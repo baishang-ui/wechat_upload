@@ -1,13 +1,26 @@
-const test = require('node:test')
-const assert = require('node:assert/strict')
+import test from 'node:test'
+import assert from 'node:assert/strict'
 
-const {
+import {
   createMockRecord,
+  normalizeApiRecord,
   normalizeTenValues,
   updateMeasurement,
   updateSampleJudgement,
   validateRecord,
-} = require('../miniprogram/domain/inspection-record')
+} from '../miniprogram/domain/inspection-record'
+
+function createCompleteRecord() {
+  return normalizeApiRecord({
+    report_title: '钢丝刷检验记录单',
+    customer: '客户A',
+    supplier: '供应商A',
+    model_spec: '100x20',
+    inspection_date: '2026-07-21',
+    items: [{ name: '材质', standard: '图纸要求', specification: '钢丝', measurements: ['OK', 'OK', 'OK'] }],
+    sample_judgements: ['OK', 'OK', 'OK'],
+  })
+}
 
 test('normalizeTenValues pads and truncates values to ten entries', () => {
   assert.deepEqual(normalizeTenValues(['1', '2']), ['1', '2', '', '', '', '', '', '', '', ''])
@@ -17,17 +30,14 @@ test('normalizeTenValues pads and truncates values to ten entries', () => {
   )
 })
 
-test('createMockRecord produces a table matching the ten-sample report layout', () => {
+test('createMockRecord creates an empty ten-sample form state', () => {
   const record = createMockRecord()
-
-  assert.equal(record.productType, 'steel_brush')
+  assert.equal(record.rows.length, 0)
   assert.equal(record.sampleJudgements.length, 10)
-  assert.ok(record.rows.length > 0)
-  assert.ok(record.rows.every((row) => row.measurements.length === 10))
 })
 
 test('updateMeasurement changes one cell without mutating the source record', () => {
-  const record = createMockRecord()
+  const record = createCompleteRecord()
   const updated = updateMeasurement(record, 0, 2, '0.26')
 
   assert.equal(record.rows[0].measurements[2], 'OK')
@@ -37,7 +47,7 @@ test('updateMeasurement changes one cell without mutating the source record', ()
 })
 
 test('updateSampleJudgement changes one sample result immutably', () => {
-  const record = createMockRecord()
+  const record = createCompleteRecord()
   const updated = updateSampleJudgement(record, 1, 'NG')
 
   assert.equal(record.sampleJudgements[1], 'OK')
@@ -45,7 +55,7 @@ test('updateSampleJudgement changes one sample result immutably', () => {
 })
 
 test('validateRecord reports required fields and accepts a complete record', () => {
-  const record = createMockRecord()
+  const record = createCompleteRecord()
   assert.deepEqual(validateRecord(record), [])
   assert.deepEqual(validateRecord({ ...record, customer: '', model: '' }), ['客户', '型号/规格'])
 })

@@ -1,5 +1,7 @@
 # Inspection Report Interface Implementation Plan
 
+> **Implementation update (2026-07-21):** After this plan was approved, the user required all new modules to use TypeScript and requested direct integration with the tested `qwen35` vision endpoint. The final implementation therefore uses `.ts` domain/service modules, `tsx` tests, real base64 image requests, raw API response display, and an editable normalized table. The detailed steps below preserve the originally approved mock-first plan as historical context.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Build a WeChat Mini Program interface that captures one inspection-report photo, simulates backend LLM OCR, lets the user edit the normalized table, and simulates submitting the confirmed record.

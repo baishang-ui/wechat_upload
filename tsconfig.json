@@ -16,6 +16,7 @@
     "noUnusedParameters": true,
     "strict": true,
     "strictPropertyInitialization": true,
+    "skipLibCheck": true,
     "lib": ["ES2020"],
     "typeRoots": [
       "./typings"
@@ -25,6 +26,7 @@
     "./**/*.ts"
   ],
   "exclude": [
-    "node_modules"
+    "node_modules",
+    "tests"
   ]
 }

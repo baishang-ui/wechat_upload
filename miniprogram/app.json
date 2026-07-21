@@ -19,6 +19,9 @@
     }
   },
   "componentFramework": "glass-easel",
+  "networkTimeout": {
+    "request": 120000
+  },
   "sitemapLocation": "sitemap.json",
   "lazyCodeLoading": "requiredComponents"
 }

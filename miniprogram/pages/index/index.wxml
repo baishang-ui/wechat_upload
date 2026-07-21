@@ -1,28 +1,281 @@
-<!--index.wxml-->
-<navigation-bar title="Weixin" back="{{false}}" color="black" background="#FFF"></navigation-bar>
-<scroll-view class="scrollarea" scroll-y type="list">
-  <view class="container">
-    <view class="userinfo">
-      <block wx:if="{{canIUseNicknameComp && !hasUserInfo}}">
-        <button class="avatar-wrapper" open-type="chooseAvatar" bind:chooseavatar="onChooseAvatar">
-          <image class="avatar" src="{{userInfo.avatarUrl}}"></image>
-        </button>
-        <view class="nickname-wrapper">
-          <text class="nickname-label">昵称</text>
-          <input type="nickname" class="nickname-input" placeholder="请输入昵称" bind:change="onInputChange" />
+<navigation-bar title="{{activeTab === 'scan' ? '检验报告识别' : '识别记录'}}" back="{{false}}" color="#17233d" background="#f3f6f8"></navigation-bar>
+
+<scroll-view class="page-scroll" scroll-y enhanced show-scrollbar="{{false}}">
+  <view class="page-shell">
+    <block wx:if="{{activeTab === 'scan'}}">
+    <block wx:if="{{screen === 'capture'}}">
+      <view class="hero-card">
+        <view class="eyebrow">AI INSPECTION</view>
+        <view class="hero-title">拍照识别检验报告</view>
+        <view class="hero-desc">一次拍摄一张报告，系统将自动提取表格并供你逐项确认。</view>
+        <view class="document-illustration">
+          <view class="document-sheet">
+            <view class="sheet-line sheet-line--wide"></view>
+            <view class="sheet-line"></view>
+            <view class="sheet-grid">
+              <view wx:for="{{illustrationCells}}" wx:key="*this" class="sheet-cell"></view>
+            </view>
+          </view>
+          <view class="scan-line"></view>
         </view>
-      </block>
-      <block wx:elif="{{!hasUserInfo}}">
-        <button wx:if="{{canIUseGetUserProfile}}" bindtap="getUserProfile"> 获取头像昵称 </button>
-        <view wx:else> 请使用2.10.4及以上版本基础库 </view>
-      </block>
-      <block wx:else>
-        <image bindtap="bindViewTap" class="userinfo-avatar" src="{{userInfo.avatarUrl}}" mode="cover"></image>
-        <text class="userinfo-nickname">{{userInfo.nickName}}</text>
-      </block>
-    </view>
-    <view class="usermotto">
-      <text class="user-motto">{{motto}}</text>
-    </view>
+        <button class="primary-button" bindtap="takePhoto">拍摄检验报告</button>
+        <button class="secondary-button" bindtap="chooseFromAlbum">从相册选择</button>
+      </view>
+
+      <view class="tips-card">
+        <view class="section-title">拍摄建议</view>
+        <view class="tip"><text class="tip-index">1</text><text>完整拍入表格四角，避免裁切</text></view>
+        <view class="tip"><text class="tip-index">2</text><text>保持光线均匀，避免阴影和反光</text></view>
+        <view class="tip"><text class="tip-index">3</text><text>横向表格可直接拍摄，服务器会处理方向</text></view>
+      </view>
+    </block>
+
+    <block wx:elif="{{screen === 'recognizing'}}">
+      <view class="status-card">
+        <image class="status-image" src="{{imagePath}}" mode="aspectFill"></image>
+        <view class="spinner"></view>
+        <view class="status-title">正在识别检验报告</view>
+        <view class="status-desc">{{recognitionStage}}</view>
+        <view class="progress"><view class="progress-bar"></view></view>
+        <button class="text-button" bindtap="cancelRecognition">取消识别</button>
+      </view>
+    </block>
+
+    <block wx:elif="{{screen === 'review'}}">
+      <view class="review-head card">
+        <image class="report-thumb" src="{{imagePath}}" mode="aspectFill" bindtap="previewImage"></image>
+        <view class="review-summary">
+          <view class="status-pill">识别完成</view>
+          <view class="review-title">{{editingRecordId ? '编辑识别记录' : '请核对识别结果'}}</view>
+        </view>
+        <view class="review-foot">
+          <view class="review-desc">请核对图像与识别字段。</view>
+          <view class="review-actions"><button class="mini-button review-retake" bindtap="resetFlow">重新拍摄</button></view>
+        </view>
+      </view>
+
+      <view class="card api-card">
+        <view class="section-heading"><text>API 原始返回</text><text class="raw-tag">qwen35</text></view>
+        <scroll-view class="raw-scroll" scroll-x scroll-y enhanced show-scrollbar="{{false}}">
+          <text class="raw-content" user-select>{{rawContent}}</text>
+        </scroll-view>
+      </view>
+
+      <view class="card form-card">
+        <view class="section-heading"><text>报告信息</text><text class="required-note">* 必填</text></view>
+        <view class="field full-field">
+          <text class="field-label">产品类型</text>
+          <picker mode="selector" range="{{productLabels}}" value="{{productIndex}}" bindchange="onProductChange">
+            <view class="picker-value">{{productLabels[productIndex]}}<text>⌄</text></view>
+          </picker>
+        </view>
+        <view class="field-grid">
+          <view class="field"><text class="field-label">客户 *</text><input value="{{record.customer}}" data-field="customer" bindinput="onRecordInput" /></view>
+          <view class="field"><text class="field-label">供应商 *</text><input value="{{record.supplier}}" data-field="supplier" bindinput="onRecordInput" /></view>
+          <view class="field"><text class="field-label">商标</text><input value="{{record.trademark}}" data-field="trademark" bindinput="onRecordInput" /></view>
+          <view class="field"><text class="field-label">订单编号</text><input value="{{record.orderNumber}}" data-field="orderNumber" bindinput="onRecordInput" /></view>
+          <view class="field"><text class="field-label">型号/规格 *</text><input value="{{record.model}}" data-field="model" bindinput="onRecordInput" /></view>
+          <view class="field"><text class="field-label">到货数量</text><input value="{{record.arrivalQuantity}}" data-field="arrivalQuantity" bindinput="onRecordInput" /></view>
+          <view class="field full-field"><text class="field-label">检验日期 *</text><input value="{{record.inspectionDate}}" data-field="inspectionDate" bindinput="onRecordInput" /></view>
+        </view>
+      </view>
+
+      <view class="card table-card">
+        <view class="section-heading"><text>检验数据</text><text class="scroll-hint">左右滑动查看 1–10</text></view>
+        <scroll-view class="table-scroll" scroll-x enhanced show-scrollbar="{{false}}">
+          <view class="inspection-table">
+            <view class="table-row table-head">
+              <view class="table-cell cell-item">检验项目</view>
+              <view class="table-cell cell-requirement">标准要求</view>
+              <view class="table-cell cell-spec">规格</view>
+              <view wx:for="{{measurementHeaders}}" wx:key="*this" class="table-cell cell-value">{{item}}</view>
+            </view>
+            <view wx:for="{{record.rows}}" wx:key="id" wx:for-item="row" wx:for-index="rowIndex" class="table-row">
+              <view class="table-cell cell-item"><input value="{{row.item}}" data-row-index="{{rowIndex}}" data-field="item" bindinput="onRowInput" /></view>
+              <view class="table-cell cell-requirement"><input value="{{row.requirement}}" data-row-index="{{rowIndex}}" data-field="requirement" bindinput="onRowInput" /></view>
+              <view class="table-cell cell-spec"><input value="{{row.specification}}" data-row-index="{{rowIndex}}" data-field="specification" bindinput="onRowInput" /></view>
+              <view wx:for="{{row.measurements}}" wx:key="index" wx:for-item="measurement" wx:for-index="measurementIndex" class="table-cell cell-value">
+                <input value="{{measurement}}" data-row-index="{{rowIndex}}" data-measurement-index="{{measurementIndex}}" bindinput="onMeasurementInput" />
+              </view>
+            </view>
+            <view class="table-row judgement-row">
+              <view class="table-cell cell-item">判定</view>
+              <view class="table-cell cell-requirement"></view>
+              <view class="table-cell cell-spec"></view>
+              <view wx:for="{{record.sampleJudgements}}" wx:key="index" wx:for-item="judgement" wx:for-index="sampleIndex" class="table-cell cell-value judgement-cell">
+                <picker mode="selector" range="{{judgementOptions}}" value="{{judgement === 'OK' ? 1 : judgement === 'NG' ? 2 : 0}}" data-sample-index="{{sampleIndex}}" bindchange="onJudgementChange">
+                  <view class="judgement {{judgement === 'NG' ? 'judgement--ng' : ''}}">{{judgement || '—'}}</view>
+                </picker>
+              </view>
+            </view>
+          </view>
+        </scroll-view>
+      </view>
+
+      <view class="card form-card">
+        <view class="section-heading">补充信息</view>
+        <view class="field full-field"><text class="field-label">备注</text><textarea value="{{record.notes}}" data-field="notes" bindinput="onRecordInput"></textarea></view>
+        <view class="field-grid">
+          <view class="field"><text class="field-label">审核人</text><input value="{{record.reviewer}}" data-field="reviewer" bindinput="onRecordInput" /></view>
+          <view class="field"><text class="field-label">检验员</text><input value="{{record.inspector}}" data-field="inspector" bindinput="onRecordInput" /></view>
+        </view>
+      </view>
+
+      <view class="bottom-actions">
+        <button class="secondary-button" bindtap="resetFlow">重新识别</button>
+        <button class="primary-button" loading="{{submitting}}" disabled="{{submitting}}" bindtap="submitRecord">{{editingRecordId ? '保存更新' : '确认保存'}}</button>
+      </view>
+    </block>
+
+    <block wx:else>
+      <view class="success-card">
+        <view class="success-icon">✓</view>
+        <view class="success-title">识别结果已确认</view>
+        <view class="success-desc">本地结果编号</view>
+        <view class="record-id">{{recordId}}</view>
+        <view class="success-actions">
+          <button class="secondary-button" bindtap="showHistory">查看记录</button>
+          <button class="primary-button" bindtap="resetFlow">继续识别</button>
+        </view>
+      </view>
+    </block>
+    </block>
+
+    <block wx:else>
+      <view class="history-header">
+        <view>
+          <view class="history-title">识别记录</view>
+          <view class="history-subtitle">共 {{historyRecords.length}} 份本地记录</view>
+        </view>
+        <view class="local-pill">仅本机</view>
+      </view>
+
+      <view wx:if="{{historyRecords.length === 0}}" class="history-empty">
+        <view class="empty-icon">
+          <view class="empty-line empty-line--wide"></view>
+          <view class="empty-line"></view>
+          <view class="empty-line"></view>
+        </view>
+        <view class="empty-title">还没有识别记录</view>
+        <view class="empty-desc">保存一份检验报告后，会显示在这里。</view>
+        <button class="primary-button empty-action" bindtap="goToScan">去识别</button>
+      </view>
+
+      <view wx:else class="history-list">
+        <view wx:for="{{historyRecords}}" wx:key="id" class="history-item" data-id="{{item.id}}" bindtap="openHistory">
+          <image class="history-thumb" src="{{item.imagePath}}" mode="aspectFill"></image>
+          <view class="history-main">
+            <view class="history-row">
+              <text class="history-product">{{item.productLabel}}</text>
+              <text class="history-date">{{item.updatedLabel}}</text>
+            </view>
+            <view class="history-customer">{{item.record.customer || '未识别客户'}}</view>
+            <view class="history-meta">{{item.record.model || '未识别型号'}} · {{item.record.inspectionDate || '无日期'}}</view>
+            <view class="history-id">{{item.id}}</view>
+          </view>
+          <view class="delete-button" data-id="{{item.id}}" catchtap="deleteHistory" aria-label="删除记录" role="button" hover-class="delete-button--pressed" hover-stay-time="120">
+            <text class="delete-symbol">×</text>
+          </view>
+        </view>
+      </view>
+    </block>
+    <view class="bottom-safe-spacer"></view>
   </view>
 </scroll-view>
+
+<view wx:if="{{historyModalVisible}}" class="history-modal-layer {{historyModalClosing ? 'is-closing' : ''}}">
+  <view class="history-modal-mask" bindtap="closeHistoryModal" catchtouchmove="noop"></view>
+  <view class="history-modal-panel" catchtap="noop">
+    <view class="modal-grabber"></view>
+    <view class="history-modal-header">
+      <image class="modal-thumb" src="{{historyEditImagePath}}" mode="aspectFill" bindtap="previewHistoryImage"></image>
+      <view class="modal-heading">
+        <view class="modal-title">编辑识别记录</view>
+        <view class="modal-record-id">{{historyEditId}}</view>
+      </view>
+      <view class="modal-close" bindtap="closeHistoryModal" aria-label="关闭" role="button" hover-class="modal-close--pressed" hover-stay-time="120">×</view>
+    </view>
+
+    <scroll-view class="history-modal-body" scroll-y enhanced show-scrollbar="{{false}}">
+      <view class="modal-section">
+        <view class="section-heading"><text>报告信息</text><text class="required-note">* 必填</text></view>
+        <view class="field full-field">
+          <text class="field-label">产品类型</text>
+          <picker mode="selector" range="{{productLabels}}" value="{{historyEditProductIndex}}" bindchange="onHistoryProductChange">
+            <view class="picker-value">{{productLabels[historyEditProductIndex]}}<text>⌄</text></view>
+          </picker>
+        </view>
+        <view class="field-grid">
+          <view class="field"><text class="field-label">客户 *</text><input value="{{historyEditRecord.customer}}" data-field="customer" bindinput="onHistoryRecordInput" /></view>
+          <view class="field"><text class="field-label">供应商 *</text><input value="{{historyEditRecord.supplier}}" data-field="supplier" bindinput="onHistoryRecordInput" /></view>
+          <view class="field"><text class="field-label">商标</text><input value="{{historyEditRecord.trademark}}" data-field="trademark" bindinput="onHistoryRecordInput" /></view>
+          <view class="field"><text class="field-label">订单编号</text><input value="{{historyEditRecord.orderNumber}}" data-field="orderNumber" bindinput="onHistoryRecordInput" /></view>
+          <view class="field"><text class="field-label">型号/规格 *</text><input value="{{historyEditRecord.model}}" data-field="model" bindinput="onHistoryRecordInput" /></view>
+          <view class="field"><text class="field-label">到货数量</text><input value="{{historyEditRecord.arrivalQuantity}}" data-field="arrivalQuantity" bindinput="onHistoryRecordInput" /></view>
+          <view class="field full-field"><text class="field-label">检验日期 *</text><input value="{{historyEditRecord.inspectionDate}}" data-field="inspectionDate" bindinput="onHistoryRecordInput" /></view>
+        </view>
+      </view>
+
+      <view class="modal-section modal-table-section">
+        <view class="section-heading modal-section-heading"><text>检验数据</text><text class="scroll-hint">左右滑动查看 1–10</text></view>
+        <scroll-view class="table-scroll" scroll-x enhanced show-scrollbar="{{false}}">
+          <view class="inspection-table modal-table">
+            <view class="table-row table-head">
+              <view class="table-cell cell-item">检验项目</view>
+              <view class="table-cell cell-requirement">标准要求</view>
+              <view class="table-cell cell-spec">规格</view>
+              <view wx:for="{{measurementHeaders}}" wx:key="*this" class="table-cell cell-value">{{item}}</view>
+            </view>
+            <view wx:for="{{historyEditRecord.rows}}" wx:key="id" wx:for-item="row" wx:for-index="rowIndex" class="table-row">
+              <view class="table-cell cell-item"><input value="{{row.item}}" data-row-index="{{rowIndex}}" data-field="item" bindinput="onHistoryRowInput" /></view>
+              <view class="table-cell cell-requirement"><input value="{{row.requirement}}" data-row-index="{{rowIndex}}" data-field="requirement" bindinput="onHistoryRowInput" /></view>
+              <view class="table-cell cell-spec"><input value="{{row.specification}}" data-row-index="{{rowIndex}}" data-field="specification" bindinput="onHistoryRowInput" /></view>
+              <view wx:for="{{row.measurements}}" wx:key="index" wx:for-item="measurement" wx:for-index="measurementIndex" class="table-cell cell-value">
+                <input value="{{measurement}}" data-row-index="{{rowIndex}}" data-measurement-index="{{measurementIndex}}" bindinput="onHistoryMeasurementInput" />
+              </view>
+            </view>
+            <view class="table-row judgement-row">
+              <view class="table-cell cell-item">判定</view>
+              <view class="table-cell cell-requirement"></view>
+              <view class="table-cell cell-spec"></view>
+              <view wx:for="{{historyEditRecord.sampleJudgements}}" wx:key="index" wx:for-item="judgement" wx:for-index="sampleIndex" class="table-cell cell-value judgement-cell">
+                <picker mode="selector" range="{{judgementOptions}}" value="{{judgement === 'OK' ? 1 : judgement === 'NG' ? 2 : 0}}" data-sample-index="{{sampleIndex}}" bindchange="onHistoryJudgementChange">
+                  <view class="judgement {{judgement === 'NG' ? 'judgement--ng' : ''}}">{{judgement || '—'}}</view>
+                </picker>
+              </view>
+            </view>
+          </view>
+        </scroll-view>
+      </view>
+
+      <view class="modal-section">
+        <view class="section-heading">补充信息</view>
+        <view class="field full-field"><text class="field-label">备注</text><textarea value="{{historyEditRecord.notes}}" data-field="notes" bindinput="onHistoryRecordInput"></textarea></view>
+        <view class="field-grid">
+          <view class="field"><text class="field-label">审核人</text><input value="{{historyEditRecord.reviewer}}" data-field="reviewer" bindinput="onHistoryRecordInput" /></view>
+          <view class="field"><text class="field-label">检验员</text><input value="{{historyEditRecord.inspector}}" data-field="inspector" bindinput="onHistoryRecordInput" /></view>
+        </view>
+      </view>
+      <view class="modal-body-spacer"></view>
+    </scroll-view>
+
+    <view class="history-modal-actions">
+      <button class="secondary-button" disabled="{{historySaving}}" bindtap="closeHistoryModal">取消</button>
+      <button class="primary-button" loading="{{historySaving}}" disabled="{{historySaving}}" bindtap="saveHistoryEdit">更新记录</button>
+    </view>
+  </view>
+</view>
+
+<view class="floating-tabs">
+  <view class="tab-indicator {{activeTab === 'history' ? 'is-history' : ''}}">
+    <view class="tab-indicator-fill {{pressedTab === activeTab ? 'is-pressing' : ''}}"></view>
+  </view>
+  <view class="floating-tab {{activeTab === 'scan' ? 'is-active' : ''}}" data-tab="scan" bindtap="switchTab" bindtouchstart="onTabPressStart" bindtouchend="onTabPressEnd" bindtouchcancel="onTabPressEnd">
+    <view class="scan-tab-icon"><view class="scan-dot"></view></view>
+    <text>识别</text>
+  </view>
+  <view class="floating-tab {{activeTab === 'history' ? 'is-active' : ''}}" data-tab="history" bindtap="switchTab" bindtouchstart="onTabPressStart" bindtouchend="onTabPressEnd" bindtouchcancel="onTabPressEnd">
+    <view class="history-tab-icon"><view></view><view></view><view></view></view>
+    <text>记录</text>
+  </view>
+</view>
