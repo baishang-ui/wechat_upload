@@ -13,6 +13,7 @@
 - 支持六类报告：钢丝刷、拉绒片、树脂砂轮、百叶轮、网格砂和金刚石锯片。
 - 使用本地文件与本地存储保存最近 30 条识别记录。
 - 在记录页通过底部弹窗重新打开并编辑历史表格。
+- 将当前识别结果或历史记录导出为单表 JSON 文件。
 - 毛玻璃胶囊底栏、滑块位移动画、列表入场动画和安全区适配。
 
 ## 技术栈
@@ -31,9 +32,11 @@ miniprogram/
   domain/
     inspection-record.ts     OCR 数据归一化与表格更新
     inspection-history.ts    本地历史排序、更新和数量限制
+    inspection-export.ts     版本化单表 JSON 导出契约
   services/
     inspection-service.ts    图片压缩、视觉模型调用与 JSON 解析
     history-service.ts       微信本地存储与持久图片管理
+    export-service.ts        JSON 文件写入与微信文件分享
   pages/index/
     index.ts                 页面状态与交互
     index.wxml               识别、历史和编辑弹窗
@@ -101,6 +104,19 @@ wx.removeStorageSync('llmApiToken')
 - 更新记录会复用原图片，不会重复保存。
 - 删除或超出数量限制时会清理对应本地图片。
 - 本地记录不会跨设备同步。
+
+## JSON 导出
+
+单份检验报告导出为 UTF-8 JSON 文件，契约版本为 `inspection-table/v1`。文件包含：
+
+- `record_id` 和 `exported_at`。
+- `meta` 基本信息、备注和审核信息。
+- `table.columns` 固定列定义。
+- `table.rows` 检验项目行和末尾判定行。
+
+导出不会包含本地图片路径、图片 Base64、模型原始返回或本地同步状态。小程序生成 `.json` 文件后直接打开微信文件分享；首次分享失败时会自动重试一次，不会复制到剪贴板。
+
+上传功能尚未实现。未来上传层应将完整 UTF-8 JSON 文本转换为 Base64 后发送，不改变导出 JSON 的字段结构。完整契约见 `docs/superpowers/specs/2026-07-21-inspection-json-export-design.md`。
 
 ## 测试
 

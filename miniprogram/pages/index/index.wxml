@@ -33,10 +33,10 @@
     <block wx:elif="{{screen === 'recognizing'}}">
       <view class="status-card">
         <image class="status-image" src="{{imagePath}}" mode="aspectFill"></image>
-        <view class="spinner"></view>
+        <view class="loader"></view>
         <view class="status-title">正在识别检验报告</view>
         <view class="status-desc">{{recognitionStage}}</view>
-        <view class="progress"><view class="progress-bar"></view></view>
+        <view class="progress"><view class="progress-bar {{recognitionCompleting ? 'progress-bar--complete' : ''}}"></view></view>
         <button class="text-button" bindtap="cancelRecognition">取消识别</button>
       </view>
     </block>
@@ -125,6 +125,7 @@
         <button class="secondary-button" bindtap="resetFlow">重新识别</button>
         <button class="primary-button" loading="{{submitting}}" disabled="{{submitting}}" bindtap="submitRecord">{{editingRecordId ? '保存更新' : '确认保存'}}</button>
       </view>
+      <button class="export-button review-export" loading="{{exporting}}" disabled="{{exporting}}" bindtap="exportCurrentRecord">导出 JSON</button>
     </block>
 
     <block wx:else>
@@ -137,6 +138,7 @@
           <button class="secondary-button" bindtap="showHistory">查看记录</button>
           <button class="primary-button" bindtap="resetFlow">继续识别</button>
         </view>
+        <button class="export-button success-export" loading="{{exporting}}" disabled="{{exporting}}" bindtap="exportCurrentRecord">导出 JSON</button>
       </view>
     </block>
     </block>
@@ -260,8 +262,8 @@
     </scroll-view>
 
     <view class="history-modal-actions">
-      <button class="secondary-button" disabled="{{historySaving}}" bindtap="closeHistoryModal">取消</button>
-      <button class="primary-button" loading="{{historySaving}}" disabled="{{historySaving}}" bindtap="saveHistoryEdit">更新记录</button>
+      <button class="export-button modal-export" loading="{{historyExporting}}" disabled="{{historyExporting || historySaving}}" bindtap="exportHistoryRecord">导出 JSON</button>
+      <button class="primary-button modal-save" loading="{{historySaving}}" disabled="{{historySaving}}" bindtap="saveHistoryEdit">保存</button>
     </view>
   </view>
 </view>

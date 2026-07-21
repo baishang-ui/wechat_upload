@@ -314,7 +314,7 @@ Run: `rg -n "inspectionHistory:v1|saveFile|removeSavedFile|floating-tabs|openHis
 
 Expected: every required history and navigation integration has matches.
 
-Run: `rg -n "app-8ZuWtMDwohXAF7Yw8fjZDWef" miniprogram package.json project.private.config.json`
+Run: `rg -n "app-[A-Za-z0-9]{20,}" miniprogram package.json project.private.config.json`
 
 Expected: no matches.
 

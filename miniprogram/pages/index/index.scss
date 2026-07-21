@@ -52,13 +52,49 @@ page {
 }
 
 .hero-title,
-.status-title,
-.success-title {
-  margin-top: 18rpx;
+.success-title{
+    margin-top: 18rpx;
   font-size: 42rpx;
   line-height: 1.25;
   font-weight: 700;
 }
+.status-title
+ {
+  --color-1: #0f39f3;
+  --color-2: #fdfeff;
+  --size: 1px;
+
+  font-size: calc(24 * var(--size));
+  font-weight: bold;
+  display: inline-block;
+  letter-spacing: calc(2 * var(--size));
+  background: linear-gradient(
+    90deg,
+    var(--color-1) 0%,
+    var(--color-1) 30%,
+    var(--color-2) 50%,
+    var(--color-1) 70%,
+    var(--color-1) 100%
+  );
+  background-size: 200% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+  box-sizing: border-box;
+  animation: animloader 4s ease infinite;
+}
+
+@keyframes animloader {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+
 
 .hero-desc,
 .status-desc,
@@ -178,6 +214,7 @@ page {
 .tips-card {
   margin-top: 24rpx;
   padding: 32rpx;
+  animation: content-rise .38s ease-out both;
 }
 
 .section-title,
@@ -212,19 +249,32 @@ page {
   border-radius: 20rpx;
 }
 
-.spinner {
-  width: 58rpx;
-  height: 58rpx;
-  margin: 42rpx auto 0;
-  border: 7rpx solid #dce6fa;
-  border-top-color: #2f6bff;
+.loader {
+  --color-1: #0084ff;
+  --size: 1px;
+  margin: 32rpx auto 0;
+  width: calc(48 * var(--size));
+  height: calc(48 * var(--size));
+  border: calc(6 * var(--size)) solid var(--color-1);
+
+  border-bottom-color: transparent;
   border-radius: 50%;
-  animation: spin .8s linear infinite;
+  position: relative;
+  box-sizing: border-box;
+  animation: rotate 1s linear infinite;
 }
 
-@keyframes spin {
-  to { transform: rotate(360deg); }
+@keyframes rotate {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
 }
+
+
+
 
 .progress {
   height: 10rpx;
@@ -235,16 +285,25 @@ page {
 }
 
 .progress-bar {
-  width: 62%;
+  width: 100%;
   height: 100%;
   border-radius: inherit;
-  background: #2f6bff;
-  animation: progress 1.4s ease-in-out infinite alternate;
+  background: linear-gradient(90deg, #2f6bff, #75a0ff);
+  box-shadow: 0 0 14rpx rgba(47, 107, 255, .28);
+  transform: scaleX(.12);
+  transform-origin: left center;
+  animation: progress 8s cubic-bezier(.2, .72, .25, 1) forwards;
+}
+
+.progress-bar--complete {
+  animation: none;
+  transform: scaleX(1);
+  transition: transform .42s cubic-bezier(.2, .72, .25, 1);
 }
 
 @keyframes progress {
-  from { width: 28%; }
-  to { width: 82%; }
+  from { transform: scaleX(.12); }
+  to { transform: scaleX(.88); }
 }
 
 .text-button,
@@ -527,6 +586,34 @@ page {
   margin-top: 0;
   border-radius: 18rpx;
   font-size: 28rpx;
+}
+
+.export-button {
+  width: 100%;
+  height: 76rpx;
+  margin: 16rpx 0 0;
+  padding: 0 20rpx;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 18rpx;
+  color: #526174;
+  background: #e9eef4;
+  font-size: 26rpx;
+  font-weight: 600;
+  line-height: 1;
+  transition: color .18s ease, background .18s ease, transform .18s ease;
+}
+
+.export-button:active {
+  color: #35445a;
+  background: #dfe6ee;
+  transform: scale(.985);
+}
+
+.export-button[disabled] {
+  opacity: .6;
 }
 
 .success-card {
@@ -1111,10 +1198,13 @@ page {
 
 .history-modal-actions {
   flex: none;
-  display: grid;
-  grid-template-columns: 1fr 1.4fr;
-  gap: 18rpx;
-  padding: 18rpx 24rpx calc(18rpx + env(safe-area-inset-bottom));
+  width: 100%;
+  padding: 16rpx 20rpx calc(16rpx + env(safe-area-inset-bottom));
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 28rpx;
   border-top: 1rpx solid rgba(215, 223, 232, .9);
   background: rgba(250, 252, 254, .92);
   -webkit-backdrop-filter: blur(20rpx);
@@ -1122,8 +1212,27 @@ page {
 }
 
 .history-modal-actions .primary-button,
-.history-modal-actions .secondary-button {
+.history-modal-actions .export-button {
+  flex: none;
+  width: 210rpx;
+  min-width: 0;
+  height: 76rpx;
+  padding: 0 10rpx;
   margin-top: 0;
+  border-radius: 18rpx;
+  font-size: 26rpx;
+}
+
+.history-modal-actions .modal-save {
+  box-shadow: 0 8rpx 18rpx rgba(47, 107, 255, .2);
+}
+
+.history-modal-actions .modal-export {
+  margin-top: 0;
+  border-radius: 18rpx;
+  color: #44607f;
+  background: rgba(226, 233, 242, .84);
+  font-size: 25rpx;
 }
 
 @media (max-width: 360px) {

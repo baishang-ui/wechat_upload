@@ -22,6 +22,7 @@ import {
   RecognizeInspectionResult,
   submitInspection,
 } from '../../services/inspection-service'
+import { exportInspectionJson } from '../../services/export-service'
 
 interface HistoryViewItem extends StoredInspectionRecord {
   productLabel: string
@@ -33,6 +34,7 @@ type WorkspaceTab = 'scan' | 'history'
 const productLabels = PRODUCT_OPTIONS.map((option) => option.label)
 const measurementHeaders = Array.from({ length: MEASUREMENT_COUNT }, (_, index) => index + 1)
 const judgementOptions: Judgement[] = ['', 'OK', 'NG']
+const PROGRESS_COMPLETION_DURATION = 420
 
 function formatHistoryTime(timestamp: number): string {
   const date = new Date(timestamp)
@@ -59,6 +61,7 @@ Component({
     imageId: '',
     rawContent: '',
     recognitionStage: '正在读取图片',
+    recognitionCompleting: false,
     recognitionRequestId: 0,
     productLabels,
     productIndex: 0,
@@ -67,6 +70,7 @@ Component({
     illustrationCells: Array.from({ length: 9 }, (_, index) => index + 1),
     record: createMockRecord(),
     submitting: false,
+    exporting: false,
     recordId: '',
     editingRecordId: '',
     historyRecords: [] as HistoryViewItem[],
@@ -78,6 +82,7 @@ Component({
     historyEditProductIndex: 0,
     historyEditRecord: createMockRecord(),
     historySaving: false,
+    historyExporting: false,
     pressedTab: '' as WorkspaceTab | '',
   },
   lifetimes: {
@@ -112,6 +117,21 @@ Component({
         historyRecords: toHistoryViewItems(loadInspectionHistory()),
       })
     },
+    exportCurrentRecord() {
+      if (this.data.exporting) return
+      this.setData({ exporting: true })
+      exportInspectionJson({
+        recordId: this.data.recordId || this.data.editingRecordId,
+        record: this.data.record,
+      })
+        .then(() => {
+          wx.showToast({ title: 'JSON已生成', icon: 'none' })
+        })
+        .catch((error: Error) => {
+          wx.showModal({ title: '导出失败', content: error.message, showCancel: false })
+        })
+        .finally(() => this.setData({ exporting: false }))
+    },
     takePhoto() {
       this.chooseImage(['camera'])
     },
@@ -137,10 +157,11 @@ Component({
         recordId: '',
         editingRecordId: '',
         recognitionStage: '正在读取图片',
+        recognitionCompleting: false,
         recognitionRequestId: requestId,
       })
       setTimeout(() => {
-        if (this.data.recognitionRequestId === requestId) {
+        if (this.data.recognitionRequestId === requestId && !this.data.recognitionCompleting) {
           this.setData({ recognitionStage: '正在调用视觉大模型' })
         }
       }, 350)
@@ -151,21 +172,33 @@ Component({
             (option) => option.value === result.record.productType,
           )
           this.setData({
-            screen: 'review',
-            imageId: result.imageId,
-            rawContent: result.rawContent,
-            record: result.record,
-            productIndex: Math.max(productIndex, 0),
+            recognitionCompleting: true,
+            recognitionStage: '识别完成，正在整理结果',
           })
+          setTimeout(() => {
+            if (this.data.recognitionRequestId !== requestId) return
+            this.setData({
+              screen: 'review',
+              imageId: result.imageId,
+              rawContent: result.rawContent,
+              record: result.record,
+              productIndex: Math.max(productIndex, 0),
+              recognitionCompleting: false,
+            })
+          }, PROGRESS_COMPLETION_DURATION)
         })
         .catch((error: Error) => {
           if (this.data.recognitionRequestId !== requestId) return
           wx.showModal({ title: '识别失败', content: error.message, showCancel: false })
-          this.setData({ screen: 'capture' })
+          this.setData({ screen: 'capture', recognitionCompleting: false })
         })
     },
     cancelRecognition() {
-      this.setData({ screen: 'capture', recognitionRequestId: this.data.recognitionRequestId + 1 })
+      this.setData({
+        screen: 'capture',
+        recognitionCompleting: false,
+        recognitionRequestId: this.data.recognitionRequestId + 1,
+      })
     },
     previewImage() {
       if (!this.data.imagePath) return
@@ -260,6 +293,21 @@ Component({
       this.setData({
         historyEditRecord: updateSampleJudgement(this.data.historyEditRecord, sampleIndex, judgement),
       })
+    },
+    exportHistoryRecord() {
+      if (this.data.historyExporting) return
+      this.setData({ historyExporting: true })
+      exportInspectionJson({
+        recordId: this.data.historyEditId,
+        record: this.data.historyEditRecord,
+      })
+        .then(() => {
+          wx.showToast({ title: 'JSON已生成', icon: 'none' })
+        })
+        .catch((error: Error) => {
+          wx.showModal({ title: '导出失败', content: error.message, showCancel: false })
+        })
+        .finally(() => this.setData({ historyExporting: false }))
     },
     saveHistoryEdit() {
       if (this.data.historySaving) return
