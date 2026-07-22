@@ -4,7 +4,6 @@ import strictAssert from 'node:assert/strict'
 const assert: typeof strictAssert = strictAssert
 
 import { normalizeApiRecord, parseModelContent } from '../miniprogram/domain/inspection-record.ts'
-import { buildVisionPayload } from '../miniprogram/services/inspection-service.ts'
 
 test('parseModelContent accepts JSON inside a markdown fence', () => {
   assert.deepEqual(parseModelContent('```json\n{"report_title":"钢丝刷检验记录单"}\n```'), {
@@ -33,13 +32,4 @@ test('normalizeApiRecord maps the model response to the editable ten-sample tabl
   assert.equal(record.rows.length, 1)
   assert.equal(record.rows[0].measurements.length, 10)
   assert.deepEqual(record.sampleJudgements.slice(0, 3), ['OK', 'NG', ''])
-})
-
-test('buildVisionPayload sends the report as an OpenAI-compatible image message', () => {
-  const payload = buildVisionPayload('abc123', 'image/jpeg')
-  const content = payload.messages[0].content
-
-  assert.equal(payload.model, 'qwen35')
-  assert.equal(content[1].type, 'image_url')
-  assert.equal(content[1].image_url.url, 'data:image/jpeg;base64,abc123')
 })

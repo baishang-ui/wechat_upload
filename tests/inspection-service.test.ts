@@ -1,4 +1,6 @@
 import test from 'node:test'
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 import strictAssert from 'node:assert/strict'
 
 const assert: typeof strictAssert = strictAssert
@@ -25,6 +27,38 @@ function createCompleteRecord() {
 
 test('recognizeInspection requires an image path before accessing WeChat APIs', async () => {
   await assert.rejects(() => recognizeInspection(''), /请选择检验报告图片/)
+})
+
+
+test('recognizeInspection uploads to the shared backend without direct model credentials', async () => {
+  const imageApi = createImageApi({ '/tmp/report.jpg': 100 })
+  const calls: Array<Record<string, unknown>> = []
+  const upload = async <T>(options: Record<string, unknown>): Promise<T> => {
+    calls.push(options)
+    return {
+      record: {
+        report_title: '钢丝刷检验记录单',
+        customer: '客户A',
+        supplier: '供应商A',
+        model_spec: '100x20',
+        inspection_date: '2026-07-22',
+        items: [{ name: '材质', measurements: ['OK'] }],
+        sample_judgements: ['OK'],
+      },
+      raw_content: '{"report_title":"钢丝刷检验记录单"}',
+    } as T
+  }
+  const result = await recognizeInspection('/tmp/report.jpg', imageApi, upload)
+  assert.equal(calls[0].path, '/api/miniprogram/quality-inspections/recognize')
+  assert.equal(result.record.customer, '客户A')
+
+  const source = readFileSync(
+    resolve('miniprogram/services/inspection-service.ts'),
+    'utf8',
+  )
+  assert.equal(source.includes('8865'), false)
+  assert.equal(source.includes('TOKEN_STORAGE_KEY'), false)
+  assert.equal(source.includes('Authorization'), false)
 })
 
 test('prepareImageForUpload keeps an image already below the request limit', async () => {
