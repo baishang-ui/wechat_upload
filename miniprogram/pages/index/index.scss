@@ -1444,3 +1444,76 @@ page {
   border-radius: 3rpx;
   background: currentColor;
 }
+
+.history-sync-row {
+  min-height: 48rpx;
+  margin-top: 12rpx;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16rpx;
+}
+
+.history-sync-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 8rpx;
+  padding: 6rpx 14rpx;
+  border-radius: 18rpx;
+  background: #edf1f6;
+  color: #748196;
+  font-size: 20rpx;
+}
+
+.history-sync-status.sync-synced {
+  background: #dcf5e8;
+  color: #217647;
+}
+
+.history-sync-status.sync-failed {
+  background: #fde7e7;
+  color: #b23a42;
+}
+
+.history-sync-status.sync-syncing {
+  background: #e5edff;
+  color: #285fc5;
+}
+
+.sync-spinner {
+  width: 16rpx;
+  height: 16rpx;
+  box-sizing: border-box;
+  border: 2rpx solid rgba(40, 95, 197, .25);
+  border-top-color: #285fc5;
+  border-radius: 50%;
+  animation: sync-spin .8s linear infinite;
+}
+
+@keyframes sync-spin {
+  to { transform: rotate(360deg); }
+}
+
+.history-retry-button {
+  min-width: 132rpx;
+  height: 48rpx;
+  margin: 0;
+  padding: 0 18rpx;
+  border-radius: 24rpx;
+  background: #edf3ff;
+  color: #245fd7;
+  font-size: 21rpx;
+  line-height: 48rpx;
+}
+
+.history-retry-button::after { border: 0; }
+
+.history-sync-error {
+  margin-top: 8rpx;
+  overflow: hidden;
+  color: #b34a50;
+  font-size: 20rpx;
+  line-height: 1.4;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

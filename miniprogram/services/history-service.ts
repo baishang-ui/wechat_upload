@@ -111,6 +111,30 @@ function persistState(
   return updated
 }
 
+export function saveHistorySyncState(
+  record: StoredInspectionRecord,
+  adapter: HistoryStorageAdapter = createDefaultAdapter(),
+): StoredInspectionRecord | null {
+  const records = loadInspectionHistory(adapter)
+  let updated: StoredInspectionRecord | null = null
+  const next = records.map((stored) => {
+    if (stored.id !== record.id) return stored
+    updated = {
+      ...stored,
+      sourceType: record.sourceType,
+      taskId: record.taskId,
+      itemId: record.itemId,
+      syncStatus: record.syncStatus,
+      syncError: record.syncError,
+      updatedAt: record.updatedAt,
+    }
+    return updated
+  })
+  if (updated) adapter.setStorage(HISTORY_STORAGE_KEY, next)
+  return updated
+}
+
+
 export function markHistorySyncing(
   id: string,
   adapter: HistoryStorageAdapter = createDefaultAdapter(),

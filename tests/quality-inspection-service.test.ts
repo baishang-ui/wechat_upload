@@ -160,3 +160,69 @@ test('task item prefill keeps supplier and product values', () => {
   assert.equal(record.model, task.items[0].spec_desc)
   assert.equal(record.arrivalQuantity, String(task.items[0].quantity))
 })
+
+function createSyncRecord(sourceType: 'standalone' | 'purchase_order' = 'standalone') {
+  return {
+    id: 'IR-1',
+    clientRecordId: '550e8400-e29b-41d4-a716-446655440000',
+    sourceType,
+    taskId: sourceType === 'purchase_order' ? 30 : null,
+    itemId: sourceType === 'purchase_order' ? 31 : null,
+    imagePath: '/saved/report.jpg',
+    rawContent: '{}',
+    record: createCompleteRecord(),
+    createdAt: 1,
+    updatedAt: 1,
+    syncStatus: 'local' as const,
+    syncError: '',
+  }
+}
+
+test('standalone sync creates once, saves draft, then marks local record synced', async () => {
+  const { syncStoredInspection } = require('../miniprogram/services/quality-inspection-service') as typeof import('../miniprogram/services/quality-inspection-service')
+  const calls: string[] = []
+  const result = await syncStoredInspection(createSyncRecord(), {
+    createStandalone: async () => {
+      calls.push('create')
+      return { task_id: 20, item_id: 21, task: { id: 20 } }
+    },
+    saveDraft: async () => { calls.push('draft') },
+    updateState: async (record) => record,
+    imageToDataUrl: async () => 'data:image/jpeg;base64,YQ==',
+  })
+  assert.deepEqual(calls, ['create', 'draft'])
+  assert.equal(result.syncStatus, 'synced')
+  assert.equal(result.taskId, 20)
+  assert.equal(result.itemId, 21)
+})
+
+test('failed sync retains ids, image and record for retry', async () => {
+  const { syncStoredInspection } = require('../miniprogram/services/quality-inspection-service') as typeof import('../miniprogram/services/quality-inspection-service')
+  const local = createSyncRecord()
+  const result = await syncStoredInspection(local, {
+    createStandalone: async () => { throw new Error('网络连接失败') },
+    saveDraft: async () => undefined,
+    updateState: async (record) => record,
+    imageToDataUrl: async () => 'data:image/jpeg;base64,YQ==',
+  })
+  assert.equal(result.syncStatus, 'failed')
+  assert.equal(result.clientRecordId, local.clientRecordId)
+  assert.equal(result.imagePath, local.imagePath)
+  assert.deepEqual(result.record, local.record)
+  assert.equal(result.syncError, '网络连接失败')
+})
+
+test('purchase-order sync skips task creation and overwrites selected item draft', async () => {
+  const { syncStoredInspection } = require('../miniprogram/services/quality-inspection-service') as typeof import('../miniprogram/services/quality-inspection-service')
+  const calls: string[] = []
+  await syncStoredInspection(createSyncRecord('purchase_order'), {
+    createStandalone: async () => {
+      calls.push('create')
+      return { task_id: 0, item_id: 0, task: { id: 0 } }
+    },
+    saveDraft: async (taskId, itemId) => { calls.push(`draft:${taskId}:${itemId}`) },
+    updateState: async (record) => record,
+    imageToDataUrl: async () => 'data:image/jpeg;base64,YQ==',
+  })
+  assert.deepEqual(calls, ['draft:30:31'])
+})

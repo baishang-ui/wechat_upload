@@ -240,6 +240,19 @@
             <view class="history-customer">{{item.record.customer || '未识别客户'}}</view>
             <view class="history-meta">{{item.record.model || '未识别型号'}} · {{item.record.inspectionDate || '无日期'}}</view>
             <view class="history-id">{{item.id}}</view>
+            <view class="history-sync-row">
+              <view class="history-sync-status sync-{{item.syncStatus}}">
+                <view wx:if="{{item.syncStatus === 'syncing'}}" class="sync-spinner"></view>
+                <text>{{item.syncStatus === 'synced' ? '已同步' : item.syncStatus === 'syncing' ? '同步中' : item.syncStatus === 'failed' ? '同步失败' : '仅本地'}}</text>
+              </view>
+              <button
+                wx:if="{{item.syncStatus === 'failed'}}"
+                class="history-retry-button"
+                data-id="{{item.id}}"
+                catchtap="retryHistorySync"
+              >重试同步</button>
+            </view>
+            <view wx:if="{{item.syncStatus === 'failed' && item.syncError}}" class="history-sync-error">{{item.syncError}}</view>
           </view>
           <view class="delete-button" data-id="{{item.id}}" catchtap="deleteHistory" aria-label="删除记录" role="button" hover-class="delete-button--pressed" hover-stay-time="120">
             <text class="delete-symbol">×</text>

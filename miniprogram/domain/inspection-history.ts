@@ -28,6 +28,9 @@ export interface HistoryRecordInput {
   imagePath: string
   rawContent: string
   record: InspectionRecord
+  sourceType?: InspectionSourceType
+  taskId?: number | null
+  itemId?: number | null
 }
 
 export interface HistoryMutation {
@@ -143,6 +146,9 @@ export function upsertHistory(
       ...existing,
       rawContent: input.rawContent,
       record: input.record,
+      sourceType: input.sourceType ?? existing.sourceType,
+      taskId: input.taskId === undefined ? existing.taskId : input.taskId,
+      itemId: input.itemId === undefined ? existing.itemId : input.itemId,
       updatedAt: now,
       syncStatus: 'local',
       syncError: '',
@@ -150,9 +156,9 @@ export function upsertHistory(
     : {
       id: `IR-${now}`,
       clientRecordId: createUuid(),
-      sourceType: 'standalone',
-      taskId: null,
-      itemId: null,
+      sourceType: input.sourceType ?? 'standalone',
+      taskId: input.taskId ?? null,
+      itemId: input.itemId ?? null,
       imagePath: input.imagePath,
       rawContent: input.rawContent,
       record: input.record,

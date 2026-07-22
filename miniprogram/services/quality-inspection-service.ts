@@ -1,4 +1,8 @@
 import {
+  StoredInspectionRecord,
+  updateSyncState,
+} from '../domain/inspection-history'
+import {
   InspectionRecord,
   Judgement,
   normalizeTenValues,
@@ -103,6 +107,24 @@ interface DraftItemFallback {
   material_name?: string | null
   spec_desc?: string | null
 }
+
+export interface SyncStoredInspectionDeps {
+  createStandalone(
+    clientRecordId: string,
+    record: InspectionRecord,
+  ): Promise<StandaloneInspectionResult>
+  saveDraft(
+    taskId: number,
+    itemId: number,
+    payload: QualityInspectionDraftPayload,
+  ): Promise<unknown>
+  updateState(
+    record: StoredInspectionRecord,
+  ): Promise<StoredInspectionRecord> | StoredInspectionRecord
+  imageToDataUrl(filePath: string): Promise<string>
+  onUnauthorized?(error: unknown): void
+}
+
 
 export interface InspectionImageAdapter {
   getSize(filePath: string): Promise<number>
@@ -263,6 +285,74 @@ export function taskItemToInspectionRecord(
     reviewer: '',
     inspector: '',
     lowConfidenceFields: [],
+  }
+}
+
+
+export async function syncStoredInspection(
+  record: StoredInspectionRecord,
+  deps: SyncStoredInspectionDeps,
+): Promise<StoredInspectionRecord> {
+  let current = updateSyncState(
+    record,
+    { syncStatus: 'syncing', syncError: '' },
+    Date.now(),
+  )
+  try {
+    current = await deps.updateState(current)
+    let taskId = current.taskId
+    let itemId = current.itemId
+    if (current.sourceType === 'standalone' && (!taskId || !itemId)) {
+      const created = await deps.createStandalone(
+        current.clientRecordId,
+        current.record,
+      )
+      taskId = created.task_id
+      itemId = created.item_id
+      current = updateSyncState(current, {
+        syncStatus: 'syncing',
+        syncError: '',
+        taskId,
+        itemId,
+      }, Date.now())
+      current = await deps.updateState(current)
+    }
+    if (!taskId || !itemId) {
+      throw new Error('缺少服务端质检任务信息')
+    }
+    const imageDataUrl = await deps.imageToDataUrl(current.imagePath)
+    await deps.saveDraft(
+      taskId,
+      itemId,
+      inspectionRecordToDraft(current.record, [imageDataUrl]),
+    )
+    const synced = updateSyncState(current, {
+      syncStatus: 'synced',
+      syncError: '',
+      taskId,
+      itemId,
+    }, Date.now())
+    return await deps.updateState(synced)
+  } catch (error) {
+    const message = error instanceof Error ? error.message : '同步失败，请重试'
+    const failed = updateSyncState(current, {
+      syncStatus: 'failed',
+      syncError: message,
+    }, Date.now())
+    let persisted = failed
+    try {
+      persisted = await deps.updateState(failed)
+    } catch {
+      persisted = failed
+    }
+    if (
+      error instanceof Error
+      && 'statusCode' in error
+      && (error as Error & { statusCode?: number }).statusCode === 401
+    ) {
+      deps.onUnauthorized?.(error)
+    }
+    return persisted
   }
 }
 

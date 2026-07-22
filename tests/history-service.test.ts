@@ -16,6 +16,7 @@ import {
   markHistoryFailed,
   markHistorySynced,
   markHistorySyncing,
+  saveHistorySyncState,
   saveInspectionHistory,
 } from '../miniprogram/services/history-service'
 
@@ -108,6 +109,26 @@ test('sync helpers update only state and server identifiers', () => {
   assert.equal(synced?.syncStatus, 'synced')
   assert.equal(synced?.taskId, 8)
   assert.equal(synced?.itemId, 9)
+})
+
+
+test('saveHistorySyncState persists server ids without replacing local report data', () => {
+  const existing = createStoredRecord()
+  const adapter = createAdapter([existing])
+  const updated = saveHistorySyncState({
+    ...existing,
+    taskId: 20,
+    itemId: 21,
+    syncStatus: 'syncing',
+    syncError: '',
+    record: createRecord('不应覆盖'),
+    imagePath: '/other.jpg',
+    updatedAt: 50,
+  }, adapter)
+  assert.equal(updated?.taskId, 20)
+  assert.equal(updated?.itemId, 21)
+  assert.equal(updated?.record.customer, existing.record.customer)
+  assert.equal(updated?.imagePath, existing.imagePath)
 })
 
 test('deleteInspectionHistory removes failed record image', async () => {

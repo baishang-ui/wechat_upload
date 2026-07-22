@@ -15,6 +15,7 @@ import {
 import {
   deleteInspectionHistory,
   loadInspectionHistory,
+  saveHistorySyncState,
   saveInspectionHistory,
 } from '../../services/history-service'
 import {
@@ -26,9 +27,13 @@ import { exportInspectionJson } from '../../services/export-service'
 import { getCurrentUser } from '../../services/auth-service'
 import { ServerClientError } from '../../services/server-client'
 import {
+  createStandaloneInspection,
   getInspectionTask,
+  inspectionImageToDataUrl,
   listInspectionTasks,
   QualityInspectionTaskDto,
+  saveInspectionDraft,
+  syncStoredInspection,
   taskItemToInspectionRecord,
 } from '../../services/quality-inspection-service'
 
@@ -235,6 +240,39 @@ Component({
         productIndex: Math.max(productIndex, 0),
       })
       wx.showToast({ title: '任务已选择，请拍摄报告', icon: 'none' })
+    },
+    syncHistoryRecord(record: StoredInspectionRecord): Promise<StoredInspectionRecord> {
+      return syncStoredInspection(record, {
+        createStandalone: createStandaloneInspection,
+        saveDraft: saveInspectionDraft,
+        imageToDataUrl: inspectionImageToDataUrl,
+        updateState: async (nextRecord) => (
+          saveHistorySyncState(nextRecord) || nextRecord
+        ),
+        onUnauthorized: () => wx.reLaunch({ url: '/pages/login/login' }),
+      })
+    },
+    retryHistorySync(event: WechatMiniprogram.TouchEvent) {
+      const id = String(event.currentTarget.dataset.id || '')
+      const stored = this.data.historyRecords.find((item) => item.id === id)
+      if (!stored || stored.syncStatus === 'syncing') return
+      this.setData({
+        historyRecords: this.data.historyRecords.map((item) => (
+          item.id === id
+            ? { ...item, syncStatus: 'syncing', syncError: '' }
+            : item
+        )),
+      })
+      this.syncHistoryRecord(stored)
+        .then((result) => {
+          this.setData({
+            historyRecords: toHistoryViewItems(loadInspectionHistory()),
+          })
+          wx.showToast({
+            title: result.syncStatus === 'synced' ? '同步成功' : '同步失败，请重试',
+            icon: 'none',
+          })
+        })
     },
     exportCurrentRecord() {
       if (this.data.exporting) return
@@ -454,12 +492,18 @@ Component({
           rawContent: this.data.historyEditRawContent,
           record: this.data.historyEditRecord,
         }, this.data.historyEditId))
-        .then(() => {
+        .then((stored) => this.syncHistoryRecord(stored))
+        .then((result) => {
           this.setData({
             historyRecords: toHistoryViewItems(loadInspectionHistory()),
           })
           this.hideHistoryModal()
-          wx.showToast({ title: '记录已更新', icon: 'success' })
+          wx.showToast({
+            title: result.syncStatus === 'synced'
+              ? '记录已更新并同步'
+              : '已本地保存，同步失败',
+            icon: 'none',
+          })
         })
         .catch((error: Error) => {
           wx.showModal({ title: '更新失败', content: error.message, showCancel: false })
@@ -471,7 +515,7 @@ Component({
       if (!id) return
       wx.showModal({
         title: '删除识别记录',
-        content: '删除后将同时清理本地报告图片。',
+        content: '仅删除本地副本和本地图片，服务器上的已同步记录不会删除。',
         confirmText: '删除',
         confirmColor: '#c93f4a',
         success: (result) => {
@@ -536,7 +580,11 @@ Component({
           imagePath: this.data.imagePath,
           rawContent: this.data.rawContent,
           record: this.data.record,
+          sourceType: this.data.selectedTaskId ? 'purchase_order' : 'standalone',
+          taskId: this.data.selectedTaskId || null,
+          itemId: this.data.selectedItemId || null,
         }, this.data.editingRecordId))
+        .then((stored) => this.syncHistoryRecord(stored))
         .then((stored) => {
           this.setData({
             screen: 'success',
@@ -544,6 +592,13 @@ Component({
             editingRecordId: stored.id,
             historyRecords: toHistoryViewItems(loadInspectionHistory()),
           })
+          if (stored.syncStatus === 'failed') {
+            wx.showToast({
+              title: '已本地保存，可在历史记录重试',
+              icon: 'none',
+              duration: 2800,
+            })
+          }
         })
         .catch((error: Error) => {
           wx.showModal({ title: '保存失败', content: error.message, showCancel: false })
