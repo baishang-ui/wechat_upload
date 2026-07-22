@@ -4,19 +4,14 @@
   "description": "",
   "scripts": {
     "test": "tsx --test tests/*.test.ts",
-    "typecheck": "tsc --noEmit && tsc -p server/tsconfig.json --noEmit",
-    "server:dev": "tsx server/index.ts",
-    "mysql:test": "tsx server/test-connection.ts"
+    "typecheck": "tsc --noEmit"
   },
   "keywords": [],
   "author": "",
   "license": "",
   "dependencies": {
-    "dotenv": "^17.4.2",
-    "mysql2": "^3.23.1"
   },
   "devDependencies": {
-    "@types/node": "^26.1.1",
     "miniprogram-api-typings": "^2.8.3-1",
     "tsx": "^4.20.3",
     "typescript": "^5.5.4"
