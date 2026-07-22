@@ -3,3 +3,7 @@ node_modules/
 *.log
 
 .worktrees/
+.env
+.env.local
+.env.*.local
+!.env.example
