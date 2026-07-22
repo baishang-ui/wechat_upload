@@ -1,3 +1,9 @@
 node_modules/
 .DS_Store
 *.log
+
+.worktrees/
+.env
+.env.local
+.env.*.local
+!.env.example
