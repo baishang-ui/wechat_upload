@@ -1,6 +1,6 @@
-<navigation-bar title="{{activeTab === 'scan' ? '检验报告识别' : '识别记录'}}" back="{{false}}" color="#17233d" background="#f3f6f8"></navigation-bar>
+<navigation-bar title="{{activeTab === 'scan' ? '检验报告识别' : activeTab === 'tasks' ? '采购待检任务' : '识别记录'}}" back="{{false}}" color="#17233d" background="#f3f6f8"></navigation-bar>
 
-<scroll-view class="page-scroll" scroll-y enhanced show-scrollbar="{{false}}">
+<scroll-view class="page-scroll" scroll-y enhanced show-scrollbar="{{false}}" bindscrolltolower="loadMoreTasks">
   <view class="page-shell">
     <block wx:if="{{activeTab === 'scan'}}">
     <block wx:if="{{screen === 'capture'}}">
@@ -143,6 +143,72 @@
     </block>
     </block>
 
+    <block wx:elif="{{activeTab === 'tasks'}}">
+      <view class="task-toolbar card">
+        <view class="task-search-row">
+          <input
+            class="task-search-input"
+            value="{{taskSearch}}"
+            placeholder="搜索采购合同、客户或供应商"
+            confirm-type="search"
+            bindinput="onTaskSearchInput"
+            bindconfirm="confirmTaskSearch"
+          />
+          <button class="task-search-button" bindtap="confirmTaskSearch">搜索</button>
+        </view>
+        <view class="task-status-row">
+          <view class="task-status-chip {{taskStatus === 'pending' ? 'is-active' : ''}}" data-status="pending" bindtap="changeTaskStatus">待检</view>
+          <view class="task-status-chip {{taskStatus === 'completed' ? 'is-active' : ''}}" data-status="completed" bindtap="changeTaskStatus">已完成</view>
+          <view class="task-status-chip {{taskStatus === 'all' ? 'is-active' : ''}}" data-status="all" bindtap="changeTaskStatus">全部</view>
+        </view>
+      </view>
+
+      <view wx:if="{{taskLoading && taskItems.length === 0}}" class="task-state card">
+        <view class="task-state-title">正在加载待检任务</view>
+        <view class="task-state-desc">正在从智能销售系统获取采购质检数据。</view>
+      </view>
+
+      <view wx:elif="{{taskItems.length === 0}}" class="task-state card">
+        <view class="task-state-title">暂无符合条件的任务</view>
+        <view class="task-state-desc">可调整搜索词或状态后重新查询。</view>
+        <button class="secondary-button task-retry" bindtap="confirmTaskSearch">重新加载</button>
+      </view>
+
+      <view wx:else class="task-list">
+        <view wx:for="{{taskItems}}" wx:key="id" wx:for-item="task" class="task-card card">
+          <view class="task-card-head" data-id="{{task.id}}" bindtap="openTask">
+            <view class="task-card-main">
+              <view class="task-card-title">{{task.contract_no || task.task_no || '采购质检任务'}}</view>
+              <view class="task-card-subtitle">{{task.customer_name || '未填写客户'}} · {{task.supplier_name || '未填写供应商'}}</view>
+              <view class="task-card-meta">{{task.signed_date || '无日期'}} · {{task.items.length || 0}} 项物料</view>
+            </view>
+            <view class="task-status-badge {{task.status === 'completed' ? 'is-completed' : ''}}">{{task.status === 'completed' ? '已完成' : '待检'}}</view>
+          </view>
+          <view wx:if="{{selectedTaskId === task.id}}" class="task-item-list">
+            <view wx:if="{{!task.items || task.items.length === 0}}" class="task-item-empty">该任务暂无质检明细</view>
+            <view
+              wx:for="{{task.items}}"
+              wx:key="id"
+              wx:for-item="taskItem"
+              class="task-item {{selectedItemId === taskItem.id ? 'is-selected' : ''}}"
+              data-task-id="{{task.id}}"
+              data-item-id="{{taskItem.id}}"
+              bindtap="selectTaskItem"
+            >
+              <view class="task-item-name">{{taskItem.material_name || taskItem.material_code || '未命名物料'}}</view>
+              <view class="task-item-meta">{{taskItem.spec_desc || '无规格'}} · {{taskItem.quantity || 0}} {{taskItem.unit || 'Pcs'}}</view>
+              <view class="task-item-action">选择并拍照</view>
+            </view>
+          </view>
+        </view>
+        <view class="task-list-footer">
+          <text wx:if="{{taskLoading}}">正在加载更多…</text>
+          <text wx:elif="{{taskItems.length >= taskTotal}}">已加载全部 {{taskTotal}} 个任务</text>
+          <text wx:else>上拉加载更多</text>
+        </view>
+      </view>
+    </block>
+
     <block wx:else>
       <view class="history-header">
         <view>
@@ -269,12 +335,16 @@
 </view>
 
 <view class="floating-tabs">
-  <view class="tab-indicator {{activeTab === 'history' ? 'is-history' : ''}}">
+  <view class="tab-indicator {{activeTab === 'tasks' ? 'is-tasks' : activeTab === 'history' ? 'is-history' : ''}}">
     <view class="tab-indicator-fill {{pressedTab === activeTab ? 'is-pressing' : ''}}"></view>
   </view>
   <view class="floating-tab {{activeTab === 'scan' ? 'is-active' : ''}}" data-tab="scan" bindtap="switchTab" bindtouchstart="onTabPressStart" bindtouchend="onTabPressEnd" bindtouchcancel="onTabPressEnd">
     <view class="scan-tab-icon"><view class="scan-dot"></view></view>
     <text>识别</text>
+  </view>
+  <view class="floating-tab {{activeTab === 'tasks' ? 'is-active' : ''}}" data-tab="tasks" bindtap="switchTab" bindtouchstart="onTabPressStart" bindtouchend="onTabPressEnd" bindtouchcancel="onTabPressEnd">
+    <view class="tasks-tab-icon"><view></view><view></view></view>
+    <text>待检</text>
   </view>
   <view class="floating-tab {{activeTab === 'history' ? 'is-active' : ''}}" data-tab="history" bindtap="switchTab" bindtouchstart="onTabPressStart" bindtouchend="onTabPressEnd" bindtouchcancel="onTabPressEnd">
     <view class="history-tab-icon"><view></view><view></view><view></view></view>

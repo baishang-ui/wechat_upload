@@ -23,13 +23,21 @@ import {
   submitInspection,
 } from '../../services/inspection-service'
 import { exportInspectionJson } from '../../services/export-service'
+import { getCurrentUser } from '../../services/auth-service'
+import { ServerClientError } from '../../services/server-client'
+import {
+  getInspectionTask,
+  listInspectionTasks,
+  QualityInspectionTaskDto,
+  taskItemToInspectionRecord,
+} from '../../services/quality-inspection-service'
 
 interface HistoryViewItem extends StoredInspectionRecord {
   productLabel: string
   updatedLabel: string
 }
 
-type WorkspaceTab = 'scan' | 'history'
+type WorkspaceTab = 'scan' | 'tasks' | 'history'
 
 const productLabels = PRODUCT_OPTIONS.map((option) => option.label)
 const measurementHeaders = Array.from({ length: MEASUREMENT_COUNT }, (_, index) => index + 1)
@@ -56,6 +64,14 @@ function toHistoryViewItems(records: StoredInspectionRecord[]): HistoryViewItem[
 Component({
   data: {
     activeTab: 'scan' as WorkspaceTab,
+    taskItems: [] as QualityInspectionTaskDto[],
+    taskPage: 1,
+    taskTotal: 0,
+    taskSearch: '',
+    taskStatus: 'pending',
+    taskLoading: false,
+    selectedTaskId: 0,
+    selectedItemId: 0,
     screen: 'capture',
     imagePath: '',
     imageId: '',
@@ -87,7 +103,19 @@ Component({
   },
   lifetimes: {
     attached() {
-      this.setData({ historyRecords: toHistoryViewItems(loadInspectionHistory()) })
+      getCurrentUser()
+        .then(() => {
+          this.setData({
+            historyRecords: toHistoryViewItems(loadInspectionHistory()),
+          })
+        })
+        .catch((error: Error) => {
+          if (error instanceof ServerClientError && error.statusCode === 401) {
+            wx.reLaunch({ url: '/pages/login/login' })
+            return
+          }
+          wx.showToast({ title: error.message || '会话检查失败', icon: 'none' })
+        })
     },
   },
   methods: {
@@ -95,8 +123,14 @@ Component({
       this.setData({ historyRecords: toHistoryViewItems(loadInspectionHistory()) })
     },
     activateTab(activeTab: WorkspaceTab) {
-      this.setData({ activeTab })
+      this.setData({
+        activeTab,
+        ...(activeTab === 'scan'
+          ? { selectedTaskId: 0, selectedItemId: 0 }
+          : {}),
+      })
       if (activeTab === 'history') this.refreshHistory()
+      if (activeTab === 'tasks') this.loadTasks(true)
     },
     switchTab(event: WechatMiniprogram.TouchEvent) {
       this.activateTab(event.currentTarget.dataset.tab as WorkspaceTab)
@@ -116,6 +150,91 @@ Component({
         activeTab: 'history',
         historyRecords: toHistoryViewItems(loadInspectionHistory()),
       })
+    },
+    loadTasks(reset = false) {
+      if (this.data.taskLoading) return
+      const page = reset ? 1 : this.data.taskPage
+      if (!reset && this.data.taskItems.length >= this.data.taskTotal) return
+      this.setData({
+        taskLoading: true,
+        ...(reset ? { taskItems: [], taskPage: 1, taskTotal: 0 } : {}),
+      })
+      listInspectionTasks({
+        page,
+        pageSize: 20,
+        search: this.data.taskSearch.trim() || undefined,
+        status: this.data.taskStatus === 'all' ? undefined : this.data.taskStatus,
+        sourceType: 'purchase_order',
+      })
+        .then((data) => {
+          this.setData({
+            taskItems: reset
+              ? data.items
+              : [...this.data.taskItems, ...data.items],
+            taskTotal: data.total,
+            taskPage: page + 1,
+          })
+        })
+        .catch((error: Error) => {
+          wx.showToast({ title: error.message || '待检任务加载失败', icon: 'none' })
+        })
+        .finally(() => this.setData({ taskLoading: false }))
+    },
+    loadMoreTasks() {
+      if (this.data.activeTab === 'tasks') this.loadTasks(false)
+    },
+    onTaskSearchInput(event: WechatMiniprogram.Input) {
+      this.setData({ taskSearch: event.detail.value })
+    },
+    confirmTaskSearch() {
+      this.loadTasks(true)
+    },
+    changeTaskStatus(event: WechatMiniprogram.TouchEvent) {
+      const taskStatus = String(event.currentTarget.dataset.status || 'pending')
+      this.setData({ taskStatus }, () => this.loadTasks(true))
+    },
+    openTask(event: WechatMiniprogram.TouchEvent) {
+      const taskId = Number(event.currentTarget.dataset.id)
+      if (!taskId) return
+      if (this.data.selectedTaskId === taskId) {
+        this.setData({ selectedTaskId: 0, selectedItemId: 0 })
+        return
+      }
+      this.setData({ taskLoading: true })
+      getInspectionTask(taskId)
+        .then((task) => {
+          this.setData({
+            selectedTaskId: task.id,
+            selectedItemId: 0,
+            taskItems: this.data.taskItems.map((item) => (
+              item.id === task.id ? task : item
+            )),
+          })
+        })
+        .catch((error: Error) => {
+          wx.showToast({ title: error.message || '任务详情加载失败', icon: 'none' })
+        })
+        .finally(() => this.setData({ taskLoading: false }))
+    },
+    selectTaskItem(event: WechatMiniprogram.TouchEvent) {
+      const taskId = Number(event.currentTarget.dataset.taskId)
+      const itemId = Number(event.currentTarget.dataset.itemId)
+      const task = this.data.taskItems.find((candidate) => candidate.id === taskId)
+      const item = task?.items?.find((candidate) => candidate.id === itemId)
+      if (!task || !item) return
+      const record = taskItemToInspectionRecord(task, item)
+      const productIndex = PRODUCT_OPTIONS.findIndex(
+        (option) => option.value === record.productType,
+      )
+      this.setData({
+        activeTab: 'scan',
+        screen: 'capture',
+        selectedTaskId: taskId,
+        selectedItemId: itemId,
+        record,
+        productIndex: Math.max(productIndex, 0),
+      })
+      wx.showToast({ title: '任务已选择，请拍摄报告', icon: 'none' })
     },
     exportCurrentRecord() {
       if (this.data.exporting) return
@@ -168,8 +287,20 @@ Component({
       recognizeInspection(imagePath)
         .then((result: RecognizeInspectionResult) => {
           if (this.data.recognitionRequestId !== requestId) return
+          const taskPrefill = this.data.selectedTaskId ? this.data.record : null
+          const recognizedRecord = taskPrefill
+            ? {
+              ...result.record,
+              customer: result.record.customer || taskPrefill.customer,
+              supplier: result.record.supplier || taskPrefill.supplier,
+              orderNumber: result.record.orderNumber || taskPrefill.orderNumber,
+              model: result.record.model || taskPrefill.model,
+              arrivalQuantity: result.record.arrivalQuantity || taskPrefill.arrivalQuantity,
+              inspectionDate: result.record.inspectionDate || taskPrefill.inspectionDate,
+            }
+            : result.record
           const productIndex = PRODUCT_OPTIONS.findIndex(
-            (option) => option.value === result.record.productType,
+            (option) => option.value === recognizedRecord.productType,
           )
           this.setData({
             recognitionCompleting: true,
@@ -181,7 +312,7 @@ Component({
               screen: 'review',
               imageId: result.imageId,
               rawContent: result.rawContent,
-              record: result.record,
+              record: recognizedRecord,
               productIndex: Math.max(productIndex, 0),
               recognitionCompleting: false,
             })

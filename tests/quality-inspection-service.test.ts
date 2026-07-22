@@ -124,3 +124,39 @@ test('draft save and recognition use shared backend paths', async () => {
     '/api/miniprogram/quality-inspections/recognize',
   )
 })
+
+test('encodeTaskQuery always requests purchase-order tasks for the pending tab', () => {
+  const { encodeTaskQuery } = require('../miniprogram/services/quality-inspection-service') as typeof import('../miniprogram/services/quality-inspection-service')
+  assert.equal(
+    encodeTaskQuery({
+      page: 2,
+      pageSize: 20,
+      search: 'PO-1',
+      status: 'pending',
+      sourceType: 'purchase_order',
+    }),
+    'page=2&page_size=20&search=PO-1&status=pending&source_type=purchase_order',
+  )
+})
+
+test('task item prefill keeps supplier and product values', () => {
+  const { taskItemToInspectionRecord } = require('../miniprogram/services/quality-inspection-service') as typeof import('../miniprogram/services/quality-inspection-service')
+  const task = {
+    id: 10,
+    customer_name: '客户A',
+    supplier_name: '供应商A',
+    signed_date: '2026-07-22',
+    items: [{
+      id: 11,
+      material_name: '钢丝刷',
+      spec_desc: '100x20',
+      quantity: 1000,
+      unit: 'Pcs',
+    }],
+  }
+  const record = taskItemToInspectionRecord(task, task.items[0])
+  assert.equal(record.customer, task.customer_name)
+  assert.equal(record.supplier, task.supplier_name)
+  assert.equal(record.model, task.items[0].spec_desc)
+  assert.equal(record.arrivalQuantity, String(task.items[0].quantity))
+})

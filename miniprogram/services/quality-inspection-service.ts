@@ -227,7 +227,7 @@ export function draftToInspectionRecord(
   }
 }
 
-function encodeTaskQuery(query: TaskQuery): string {
+export function encodeTaskQuery(query: TaskQuery): string {
   const values: Array<[string, string]> = []
   if (query.page) values.push(['page', String(query.page)])
   if (query.pageSize) values.push(['page_size', String(query.pageSize)])
@@ -238,6 +238,34 @@ function encodeTaskQuery(query: TaskQuery): string {
     .map(([key, value]) => `${encodeURIComponent(key)}=${encodeURIComponent(value)}`)
     .join('&')
 }
+
+export function taskItemToInspectionRecord(
+  task: QualityInspectionTaskDto,
+  item: QualityInspectionItemDto,
+): InspectionRecord {
+  if (item.inspection_draft) {
+    return draftToInspectionRecord(item.inspection_draft, task, item)
+  }
+  return {
+    productType: 'steel_brush',
+    customer: asString(task.customer_name),
+    supplier: asString(task.supplier_name),
+    trademark: '',
+    orderNumber: asString(task.contract_no),
+    model: asString(item.spec_desc || item.material_name),
+    arrivalQuantity: item.quantity === null || item.quantity === undefined
+      ? ''
+      : String(item.quantity),
+    inspectionDate: asString(task.signed_date),
+    rows: [],
+    sampleJudgements: normalizeJudgements([]),
+    notes: '',
+    reviewer: '',
+    inspector: '',
+    lowConfidenceFields: [],
+  }
+}
+
 
 export function listInspectionTasks(
   query: TaskQuery,
