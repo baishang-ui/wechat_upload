@@ -24,6 +24,8 @@
 - SCSS
 - Node.js 测试运行器
 - `tsx`
+- Node.js HTTP 服务
+- `mysql2`
 
 ## 项目结构
 
@@ -41,8 +43,14 @@ miniprogram/
     index.ts                 页面状态与交互
     index.wxml               识别、历史和编辑弹窗
     index.scss               页面、动画和毛玻璃样式
+server/
+  config.ts                  服务端环境变量校验
+  database.ts                MySQL 连接池与探活查询
+  app.ts                     HTTP 健康检查路由
+  index.ts                   服务启动与安全退出
+  test-connection.ts         一次性真实连接测试
 tests/
-  *.test.ts                  数据、压缩和本地历史测试
+  *.test.ts                  小程序领域逻辑和服务端自动化测试
 ```
 
 ## 安装
@@ -68,6 +76,54 @@ POST http://www.binictools.cn:8865/api/llm/v1/chat/completions
 ```
 
 模型名称为 `qwen35`。图片以 OpenAI 兼容的 `image_url` Base64 数据发送。
+
+## MySQL 后端服务
+
+微信小程序不会直接连接 MySQL。数据库凭据只保存在 Node.js 服务端的环境变量中，小程序后续应通过 HTTP API 使用数据库能力。不要把真实 `.env`、数据库密码或完整连接字符串提交到 Git。
+
+复制环境变量模板：
+
+```bash
+cp .env.example .env
+```
+
+编辑 `.env`：
+
+```text
+MYSQL_HOST=数据库主机
+MYSQL_PORT=3306
+MYSQL_USER=数据库用户
+MYSQL_PASSWORD=数据库密码
+MYSQL_DATABASE=数据库名称
+SERVER_HOST=0.0.0.0
+SERVER_PORT=3000
+```
+
+执行一次真实 MySQL 连接测试：
+
+```bash
+npm run mysql:test
+```
+
+该命令会验证 MySQL 身份认证、目标数据库选择和固定只读查询，不创建或修改数据表。成功输出只包含数据库名称和服务器时间，不显示账号或密码。
+
+启动开发服务：
+
+```bash
+npm run server:dev
+```
+
+健康检查接口：
+
+```text
+GET http://127.0.0.1:3000/api/health
+GET http://127.0.0.1:3000/api/health/mysql
+```
+
+- `/api/health` 只检查 Node.js 服务是否运行。
+- `/api/health/mysql` 执行 MySQL 探活；数据库不可用时返回 HTTP 503 和稳定错误码，不暴露驱动错误。
+- `SERVER_HOST=0.0.0.0` 允许同一局域网设备访问。真机调试时应把 `127.0.0.1` 替换为运行后端电脑的局域网 IP。
+- 当前 HTTP 配置只用于开发环境；正式发布需要 HTTPS、合法域名、网络访问控制、鉴权和最小权限数据库账号。
 
 ## API Token
 
