@@ -1,5 +1,7 @@
 import test from 'node:test'
-import assert from 'node:assert/strict'
+import strictAssert from 'node:assert/strict'
+
+const assert: typeof strictAssert = strictAssert
 
 import {
   SERVER_BASE_URL,

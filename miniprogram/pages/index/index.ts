@@ -15,6 +15,7 @@ import {
 import {
   deleteInspectionHistory,
   loadInspectionHistory,
+  saveHistorySyncState,
   saveInspectionHistory,
 } from '../../services/history-service'
 import {
@@ -23,39 +24,52 @@ import {
   submitInspection,
 } from '../../services/inspection-service'
 import { exportInspectionJson } from '../../services/export-service'
+import { getCurrentUser } from '../../services/auth-service'
+import { ServerClientError } from '../../services/server-client'
+import {
+  createStandaloneInspection,
+  getInspectionTask,
+  HistoryViewItem,
+  inspectionImageToDataUrl,
+  listInspectionHistory,
+  listInspectionTasks,
+  mergeInspectionHistory,
+  QualityInspectionTaskDto,
+  saveInspectionDraft,
+  syncStoredInspection,
+  taskItemToInspectionRecord,
+} from '../../services/quality-inspection-service'
 
-interface HistoryViewItem extends StoredInspectionRecord {
-  productLabel: string
-  updatedLabel: string
+interface HistoryEditorInput {
+  localId: string
+  displayId: string
+  origin: 'local' | 'remote'
+  sourceType: 'purchase_order' | 'standalone'
+  taskId: number | null
+  itemId: number | null
+  imagePath: string
+  rawContent: string
+  record: InspectionRecord
 }
 
-type WorkspaceTab = 'scan' | 'history'
+type WorkspaceTab = 'scan' | 'tasks' | 'history'
 
 const productLabels = PRODUCT_OPTIONS.map((option) => option.label)
 const measurementHeaders = Array.from({ length: MEASUREMENT_COUNT }, (_, index) => index + 1)
 const judgementOptions: Judgement[] = ['', 'OK', 'NG']
 const PROGRESS_COMPLETION_DURATION = 420
 
-function formatHistoryTime(timestamp: number): string {
-  const date = new Date(timestamp)
-  const month = String(date.getMonth() + 1).padStart(2, '0')
-  const day = String(date.getDate()).padStart(2, '0')
-  const hour = String(date.getHours()).padStart(2, '0')
-  const minute = String(date.getMinutes()).padStart(2, '0')
-  return `${month}/${day} ${hour}:${minute}`
-}
-
-function toHistoryViewItems(records: StoredInspectionRecord[]): HistoryViewItem[] {
-  return records.map((item) => ({
-    ...item,
-    productLabel: PRODUCT_OPTIONS.find((option) => option.value === item.record.productType)?.label ?? '检验报告',
-    updatedLabel: formatHistoryTime(item.updatedAt),
-  }))
-}
-
 Component({
   data: {
     activeTab: 'scan' as WorkspaceTab,
+    taskItems: [] as QualityInspectionTaskDto[],
+    taskPage: 1,
+    taskTotal: 0,
+    taskSearch: '',
+    taskStatus: 'pending',
+    taskLoading: false,
+    selectedTaskId: 0,
+    selectedItemId: 0,
     screen: 'capture',
     imagePath: '',
     imageId: '',
@@ -74,9 +88,17 @@ Component({
     recordId: '',
     editingRecordId: '',
     historyRecords: [] as HistoryViewItem[],
+    historyError: '',
+    historyRequestId: 0,
+    historyOpeningId: '',
     historyModalVisible: false,
     historyModalClosing: false,
     historyEditId: '',
+    historyEditDisplayId: '',
+    historyEditOrigin: 'local' as 'local' | 'remote',
+    historyEditSourceType: 'standalone' as 'purchase_order' | 'standalone',
+    historyEditTaskId: 0,
+    historyEditItemId: 0,
     historyEditImagePath: '',
     historyEditRawContent: '',
     historyEditProductIndex: 0,
@@ -87,16 +109,53 @@ Component({
   },
   lifetimes: {
     attached() {
-      this.setData({ historyRecords: toHistoryViewItems(loadInspectionHistory()) })
+      getCurrentUser()
+        .then(() => {
+          this.refreshHistory()
+        })
+        .catch((error: Error) => {
+          if (error instanceof ServerClientError && error.statusCode === 401) {
+            wx.reLaunch({ url: '/pages/login/login' })
+            return
+          }
+          wx.showToast({ title: error.message || '会话检查失败', icon: 'none' })
+        })
     },
   },
   methods: {
-    refreshHistory() {
-      this.setData({ historyRecords: toHistoryViewItems(loadInspectionHistory()) })
+    refreshHistory(): Promise<void> {
+      const requestId = this.data.historyRequestId + 1
+      const local = loadInspectionHistory()
+      this.setData({
+        historyRecords: mergeInspectionHistory(local, []),
+        historyError: '',
+        historyRequestId: requestId,
+      })
+      return listInspectionHistory()
+        .then((data) => {
+          if (this.data.historyRequestId !== requestId) return
+          this.setData({
+            historyRecords: mergeInspectionHistory(loadInspectionHistory(), data.items),
+            historyError: '',
+          })
+        })
+        .catch((error: Error) => {
+          if (this.data.historyRequestId !== requestId) return
+          this.setData({
+            historyRecords: mergeInspectionHistory(loadInspectionHistory(), []),
+            historyError: `服务器记录加载失败：${error.message || '请稍后重试'}`,
+          })
+        })
     },
     activateTab(activeTab: WorkspaceTab) {
-      this.setData({ activeTab })
+      this.setData({
+        activeTab,
+        ...(activeTab === 'scan'
+          ? { selectedTaskId: 0, selectedItemId: 0 }
+          : {}),
+      })
       if (activeTab === 'history') this.refreshHistory()
+      if (activeTab === 'tasks') this.loadTasks(true)
     },
     switchTab(event: WechatMiniprogram.TouchEvent) {
       this.activateTab(event.currentTarget.dataset.tab as WorkspaceTab)
@@ -112,10 +171,130 @@ Component({
       this.setData({ activeTab: 'scan' })
     },
     showHistory() {
+      this.activateTab('history')
+    },
+    loadTasks(reset = false) {
+      if (this.data.taskLoading) return
+      const page = reset ? 1 : this.data.taskPage
+      if (!reset && this.data.taskItems.length >= this.data.taskTotal) return
       this.setData({
-        activeTab: 'history',
-        historyRecords: toHistoryViewItems(loadInspectionHistory()),
+        taskLoading: true,
+        ...(reset ? { taskItems: [], taskPage: 1, taskTotal: 0 } : {}),
       })
+      listInspectionTasks({
+        page,
+        pageSize: 20,
+        search: this.data.taskSearch.trim() || undefined,
+        status: this.data.taskStatus === 'all' ? undefined : this.data.taskStatus,
+        sourceType: 'purchase_order',
+      })
+        .then((data) => {
+          this.setData({
+            taskItems: reset
+              ? data.items
+              : [...this.data.taskItems, ...data.items],
+            taskTotal: data.total,
+            taskPage: page + 1,
+          })
+        })
+        .catch((error: Error) => {
+          wx.showToast({ title: error.message || '待检任务加载失败', icon: 'none' })
+        })
+        .finally(() => this.setData({ taskLoading: false }))
+    },
+    loadMoreTasks() {
+      if (this.data.activeTab === 'tasks') this.loadTasks(false)
+    },
+    onTaskSearchInput(event: WechatMiniprogram.Input) {
+      this.setData({ taskSearch: event.detail.value })
+    },
+    confirmTaskSearch() {
+      this.loadTasks(true)
+    },
+    changeTaskStatus(event: WechatMiniprogram.TouchEvent) {
+      const taskStatus = String(event.currentTarget.dataset.status || 'pending')
+      this.setData({ taskStatus }, () => this.loadTasks(true))
+    },
+    openTask(event: WechatMiniprogram.TouchEvent) {
+      const taskId = Number(event.currentTarget.dataset.id)
+      if (!taskId) return
+      if (this.data.selectedTaskId === taskId) {
+        this.setData({ selectedTaskId: 0, selectedItemId: 0 })
+        return
+      }
+      this.setData({ taskLoading: true })
+      getInspectionTask(taskId)
+        .then((task) => {
+          this.setData({
+            selectedTaskId: task.id,
+            selectedItemId: 0,
+            taskItems: this.data.taskItems.map((item) => (
+              item.id === task.id ? task : item
+            )),
+          })
+        })
+        .catch((error: Error) => {
+          wx.showToast({ title: error.message || '任务详情加载失败', icon: 'none' })
+        })
+        .finally(() => this.setData({ taskLoading: false }))
+    },
+    selectTaskItem(event: WechatMiniprogram.TouchEvent) {
+      const taskId = Number(event.currentTarget.dataset.taskId)
+      const itemId = Number(event.currentTarget.dataset.itemId)
+      const task = this.data.taskItems.find((candidate) => candidate.id === taskId)
+      const item = task?.items?.find((candidate) => candidate.id === itemId)
+      if (!task || !item) return
+      const record = taskItemToInspectionRecord(task, item)
+      const productIndex = PRODUCT_OPTIONS.findIndex(
+        (option) => option.value === record.productType,
+      )
+      this.setData({
+        activeTab: 'scan',
+        screen: 'capture',
+        selectedTaskId: taskId,
+        selectedItemId: itemId,
+        record,
+        productIndex: Math.max(productIndex, 0),
+      })
+      wx.showToast({ title: '任务已选择，请拍摄报告', icon: 'none' })
+    },
+    syncHistoryRecord(record: StoredInspectionRecord): Promise<StoredInspectionRecord> {
+      return syncStoredInspection(record, {
+        createStandalone: createStandaloneInspection,
+        saveDraft: saveInspectionDraft,
+        imageToDataUrl: inspectionImageToDataUrl,
+        loadExistingImages: async (taskId, itemId) => {
+          const task = await getInspectionTask(taskId)
+          const item = task.items?.find((candidate) => candidate.id === itemId)
+          return (item?.inspection_draft?.ai_workbench_images || [])
+            .filter((image) => image.startsWith('data:image/'))
+            .slice(0, 1)
+        },
+        updateState: async (nextRecord) => (
+          saveHistorySyncState(nextRecord) || nextRecord
+        ),
+        onUnauthorized: () => wx.reLaunch({ url: '/pages/login/login' }),
+      })
+    },
+    retryHistorySync(event: WechatMiniprogram.TouchEvent) {
+      const id = String(event.currentTarget.dataset.id || '')
+      const stored = loadInspectionHistory().find((item) => item.id === id)
+      if (!stored || stored.syncStatus === 'syncing') return
+      this.setData({
+        historyRecords: this.data.historyRecords.map((item) => (
+          item.id === id
+            ? { ...item, syncStatus: 'syncing', syncError: '' }
+            : item
+        )),
+      })
+      this.syncHistoryRecord(stored)
+        .then((result) => this.refreshHistory().then(() => result))
+        .then((result) => {
+          wx.showToast({
+            title: result.syncStatus === 'synced' ? '同步成功' : '同步失败，请重试',
+            icon: 'none',
+          })
+        })
     },
     exportCurrentRecord() {
       if (this.data.exporting) return
@@ -168,8 +347,20 @@ Component({
       recognizeInspection(imagePath)
         .then((result: RecognizeInspectionResult) => {
           if (this.data.recognitionRequestId !== requestId) return
+          const taskPrefill = this.data.selectedTaskId ? this.data.record : null
+          const recognizedRecord = taskPrefill
+            ? {
+              ...result.record,
+              customer: result.record.customer || taskPrefill.customer,
+              supplier: result.record.supplier || taskPrefill.supplier,
+              orderNumber: result.record.orderNumber || taskPrefill.orderNumber,
+              model: result.record.model || taskPrefill.model,
+              arrivalQuantity: result.record.arrivalQuantity || taskPrefill.arrivalQuantity,
+              inspectionDate: result.record.inspectionDate || taskPrefill.inspectionDate,
+            }
+            : result.record
           const productIndex = PRODUCT_OPTIONS.findIndex(
-            (option) => option.value === result.record.productType,
+            (option) => option.value === recognizedRecord.productType,
           )
           this.setData({
             recognitionCompleting: true,
@@ -181,7 +372,7 @@ Component({
               screen: 'review',
               imageId: result.imageId,
               rawContent: result.rawContent,
-              record: result.record,
+              record: recognizedRecord,
               productIndex: Math.max(productIndex, 0),
               recognitionCompleting: false,
             })
@@ -208,22 +399,73 @@ Component({
         fail: () => wx.showToast({ title: '本地图片已失效', icon: 'none' }),
       })
     },
-    openHistory(event: WechatMiniprogram.TouchEvent) {
-      const id = String(event.currentTarget.dataset.id || '')
-      const stored = this.data.historyRecords.find((item) => item.id === id)
-      if (!stored) return
+    showHistoryEditor(input: HistoryEditorInput) {
       const productIndex = PRODUCT_OPTIONS.findIndex(
-        (option) => option.value === stored.record.productType,
+        (option) => option.value === input.record.productType,
       )
       this.setData({
         historyModalVisible: true,
         historyModalClosing: false,
-        historyEditId: stored.id,
-        historyEditImagePath: stored.imagePath,
-        historyEditRawContent: stored.rawContent,
-        historyEditRecord: stored.record,
+        historyEditId: input.localId,
+        historyEditDisplayId: input.displayId,
+        historyEditOrigin: input.origin,
+        historyEditSourceType: input.sourceType,
+        historyEditTaskId: input.taskId || 0,
+        historyEditItemId: input.itemId || 0,
+        historyEditImagePath: input.imagePath,
+        historyEditRawContent: input.rawContent,
+        historyEditRecord: input.record,
         historyEditProductIndex: Math.max(productIndex, 0),
       })
+    },
+    openHistory(event: WechatMiniprogram.TouchEvent) {
+      const id = String(event.currentTarget.dataset.id || '')
+      const selected = this.data.historyRecords.find((item) => item.id === id)
+      if (!selected || this.data.historyOpeningId) return
+      if (selected.origin === 'local') {
+        const stored = loadInspectionHistory().find((item) => item.id === id)
+        if (!stored) {
+          this.refreshHistory()
+          return
+        }
+        this.showHistoryEditor({
+          localId: stored.id,
+          displayId: stored.id,
+          origin: 'local',
+          sourceType: stored.sourceType,
+          taskId: stored.taskId,
+          itemId: stored.itemId,
+          imagePath: stored.imagePath,
+          rawContent: stored.rawContent,
+          record: stored.record,
+        })
+        return
+      }
+      if (!selected.taskId || !selected.itemId) return
+      this.setData({ historyOpeningId: selected.id })
+      getInspectionTask(selected.taskId)
+        .then((task) => {
+          const item = task.items?.find((candidate) => candidate.id === selected.itemId)
+          if (!item) throw new Error('服务器记录明细不存在')
+          const cached = loadInspectionHistory().find((record) => (
+            record.taskId === selected.taskId && record.itemId === selected.itemId
+          ))
+          this.showHistoryEditor({
+            localId: cached?.id || '',
+            displayId: task.task_no || `云端记录 ${selected.taskId}/${selected.itemId}`,
+            origin: 'remote',
+            sourceType: task.source_type || selected.sourceType,
+            taskId: selected.taskId,
+            itemId: selected.itemId,
+            imagePath: cached?.imagePath || '',
+            rawContent: cached?.rawContent || '',
+            record: taskItemToInspectionRecord(task, item),
+          })
+        })
+        .catch((error: Error) => {
+          wx.showToast({ title: error.message || '服务器记录加载失败', icon: 'none' })
+        })
+        .finally(() => this.setData({ historyOpeningId: '' }))
     },
     noop() {},
     closeHistoryModal() {
@@ -238,6 +480,11 @@ Component({
           historyModalVisible: false,
           historyModalClosing: false,
           historyEditId: '',
+          historyEditDisplayId: '',
+          historyEditOrigin: 'local',
+          historyEditSourceType: 'standalone',
+          historyEditTaskId: 0,
+          historyEditItemId: 0,
           historyEditImagePath: '',
           historyEditRawContent: '',
           historyEditProductIndex: 0,
@@ -298,7 +545,7 @@ Component({
       if (this.data.historyExporting) return
       this.setData({ historyExporting: true })
       exportInspectionJson({
-        recordId: this.data.historyEditId,
+        recordId: this.data.historyEditId || this.data.historyEditDisplayId,
         record: this.data.historyEditRecord,
       })
         .then(() => {
@@ -317,18 +564,24 @@ Component({
         return
       }
       this.setData({ historySaving: true })
-      submitInspection(this.data.historyEditId, this.data.historyEditRecord)
-        .then(() => saveInspectionHistory({
-          imagePath: this.data.historyEditImagePath,
-          rawContent: this.data.historyEditRawContent,
-          record: this.data.historyEditRecord,
-        }, this.data.historyEditId))
-        .then(() => {
-          this.setData({
-            historyRecords: toHistoryViewItems(loadInspectionHistory()),
-          })
+      saveInspectionHistory({
+        imagePath: this.data.historyEditImagePath,
+        rawContent: this.data.historyEditRawContent,
+        record: this.data.historyEditRecord,
+        sourceType: this.data.historyEditSourceType,
+        taskId: this.data.historyEditTaskId || null,
+        itemId: this.data.historyEditItemId || null,
+      }, this.data.historyEditId)
+        .then((stored) => this.syncHistoryRecord(stored))
+        .then((result) => this.refreshHistory().then(() => result))
+        .then((result) => {
           this.hideHistoryModal()
-          wx.showToast({ title: '记录已更新', icon: 'success' })
+          wx.showToast({
+            title: result.syncStatus === 'synced'
+              ? '记录已更新并同步'
+              : '已本地保存，同步失败',
+            icon: 'none',
+          })
         })
         .catch((error: Error) => {
           wx.showModal({ title: '更新失败', content: error.message, showCancel: false })
@@ -337,17 +590,18 @@ Component({
     },
     deleteHistory(event: WechatMiniprogram.TouchEvent) {
       const id = String(event.currentTarget.dataset.id || '')
-      if (!id) return
+      const selected = this.data.historyRecords.find((item) => item.id === id)
+      if (!selected || selected.origin !== 'local') return
       wx.showModal({
         title: '删除识别记录',
-        content: '删除后将同时清理本地报告图片。',
+        content: '仅删除本地副本和本地图片，服务器上的已同步记录不会删除。',
         confirmText: '删除',
         confirmColor: '#c93f4a',
         success: (result) => {
           if (!result.confirm) return
           deleteInspectionHistory(id)
-            .then((records) => {
-              this.setData({ historyRecords: toHistoryViewItems(records) })
+            .then(() => this.refreshHistory())
+            .then(() => {
               if (this.data.historyEditId === id) this.closeHistoryModal()
               wx.showToast({ title: '已删除', icon: 'success' })
             })
@@ -405,14 +659,25 @@ Component({
           imagePath: this.data.imagePath,
           rawContent: this.data.rawContent,
           record: this.data.record,
+          sourceType: this.data.selectedTaskId ? 'purchase_order' : 'standalone',
+          taskId: this.data.selectedTaskId || null,
+          itemId: this.data.selectedItemId || null,
         }, this.data.editingRecordId))
+        .then((stored) => this.syncHistoryRecord(stored))
         .then((stored) => {
           this.setData({
             screen: 'success',
             recordId: stored.id,
             editingRecordId: stored.id,
-            historyRecords: toHistoryViewItems(loadInspectionHistory()),
           })
+          this.refreshHistory()
+          if (stored.syncStatus === 'failed') {
+            wx.showToast({
+              title: '已本地保存，可在历史记录重试',
+              icon: 'none',
+              duration: 2800,
+            })
+          }
         })
         .catch((error: Error) => {
           wx.showModal({ title: '保存失败', content: error.message, showCancel: false })
