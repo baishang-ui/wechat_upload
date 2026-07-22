@@ -86,6 +86,24 @@ test('saveInspectionHistory persists a new image and stable record', async () =>
   assert.deepEqual(adapter.savedTemporaryPaths, ['/tmp/report.jpg'])
 })
 
+
+
+test('saveInspectionHistory supports a server-backed record without a local image', async () => {
+  const adapter = createAdapter()
+  const stored = await saveInspectionHistory({
+    imagePath: '',
+    rawContent: '',
+    record: createRecord(),
+    sourceType: 'purchase_order',
+    taskId: 20,
+    itemId: 21,
+  }, '', adapter, 150)
+  assert.equal(stored.imagePath, '')
+  assert.equal(stored.taskId, 20)
+  assert.equal(stored.itemId, 21)
+  assert.deepEqual(adapter.savedTemporaryPaths, [])
+})
+
 test('saveInspectionHistory updates without changing clientRecordId', async () => {
   const existing = createStoredRecord()
   const adapter = createAdapter([existing])

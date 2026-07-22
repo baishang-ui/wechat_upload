@@ -212,10 +212,15 @@
     <block wx:else>
       <view class="history-header">
         <view>
-          <view class="history-title">识别记录</view>
-          <view class="history-subtitle">共 {{historyRecords.length}} 份本地记录</view>
+          <view class="history-title">质检记录</view>
+          <view class="history-subtitle">共 {{historyRecords.length}} 份本地与服务器记录</view>
         </view>
-        <view class="local-pill">仅本机</view>
+        <view class="local-pill">共享后端</view>
+      </view>
+
+      <view wx:if="{{historyError}}" class="history-error-bar" bindtap="refreshHistory">
+        <text>{{historyError}}</text>
+        <text class="history-error-action">点击重试</text>
       </view>
 
       <view wx:if="{{historyRecords.length === 0}}" class="history-empty">
@@ -224,37 +229,44 @@
           <view class="empty-line"></view>
           <view class="empty-line"></view>
         </view>
-        <view class="empty-title">还没有识别记录</view>
-        <view class="empty-desc">保存一份检验报告后，会显示在这里。</view>
+        <view class="empty-title">还没有质检记录</view>
+        <view class="empty-desc">本地保存或服务器已有的质检报告会显示在这里。</view>
         <button class="primary-button empty-action" bindtap="goToScan">去识别</button>
       </view>
 
       <view wx:else class="history-list">
-        <view wx:for="{{historyRecords}}" wx:key="id" class="history-item" data-id="{{item.id}}" bindtap="openHistory">
-          <image class="history-thumb" src="{{item.imagePath}}" mode="aspectFill"></image>
+        <view wx:for="{{historyRecords}}" wx:key="id" class="history-item history-item--{{item.origin}}" data-id="{{item.id}}" bindtap="openHistory">
+          <image wx:if="{{item.imagePath}}" class="history-thumb" src="{{item.imagePath}}" mode="aspectFill"></image>
+          <view wx:else class="history-thumb history-thumb--remote">
+            <view class="remote-thumb-icon">云</view>
+            <view class="remote-thumb-text">服务器记录</view>
+          </view>
           <view class="history-main">
             <view class="history-row">
-              <text class="history-product">{{item.productLabel}}</text>
+              <view class="history-heading-tags">
+                <text class="history-product">{{item.productLabel}}</text>
+                <text class="history-source history-source--{{item.sourceType}}">{{item.sourceLabel}}</text>
+              </view>
               <text class="history-date">{{item.updatedLabel}}</text>
             </view>
-            <view class="history-customer">{{item.record.customer || '未识别客户'}}</view>
-            <view class="history-meta">{{item.record.model || '未识别型号'}} · {{item.record.inspectionDate || '无日期'}}</view>
-            <view class="history-id">{{item.id}}</view>
+            <view class="history-customer">{{item.customer || '未填写客户'}}</view>
+            <view class="history-meta">{{item.model || '未填写规格'}} · {{item.inspectionDate || '无日期'}}</view>
+            <view class="history-id">{{item.origin === 'remote' ? '服务器' : '本地'}} · {{item.id}}</view>
             <view class="history-sync-row">
               <view class="history-sync-status sync-{{item.syncStatus}}">
-                <view wx:if="{{item.syncStatus === 'syncing'}}" class="sync-spinner"></view>
-                <text>{{item.syncStatus === 'synced' ? '已同步' : item.syncStatus === 'syncing' ? '同步中' : item.syncStatus === 'failed' ? '同步失败' : '仅本地'}}</text>
+                <view wx:if="{{item.syncStatus === 'syncing' || historyOpeningId === item.id}}" class="sync-spinner"></view>
+                <text>{{historyOpeningId === item.id ? '正在读取' : item.syncStatus === 'synced' ? '已同步' : item.syncStatus === 'syncing' ? '同步中' : item.syncStatus === 'failed' ? '同步失败' : '仅本地'}}</text>
               </view>
               <button
-                wx:if="{{item.syncStatus === 'failed'}}"
+                wx:if="{{item.origin === 'local' && item.syncStatus === 'failed'}}"
                 class="history-retry-button"
                 data-id="{{item.id}}"
                 catchtap="retryHistorySync"
               >重试同步</button>
             </view>
-            <view wx:if="{{item.syncStatus === 'failed' && item.syncError}}" class="history-sync-error">{{item.syncError}}</view>
+            <view wx:if="{{item.origin === 'local' && item.syncStatus === 'failed' && item.syncError}}" class="history-sync-error">{{item.syncError}}</view>
           </view>
-          <view class="delete-button" data-id="{{item.id}}" catchtap="deleteHistory" aria-label="删除记录" role="button" hover-class="delete-button--pressed" hover-stay-time="120">
+          <view wx:if="{{item.origin === 'local'}}" class="delete-button" data-id="{{item.id}}" catchtap="deleteHistory" aria-label="删除本地记录" role="button" hover-class="delete-button--pressed" hover-stay-time="120">
             <text class="delete-symbol">×</text>
           </view>
         </view>
@@ -269,10 +281,11 @@
   <view class="history-modal-panel" catchtap="noop">
     <view class="modal-grabber"></view>
     <view class="history-modal-header">
-      <image class="modal-thumb" src="{{historyEditImagePath}}" mode="aspectFill" bindtap="previewHistoryImage"></image>
+      <image wx:if="{{historyEditImagePath}}" class="modal-thumb" src="{{historyEditImagePath}}" mode="aspectFill" bindtap="previewHistoryImage"></image>
+      <view wx:else class="modal-thumb modal-thumb--remote"><text>云端</text></view>
       <view class="modal-heading">
-        <view class="modal-title">编辑识别记录</view>
-        <view class="modal-record-id">{{historyEditId}}</view>
+        <view class="modal-title">{{historyEditOrigin === 'remote' ? '编辑服务器记录' : '编辑识别记录'}}</view>
+        <view class="modal-record-id">{{historyEditDisplayId || historyEditId}}</view>
       </view>
       <view class="modal-close" bindtap="closeHistoryModal" aria-label="关闭" role="button" hover-class="modal-close--pressed" hover-stay-time="120">×</view>
     </view>

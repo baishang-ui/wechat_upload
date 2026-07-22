@@ -77,6 +77,22 @@ test('draftToInspectionRecord restores miniprogram metadata and web draft fallba
   assert.equal(fallback.model, '80x20')
 })
 
+
+
+test('draftToInspectionRecord accepts server detail records field', () => {
+  const record = createCompleteRecord()
+  const outgoing = inspectionRecordToDraft(record)
+  const serverDraft = {
+    records: outgoing.inspection_records,
+    ai_workbench_result: outgoing.ai_workbench_result,
+    ai_workbench_images: ['data:image/jpeg;base64,YQ=='],
+  }
+  const restored = draftToInspectionRecord(serverDraft)
+  assert.equal(restored.rows.length, 1)
+  assert.equal(restored.rows[0].item, record.rows[0].item)
+  assert.deepEqual(restored.rows[0].measurements, record.rows[0].measurements)
+})
+
 test('createStandaloneInspection sends stable client id to the standalone endpoint', async () => {
   const calls: Array<Record<string, unknown>> = []
   const request = async <T>(options: Record<string, unknown>): Promise<T> => {
@@ -225,4 +241,85 @@ test('purchase-order sync skips task creation and overwrites selected item draft
     imageToDataUrl: async () => 'data:image/jpeg;base64,YQ==',
   })
   assert.deepEqual(calls, ['draft:30:31'])
+})
+
+test('merged history deduplicates synced local records by task and item', () => {
+  const { mergeInspectionHistory } = require('../miniprogram/services/quality-inspection-service') as typeof import('../miniprogram/services/quality-inspection-service')
+  const local = {
+    ...createSyncRecord(),
+    taskId: 10,
+    itemId: 11,
+    syncStatus: 'synced' as const,
+    updatedAt: 100,
+  }
+  const remote = {
+    task_id: 10,
+    item_id: 11,
+    source_type: 'standalone' as const,
+    updated_at: '2026-07-22T12:00:00Z',
+    material_name: '钢丝刷',
+  }
+  const merged = mergeInspectionHistory([local], [remote])
+  assert.equal(merged.length, 1)
+  assert.equal(merged[0].origin, 'remote')
+})
+
+test('merged history keeps failed local records and sorts newest first', () => {
+  const { mergeInspectionHistory } = require('../miniprogram/services/quality-inspection-service') as typeof import('../miniprogram/services/quality-inspection-service')
+  const local = {
+    ...createSyncRecord(),
+    syncStatus: 'failed' as const,
+    syncError: '网络连接失败',
+    updatedAt: Date.parse('2026-07-22T13:00:00Z'),
+  }
+  const remote = {
+    task_id: 20,
+    item_id: 21,
+    source_type: 'purchase_order' as const,
+    updated_at: '2026-07-22T12:00:00Z',
+    material_name: '钢丝刷',
+  }
+  const merged = mergeInspectionHistory([local], [remote])
+  assert.equal(merged[0].origin, 'local')
+  assert.equal(merged[0].syncStatus, 'failed')
+})
+
+
+test('history request explicitly includes all source types', async () => {
+  const { listInspectionHistory } = require('../miniprogram/services/quality-inspection-service') as typeof import('../miniprogram/services/quality-inspection-service')
+  const calls: Array<Record<string, unknown>> = []
+  const request = async <T>(options: Record<string, unknown>): Promise<T> => {
+    calls.push(options)
+    return { items: [], total: 0, page: 2, page_size: 50 } as T
+  }
+  await listInspectionHistory(2, 50, request)
+  assert.equal(
+    calls[0].path,
+    '/customer-orders/api/purchase-orders/quality-inspections/history-records?page=2&page_size=50&source_type=all',
+  )
+})
+
+test('sync without a local image preserves existing server draft images', async () => {
+  const { syncStoredInspection } = require('../miniprogram/services/quality-inspection-service') as typeof import('../miniprogram/services/quality-inspection-service')
+  const local = {
+    ...createSyncRecord('purchase_order'),
+    imagePath: '',
+  }
+  let uploadedImages: string[] = []
+  let imageRead = false
+  const result = await syncStoredInspection(local, {
+    createStandalone: async () => { throw new Error('不应创建任务') },
+    saveDraft: async (_taskId, _itemId, payload) => {
+      uploadedImages = payload.ai_workbench_images
+    },
+    updateState: async (record) => record,
+    imageToDataUrl: async () => {
+      imageRead = true
+      return 'data:image/jpeg;base64,bG9jYWw='
+    },
+    loadExistingImages: async () => ['data:image/jpeg;base64,c2VydmVy'],
+  })
+  assert.equal(result.syncStatus, 'synced')
+  assert.equal(imageRead, false)
+  assert.deepEqual(uploadedImages, ['data:image/jpeg;base64,c2VydmVy'])
 })

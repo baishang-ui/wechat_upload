@@ -38,8 +38,10 @@ export interface QualityInspectionDraftRecord {
 
 export interface QualityInspectionDraftPayload {
   inspection_records: QualityInspectionDraftRecord[]
+  records?: QualityInspectionDraftRecord[]
   ai_workbench_result: Record<string, unknown>
   ai_workbench_images: string[]
+  saved_at?: string
 }
 
 export interface QualityInspectionItemDto {
@@ -97,6 +99,54 @@ export interface RecognitionProxyResult {
   raw_content: string
 }
 
+export interface RemoteInspectionHistory {
+  task_id: number
+  item_id: number
+  source_type: 'purchase_order' | 'standalone'
+  client_record_id?: string | null
+  task_no?: string | null
+  contract_no?: string | null
+  customer_name?: string | null
+  supplier_name?: string | null
+  material_code?: string | null
+  material_name?: string | null
+  spec_desc?: string | null
+  latest_inspection_date?: string | null
+  updated_at?: string | null
+  latest_result?: string | null
+  [key: string]: unknown
+}
+
+export interface HistoryListData {
+  items: RemoteInspectionHistory[]
+  total: number
+  total_records?: number
+  page: number
+  page_size: number
+}
+
+export interface HistoryViewItem {
+  id: string
+  origin: 'local' | 'remote'
+  taskId: number | null
+  itemId: number | null
+  clientRecordId: string
+  sourceType: 'purchase_order' | 'standalone'
+  sourceLabel: string
+  syncStatus: StoredInspectionRecord['syncStatus']
+  syncError: string
+  updatedAt: number
+  updatedLabel: string
+  inspectionDate: string
+  imagePath: string
+  rawContent: string
+  record: InspectionRecord | null
+  productLabel: string
+  customer: string
+  supplier: string
+  model: string
+}
+
 interface DraftTaskFallback {
   customer_name?: string | null
   supplier_name?: string | null
@@ -107,6 +157,102 @@ interface DraftItemFallback {
   material_name?: string | null
   spec_desc?: string | null
 }
+
+export function listInspectionHistory(
+  page = 1,
+  pageSize = 100,
+  request: QualityRequest = serverRequest,
+): Promise<HistoryListData> {
+  return request<HistoryListData>({
+    method: 'GET',
+    path: '/customer-orders/api/purchase-orders/quality-inspections/history-records'
+      + `?page=${page}&page_size=${pageSize}&source_type=all`,
+  })
+}
+
+
+function remoteTimestamp(item: RemoteInspectionHistory): number {
+  const value = item.updated_at || item.latest_inspection_date || ''
+  const timestamp = Date.parse(value)
+  return Number.isFinite(timestamp) ? timestamp : 0
+}
+
+function formatHistoryTime(timestamp: number): string {
+  if (!timestamp) return '无日期'
+  const date = new Date(timestamp)
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  const hour = String(date.getHours()).padStart(2, '0')
+  const minute = String(date.getMinutes()).padStart(2, '0')
+  return `${month}/${day} ${hour}:${minute}`
+}
+
+
+export function mergeInspectionHistory(
+  local: StoredInspectionRecord[],
+  remote: RemoteInspectionHistory[],
+): HistoryViewItem[] {
+  const remoteKeys = new Set(
+    remote.map((item) => `${item.task_id}:${item.item_id}`),
+  )
+  const localItems: HistoryViewItem[] = local
+    .filter((item) => !(
+      item.syncStatus === 'synced'
+      && item.taskId !== null
+      && item.itemId !== null
+      && remoteKeys.has(`${item.taskId}:${item.itemId}`)
+    ))
+    .map((item) => ({
+      id: item.id,
+      origin: 'local',
+      taskId: item.taskId,
+      itemId: item.itemId,
+      clientRecordId: item.clientRecordId,
+      sourceType: item.sourceType,
+      sourceLabel: item.sourceType === 'purchase_order' ? '采购质检' : '独立报告',
+      syncStatus: item.syncStatus,
+      syncError: item.syncError,
+      updatedAt: item.updatedAt,
+      updatedLabel: formatHistoryTime(item.updatedAt),
+      inspectionDate: item.record.inspectionDate,
+      imagePath: item.imagePath,
+      rawContent: item.rawContent,
+      record: item.record,
+      productLabel: PRODUCT_OPTIONS.find(
+        (option) => option.value === item.record.productType,
+      )?.label ?? '检验报告',
+      customer: item.record.customer,
+      supplier: item.record.supplier,
+      model: item.record.model,
+    }))
+  const remoteItems: HistoryViewItem[] = remote.map((item) => ({
+    id: `remote:${item.task_id}:${item.item_id}`,
+    origin: 'remote',
+    taskId: item.task_id,
+    itemId: item.item_id,
+    clientRecordId: asString(item.client_record_id),
+    sourceType: item.source_type,
+    sourceLabel: item.source_type === 'purchase_order' ? '采购质检' : '独立报告',
+    syncStatus: 'synced',
+    syncError: '',
+    updatedAt: remoteTimestamp(item),
+    updatedLabel: formatHistoryTime(remoteTimestamp(item)),
+    inspectionDate: asString(item.latest_inspection_date),
+    imagePath: '',
+    rawContent: '',
+    record: null,
+    productLabel: asString(item.material_name || item.material_code) || '检验报告',
+    customer: asString(item.customer_name || item.contract_no || item.task_no),
+    supplier: asString(item.supplier_name),
+    model: asString(item.spec_desc),
+  }))
+  return [...localItems, ...remoteItems].sort((left, right) => {
+    if (left.updatedAt !== right.updatedAt) return right.updatedAt - left.updatedAt
+    if (left.origin !== right.origin) return left.origin === 'local' ? -1 : 1
+    return left.id.localeCompare(right.id)
+  })
+}
+
 
 export interface SyncStoredInspectionDeps {
   createStandalone(
@@ -122,6 +268,7 @@ export interface SyncStoredInspectionDeps {
     record: StoredInspectionRecord,
   ): Promise<StoredInspectionRecord> | StoredInspectionRecord
   imageToDataUrl(filePath: string): Promise<string>
+  loadExistingImages?(taskId: number, itemId: number): Promise<string[]>
   onUnauthorized?(error: unknown): void
 }
 
@@ -218,7 +365,8 @@ export function draftToInspectionRecord(
   item: DraftItemFallback = {},
 ): InspectionRecord {
   const metadata = asRecord(draft.ai_workbench_result)
-  const rows = (draft.inspection_records || []).map((row, index) => ({
+  const draftRecords = draft.inspection_records || draft.records || []
+  const rows = draftRecords.map((row, index) => ({
     id: asString(row.row_key) || `draft-row-${index + 1}`,
     item: asString(row.project),
     requirement: asString(row.standard),
@@ -229,7 +377,7 @@ export function draftToInspectionRecord(
   const metadataJudgements = metadata.sample_judgements
   return {
     productType: asProductType(
-      metadata.product_type || draft.inspection_records?.[0]?.group_title,
+      metadata.product_type || draftRecords[0]?.group_title,
     ),
     customer: asString(metadata.customer || task.customer_name),
     supplier: asString(metadata.supplier || task.supplier_name),
@@ -241,7 +389,7 @@ export function draftToInspectionRecord(
     rows,
     sampleJudgements: Array.isArray(metadataJudgements)
       ? normalizeJudgements(metadataJudgements)
-      : judgementsFromRows(draft.inspection_records || []),
+      : judgementsFromRows(draftRecords),
     notes: asString(metadata.notes),
     reviewer: asString(metadata.reviewer),
     inspector: asString(metadata.inspector),
@@ -320,11 +468,13 @@ export async function syncStoredInspection(
     if (!taskId || !itemId) {
       throw new Error('缺少服务端质检任务信息')
     }
-    const imageDataUrl = await deps.imageToDataUrl(current.imagePath)
+    const imageDataUrls = current.imagePath
+      ? [await deps.imageToDataUrl(current.imagePath)]
+      : await deps.loadExistingImages?.(taskId, itemId) ?? []
     await deps.saveDraft(
       taskId,
       itemId,
-      inspectionRecordToDraft(current.record, [imageDataUrl]),
+      inspectionRecordToDraft(current.record, imageDataUrls),
     )
     const synced = updateSyncState(current, {
       syncStatus: 'synced',

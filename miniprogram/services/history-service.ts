@@ -177,7 +177,7 @@ export async function saveInspectionHistory(
   const existing = existingId ? records.find((item) => item.id === existingId) : undefined
   let savedImagePath = existing?.imagePath ?? ''
   let newlySavedImagePath = ''
-  if (!existing) {
+  if (!existing && input.imagePath) {
     savedImagePath = await adapter.saveFile(input.imagePath)
     newlySavedImagePath = savedImagePath
   }

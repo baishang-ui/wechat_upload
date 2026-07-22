@@ -572,7 +572,7 @@ page {
 
 .bottom-actions {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 16rpx;
   margin-top: 24rpx;
   padding: 0 4rpx;
@@ -879,7 +879,7 @@ page {
   padding: 8rpx;
   box-sizing: border-box;
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   align-items: center;
   gap: 8rpx;
   border: 0;
@@ -1516,4 +1516,100 @@ page {
   line-height: 1.4;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.history-error-bar {
+  margin: -10rpx 0 24rpx;
+  padding: 18rpx 22rpx;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20rpx;
+  border: 1rpx solid #f2cf9d;
+  border-radius: 18rpx;
+  color: #8a5b16;
+  background: #fff7e8;
+  font-size: 22rpx;
+  line-height: 1.45;
+}
+
+.history-error-action {
+  flex: none;
+  color: #a25f00;
+  font-weight: 700;
+}
+
+.history-item--remote {
+  border-color: #dce6f6;
+  background: linear-gradient(135deg, #fff 0%, #f7faff 100%);
+}
+
+.history-thumb--remote {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  color: #3465b5;
+  background: linear-gradient(145deg, #e8f0ff, #f2f6fc);
+}
+
+.remote-thumb-icon {
+  width: 54rpx;
+  height: 40rpx;
+  border-radius: 22rpx;
+  color: #fff;
+  background: #4d78c7;
+  font-size: 22rpx;
+  font-weight: 700;
+  line-height: 40rpx;
+  text-align: center;
+}
+
+.remote-thumb-text {
+  margin-top: 10rpx;
+  font-size: 18rpx;
+}
+
+.history-heading-tags {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 10rpx;
+  overflow: hidden;
+}
+
+.history-product {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.history-source {
+  flex: none;
+  padding: 4rpx 10rpx;
+  border-radius: 12rpx;
+  color: #51627b;
+  background: #eef2f7;
+  font-size: 18rpx;
+  font-weight: 600;
+}
+
+.history-source--purchase_order {
+  color: #1e6891;
+  background: #e3f4fb;
+}
+
+.history-source--standalone {
+  color: #6e4aa6;
+  background: #f0e9fb;
+}
+
+.modal-thumb--remote {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #3465b5;
+  background: linear-gradient(145deg, #e8f0ff, #f2f6fc);
+  font-size: 22rpx;
+  font-weight: 700;
 }
