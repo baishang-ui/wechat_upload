@@ -10,6 +10,7 @@ import {
   inspectionRecordToDraft,
   recognizeInspectionFile,
   saveInspectionDraft,
+  QualityInspectionDraftPayload,
 } from '../miniprogram/services/quality-inspection-service'
 
 function createCompleteRecord() {
@@ -57,6 +58,11 @@ test('inspectionRecordToDraft preserves ten-column rows and miniprogram metadata
     record.sampleJudgements,
   )
   assert.equal(draft.ai_workbench_result.inspection_date, '2016-06-24')
+  assert.equal(draft.record_merge_mode, 'replace')
+  assert.equal(
+    inspectionRecordToDraft(record, [], 'matched_only').record_merge_mode,
+    'matched_only',
+  )
 })
 
 test('draftToInspectionRecord restores miniprogram metadata and web draft fallback', () => {
@@ -235,12 +241,16 @@ function createSyncRecord(sourceType: 'standalone' | 'purchase_order' = 'standal
 test('standalone sync creates once, saves draft, then marks local record synced', async () => {
   const { syncStoredInspection } = require('../miniprogram/services/quality-inspection-service') as typeof import('../miniprogram/services/quality-inspection-service')
   const calls: string[] = []
+  let savedPayload: QualityInspectionDraftPayload | null = null
   const result = await syncStoredInspection(createSyncRecord(), {
     createStandalone: async () => {
       calls.push('create')
       return { task_id: 20, item_id: 21, task: { id: 20 } }
     },
-    saveDraft: async () => { calls.push('draft') },
+    saveDraft: async (_taskId, _itemId, payload) => {
+      calls.push('draft')
+      savedPayload = payload
+    },
     updateState: async (record) => record,
     imageToDataUrl: async () => 'data:image/jpeg;base64,YQ==',
   })
@@ -248,6 +258,7 @@ test('standalone sync creates once, saves draft, then marks local record synced'
   assert.equal(result.syncStatus, 'synced')
   assert.equal(result.taskId, 20)
   assert.equal(result.itemId, 21)
+  assert.equal(savedPayload?.record_merge_mode, 'replace')
 })
 
 test('failed sync retains ids, image and record for retry', async () => {
@@ -269,16 +280,42 @@ test('failed sync retains ids, image and record for retry', async () => {
 test('purchase-order sync skips task creation and overwrites selected item draft', async () => {
   const { syncStoredInspection } = require('../miniprogram/services/quality-inspection-service') as typeof import('../miniprogram/services/quality-inspection-service')
   const calls: string[] = []
+  let savedPayload: QualityInspectionDraftPayload | null = null
   await syncStoredInspection(createSyncRecord('purchase_order'), {
     createStandalone: async () => {
       calls.push('create')
       return { task_id: 0, item_id: 0, task: { id: 0 } }
     },
-    saveDraft: async (taskId, itemId) => { calls.push(`draft:${taskId}:${itemId}`) },
+    saveDraft: async (taskId, itemId, payload) => {
+      calls.push(`draft:${taskId}:${itemId}`)
+      savedPayload = payload
+    },
     updateState: async (record) => record,
     imageToDataUrl: async () => 'data:image/jpeg;base64,YQ==',
   })
   assert.deepEqual(calls, ['draft:30:31'])
+  assert.equal(savedPayload?.record_merge_mode, 'matched_only')
+})
+
+test('purchase-order zero-match response remains a failed local sync with context intact', async () => {
+  const { syncStoredInspection } = require('../miniprogram/services/quality-inspection-service') as typeof import('../miniprogram/services/quality-inspection-service')
+  const local = createSyncRecord('purchase_order')
+  const error = Object.assign(
+    new Error('识别结果中没有与所选物料质检项目匹配的数据'),
+    { statusCode: 422 },
+  )
+  const result = await syncStoredInspection(local, {
+    createStandalone: async () => ({ task_id: 0, item_id: 0, task: { id: 0 } }),
+    saveDraft: async () => { throw error },
+    updateState: async (record) => record,
+    imageToDataUrl: async () => 'data:image/jpeg;base64,YQ==',
+  })
+  assert.equal(result.syncStatus, 'failed')
+  assert.equal(result.syncError, error.message)
+  assert.equal(result.taskId, local.taskId)
+  assert.equal(result.itemId, local.itemId)
+  assert.equal(result.imagePath, local.imagePath)
+  assert.deepEqual(result.record, local.record)
 })
 
 test('merged history deduplicates synced local records by task and item', () => {

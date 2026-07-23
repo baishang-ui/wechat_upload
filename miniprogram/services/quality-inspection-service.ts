@@ -38,11 +38,14 @@ export interface QualityInspectionDraftRecord {
   images: string[]
 }
 
+export type QualityInspectionRecordMergeMode = 'replace' | 'matched_only'
+
 export interface QualityInspectionDraftPayload {
   inspection_records: QualityInspectionDraftRecord[]
   records?: QualityInspectionDraftRecord[]
   ai_workbench_result: Record<string, unknown>
   ai_workbench_images: string[]
+  record_merge_mode: QualityInspectionRecordMergeMode
   saved_at?: string
 }
 
@@ -334,6 +337,7 @@ function judgementsFromRows(records: QualityInspectionDraftRecord[]): Judgement[
 export function inspectionRecordToDraft(
   record: InspectionRecord,
   imageDataUrls: string[] = [],
+  recordMergeMode: QualityInspectionRecordMergeMode = 'replace',
 ): QualityInspectionDraftPayload {
   return {
     inspection_records: record.rows.map((row) => ({
@@ -366,6 +370,7 @@ export function inspectionRecordToDraft(
       inspector: record.inspector,
     },
     ai_workbench_images: imageDataUrls.slice(0, 1),
+    record_merge_mode: recordMergeMode,
   }
 }
 
@@ -484,7 +489,11 @@ export async function syncStoredInspection(
     await deps.saveDraft(
       taskId,
       itemId,
-      inspectionRecordToDraft(current.record, imageDataUrls),
+      inspectionRecordToDraft(
+        current.record,
+        imageDataUrls,
+        current.sourceType === 'purchase_order' ? 'matched_only' : 'replace',
+      ),
     )
     const synced = updateSyncState(current, {
       syncStatus: 'synced',
