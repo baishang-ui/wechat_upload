@@ -5,6 +5,7 @@ import {
 import {
   InspectionRecord,
   Judgement,
+  normalizeInspectionDate,
   normalizeTenValues,
   PRODUCT_OPTIONS,
   ProductType,
@@ -305,6 +306,13 @@ function normalizeJudgements(value: unknown): Judgement[] {
   })
 }
 
+function requireInspectionDate(value: string): string {
+  const normalized = normalizeInspectionDate(value)
+  if (!normalized) throw new Error('检验日期格式应为 YYYY-MM-DD')
+  return normalized
+}
+
+
 function rowDecision(measurements: string[]): string {
   const values = measurements.map((value) => value.trim().toUpperCase()).filter(Boolean)
   if (values.includes('NG')) return 'NG'
@@ -351,7 +359,7 @@ export function inspectionRecordToDraft(
       order_number: record.orderNumber,
       model: record.model,
       arrival_quantity: record.arrivalQuantity,
-      inspection_date: record.inspectionDate,
+      inspection_date: requireInspectionDate(record.inspectionDate),
       sample_judgements: [...record.sampleJudgements],
       notes: record.notes,
       reviewer: record.reviewer,
@@ -556,7 +564,7 @@ export function createStandaloneInspection(
       client_record_id: clientRecordId,
       customer_name: record.customer,
       supplier_name: record.supplier,
-      inspection_date: record.inspectionDate,
+      inspection_date: requireInspectionDate(record.inspectionDate),
       material_code: '',
       material_name: record.model || record.rows[0]?.item || '检验报告',
       spec_desc: record.model,

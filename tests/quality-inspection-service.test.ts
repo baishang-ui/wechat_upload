@@ -36,7 +36,10 @@ function createCompleteRecord() {
 }
 
 test('inspectionRecordToDraft preserves ten-column rows and miniprogram metadata', () => {
-  const record = createCompleteRecord()
+  const record = {
+    ...createCompleteRecord(),
+    inspectionDate: '2016.6.24',
+  }
   const draft = inspectionRecordToDraft(record)
   assert.equal(draft.inspection_records[0].row_key, record.rows[0].id)
   assert.equal(draft.inspection_records[0].project, record.rows[0].item)
@@ -53,6 +56,7 @@ test('inspectionRecordToDraft preserves ten-column rows and miniprogram metadata
     draft.ai_workbench_result.sample_judgements,
     record.sampleJudgements,
   )
+  assert.equal(draft.ai_workbench_result.inspection_date, '2016-06-24')
 })
 
 test('draftToInspectionRecord restores miniprogram metadata and web draft fallback', () => {
@@ -103,9 +107,13 @@ test('createStandaloneInspection sends stable client id to the standalone endpoi
       task: { id: 10, items: [{ id: 11 }] },
     } as T
   }
+  const record = {
+    ...createCompleteRecord(),
+    inspectionDate: '2016.6.24',
+  }
   await createStandaloneInspection(
     '550e8400-e29b-41d4-a716-446655440000',
-    createCompleteRecord(),
+    record,
     request,
   )
   assert.equal(
@@ -116,6 +124,36 @@ test('createStandaloneInspection sends stable client id to the standalone endpoi
     (calls[0].data as Record<string, unknown>).client_record_id,
     '550e8400-e29b-41d4-a716-446655440000',
   )
+  assert.equal(
+    (calls[0].data as Record<string, unknown>).inspection_date,
+    '2016-06-24',
+  )
+})
+
+test('database-bound serializers reject invalid dates before a request', async () => {
+  const record = {
+    ...createCompleteRecord(),
+    inspectionDate: '2026-02-30',
+  }
+  const calls: Array<Record<string, unknown>> = []
+  const request = async <T>(options: Record<string, unknown>): Promise<T> => {
+    calls.push(options)
+    return {} as T
+  }
+
+  assert.throws(
+    () => inspectionRecordToDraft(record),
+    /检验日期格式应为 YYYY-MM-DD/,
+  )
+  assert.throws(
+    () => createStandaloneInspection(
+      '550e8400-e29b-41d4-a716-446655440000',
+      record,
+      request,
+    ),
+    /检验日期格式应为 YYYY-MM-DD/,
+  )
+  assert.equal(calls.length, 0)
 })
 
 test('draft save and recognition use shared backend paths', async () => {
