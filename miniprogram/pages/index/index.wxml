@@ -27,9 +27,21 @@
           <view class="queue-item-main">
             <view class="queue-item-head">
               <view class="queue-item-title">{{queueItem.sourceType === 'purchase_order' ? '采购待检报告' : '独立检验报告'}}</view>
-              <view class="queue-status queue-status--{{queueItem.status}}">{{queueItem.status === 'queued' ? '等待识别' : queueItem.status === 'preparing' ? '图片处理中' : queueItem.status === 'recognizing' ? '正在识别' : queueItem.status === 'ready' ? '待审核' : '识别失败'}}</view>
+              <view class="queue-status queue-status--{{queueItem.status}}">{{queueItem.status === 'queued' ? '等待识别' : queueItem.status === 'preparing' ? '图片处理中' : queueItem.status === 'recognizing' ? '正在识别' : queueItem.status === 'ready' ? '待审核' : queueItem.status === 'skipped' ? '已跳过' : '识别失败'}}</view>
             </view>
             <view class="queue-item-stage">{{queueItem.error || queueItem.stage}}</view>
+            <view class="queue-progress">
+              <view class="queue-progress-head">
+                <text>识别进度</text>
+                <text class="queue-progress-value queue-progress-value--{{queueItem.status}}">{{queueItem.progress}}%</text>
+              </view>
+              <view class="queue-progress-track">
+                <view
+                  class="queue-progress-fill queue-progress-fill--{{queueItem.status}}"
+                  style="width: {{queueItem.progress}}%;"
+                ></view>
+              </view>
+            </view>
             <view wx:if="{{queueItem.reviewHints}}" class="queue-risk-row">
               <text wx:if="{{queueItem.reviewHints.dangerCount}}" class="queue-risk is-danger">红色 {{queueItem.reviewHints.dangerCount}}</text>
               <text wx:if="{{queueItem.reviewHints.warningCount}}" class="queue-risk is-warning">黄色 {{queueItem.reviewHints.warningCount}}</text>
@@ -189,10 +201,28 @@
         </view>
       </view>
 
-      <view wx:if="{{taskLoading && taskItems.length === 0}}" class="task-state card">
-        <view class="task-state-icon is-loading"></view>
-        <view class="task-state-title">正在加载待检任务</view>
-        <view class="task-state-desc">正在从智能销售系统获取采购质检数据。</view>
+      <view wx:if="{{taskLoading && taskItems.length === 0}}" class="task-skeleton-list">
+        <view class="task-skeleton-card skeleton-card card">
+          <view class="skeleton-line skeleton-kicker"></view>
+          <view class="skeleton-line skeleton-title"></view>
+          <view class="skeleton-line skeleton-detail"></view>
+          <view class="skeleton-line skeleton-meta"></view>
+          <view class="skeleton-pill"></view>
+        </view>
+        <view class="task-skeleton-card skeleton-card card">
+          <view class="skeleton-line skeleton-kicker"></view>
+          <view class="skeleton-line skeleton-title"></view>
+          <view class="skeleton-line skeleton-detail"></view>
+          <view class="skeleton-line skeleton-meta"></view>
+          <view class="skeleton-pill"></view>
+        </view>
+        <view class="task-skeleton-card skeleton-card card">
+          <view class="skeleton-line skeleton-kicker"></view>
+          <view class="skeleton-line skeleton-title"></view>
+          <view class="skeleton-line skeleton-detail"></view>
+          <view class="skeleton-line skeleton-meta"></view>
+          <view class="skeleton-pill"></view>
+        </view>
       </view>
 
       <view wx:elif="{{taskItems.length === 0}}" class="task-state card">
@@ -249,12 +279,42 @@
         <view class="local-pill">共享后端</view>
       </view>
 
-      <view wx:if="{{historyError}}" class="history-error-bar" bindtap="refreshHistory">
+      <view wx:if="{{historyError}}" class="history-error-bar" bindtap="retryHistoryRefresh">
         <text>{{historyError}}</text>
         <text class="history-error-action">点击重试</text>
       </view>
 
-      <view wx:if="{{historyRecords.length === 0}}" class="history-empty">
+      <view wx:if="{{historyLoading && historyRecords.length === 0}}" class="history-skeleton-list">
+        <view class="history-skeleton-card skeleton-card">
+          <view class="history-skeleton-thumb skeleton-block"></view>
+          <view class="history-skeleton-main">
+            <view class="skeleton-line skeleton-history-heading"></view>
+            <view class="skeleton-line skeleton-history-title"></view>
+            <view class="skeleton-line skeleton-history-meta"></view>
+            <view class="skeleton-line skeleton-history-status"></view>
+          </view>
+        </view>
+        <view class="history-skeleton-card skeleton-card">
+          <view class="history-skeleton-thumb skeleton-block"></view>
+          <view class="history-skeleton-main">
+            <view class="skeleton-line skeleton-history-heading"></view>
+            <view class="skeleton-line skeleton-history-title"></view>
+            <view class="skeleton-line skeleton-history-meta"></view>
+            <view class="skeleton-line skeleton-history-status"></view>
+          </view>
+        </view>
+        <view class="history-skeleton-card skeleton-card">
+          <view class="history-skeleton-thumb skeleton-block"></view>
+          <view class="history-skeleton-main">
+            <view class="skeleton-line skeleton-history-heading"></view>
+            <view class="skeleton-line skeleton-history-title"></view>
+            <view class="skeleton-line skeleton-history-meta"></view>
+            <view class="skeleton-line skeleton-history-status"></view>
+          </view>
+        </view>
+      </view>
+
+      <view wx:elif="{{!historyLoading && historyRecords.length === 0}}" class="history-empty">
         <view class="empty-icon">
           <view class="empty-line empty-line--wide"></view>
           <view class="empty-line"></view>
@@ -297,9 +357,14 @@
             </view>
             <view wx:if="{{item.origin === 'local' && item.syncStatus === 'failed' && item.syncError}}" class="history-sync-error">{{item.syncError}}</view>
           </view>
-          <view wx:if="{{item.origin === 'local'}}" class="delete-button" data-id="{{item.id}}" catchtap="deleteHistory" aria-label="删除本地记录" role="button" hover-class="delete-button--pressed" hover-stay-time="120">
-            <text class="delete-symbol">×</text>
-          </view>
+          <button
+            class="history-delete-button"
+            data-id="{{item.id}}"
+            loading="{{historyDeletingId === item.id}}"
+            disabled="{{!!historyDeletingId}}"
+            catchtap="deleteHistory"
+            aria-label="删除识别记录"
+          >删除</button>
         </view>
       </view>
     </block>

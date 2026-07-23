@@ -14,6 +14,17 @@ export type RecognitionQueueStatus =
   | 'failed'
   | 'skipped'
 
+export function getRecognitionProgress(status: RecognitionQueueStatus): number {
+  switch (status) {
+    case 'queued': return 10
+    case 'preparing': return 35
+    case 'recognizing': return 70
+    case 'ready': return 100
+    case 'failed': return 70
+    case 'skipped': return 0
+  }
+}
+
 export interface RecognitionQueueResult {
   imageId: string
   rawContent: string
@@ -26,6 +37,7 @@ export interface RecognitionQueueItem {
   imagePath: string
   createdAt: number
   status: RecognitionQueueStatus
+  progress: number
   stage: string
   sourceType: 'standalone' | 'purchase_order'
   taskId: number | null
@@ -77,6 +89,7 @@ export function createRecognitionQueueItem(
     imagePath: input.imagePath,
     createdAt: input.createdAt,
     status: 'queued',
+    progress: getRecognitionProgress('queued'),
     stage: '等待识别',
     sourceType: input.sourceType,
     taskId: input.taskId,
@@ -113,7 +126,14 @@ export function updateQueueItem(
   id: string,
   update: Partial<RecognitionQueueItem>,
 ): RecognitionQueueItem[] {
-  return queue.map((item) => item.id === id ? { ...item, ...update } : item)
+  return queue.map((item) => {
+    if (item.id !== id) return item
+    const next = { ...item, ...update }
+    return {
+      ...next,
+      progress: getRecognitionProgress(next.status),
+    }
+  })
 }
 
 function hasActiveItem(queue: RecognitionQueueItem[], exceptId = ''): boolean {

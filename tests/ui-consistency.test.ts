@@ -69,3 +69,83 @@ test('recognition queue add buttons remain full-width and single-line', () => {
   assert.doesNotMatch(layout, /1fr\s+1fr/)
   assert.match(buttons, /white-space:\s*nowrap;/)
 })
+
+test('record cards expose server-aware delete controls', () => {
+  const wxml = source('miniprogram/pages/index/index.wxml')
+  const scss = source('miniprogram/pages/index/index.scss')
+  const page = source('miniprogram/pages/index/index.ts')
+  assert.match(wxml, /class="history-delete-button"/)
+  assert.match(wxml, /loading="\{\{historyDeletingId === item\.id\}\}"/)
+  assert.match(wxml, /catchtap="deleteHistory"/)
+  assert.doesNotMatch(
+    wxml,
+    /wx:if="\{\{item\.origin === 'local'\}\}" class="history-delete-button"/,
+  )
+  assert.match(scss, /\.history-delete-button\s*\{/)
+  const cardMain = scss.match(/\.history-main\s*\{([^}]*)\}/)?.[1] || ''
+  assert.match(cardMain, /padding-right:\s*64rpx;/)
+  assert.match(page, /deleteRemoteInspectionRecord/)
+  assert.match(page, /deleteInspectionHistoriesByServerRecord/)
+})
+
+test('task and history lists expose animated loading skeletons', () => {
+  const wxml = source('miniprogram/pages/index/index.wxml')
+  const scss = source('miniprogram/pages/index/index.scss')
+  const page = source('miniprogram/pages/index/index.ts')
+  assert.match(
+    wxml,
+    /wx:if="\{\{taskLoading && taskItems\.length === 0\}\}" class="task-skeleton-list"/,
+  )
+  assert.match(
+    wxml,
+    /wx:if="\{\{historyLoading && historyRecords\.length === 0\}\}" class="history-skeleton-list"/,
+  )
+  assert.match(
+    wxml,
+    /wx:elif="\{\{!historyLoading && historyRecords\.length === 0\}\}" class="history-empty"/,
+  )
+  assert.match(wxml, /class="[^\"]*skeleton-card/)
+  assert.match(page, /historyLoading:\s*false/)
+  assert.match(scss, /@keyframes skeleton-card-in/)
+  assert.match(scss, /@keyframes skeleton-shimmer/)
+  assert.match(scss, /\.skeleton-card:nth-child\(2\)/)
+  assert.match(scss, /\.skeleton-card:nth-child\(3\)/)
+})
+
+
+test('recognition cards expose status-aware progress bars', () => {
+  const wxml = source('miniprogram/pages/index/index.wxml')
+  const scss = source('miniprogram/pages/index/index.scss')
+  assert.match(wxml, /class="queue-progress"/)
+  assert.match(wxml, /class="queue-progress-fill queue-progress-fill--\{\{queueItem\.status\}\}"/)
+  assert.match(wxml, /width:\s*\{\{queueItem\.progress\}\}%/)
+  assert.match(wxml, /\{\{queueItem\.progress\}\}%/)
+  assert.match(scss, /\.queue-progress-fill--recognizing::after/)
+  assert.match(scss, /@keyframes queue-progress-shimmer/)
+  assert.match(scss, /\.queue-progress-fill--failed/)
+  assert.match(scss, /\.queue-progress-fill--ready/)
+})
+
+test('history page throttles automatic refreshes without flashing cached records', () => {
+  const page = source('miniprogram/pages/index/index.ts')
+  const wxml = source('miniprogram/pages/index/index.wxml')
+  const attached = page.match(/attached\(\)\s*\{([\s\S]*?)\n    \},\n  \},\n  methods:/)?.[1] || ''
+
+  assert.doesNotMatch(attached, /refreshHistory\(/)
+  assert.match(page, /historyLoadedAt:\s*0/)
+  assert.match(page, /historyRefreshQueued:\s*false/)
+  assert.match(page, /shouldRefreshInspectionHistory/)
+  assert.match(page, /shouldQueueInspectionHistoryRefresh/)
+  assert.match(page, /const previousTab = this\.data\.activeTab/)
+  assert.match(page, /activeTab === 'history' && previousTab !== 'history'/)
+  assert.match(
+    page,
+    /historyRecords:\s*this\.data\.historyRecords\.length > 0\s*\? this\.data\.historyRecords/,
+  )
+  assert.match(wxml, /bindtap="retryHistoryRefresh"/)
+  assert.match(page, /shouldQueueInspectionHistoryRefresh\([\s\S]*?this\.data\.historyRefreshQueued/)
+  assert.match(page, /const queuedRefresh = this\.data\.historyRefreshQueued/)
+  assert.match(page, /historyRefreshQueued:\s*false/)
+  assert.match(page, /if \(queuedRefresh\) this\.refreshHistory\(true\)/)
+  assert.ok((page.match(/refreshHistory\(true\)/g) || []).length >= 4)
+})

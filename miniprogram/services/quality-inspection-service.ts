@@ -21,6 +21,25 @@ import {
 
 const MAX_INSPECTION_IMAGE_BYTES = 600 * 1024
 
+export const HISTORY_REFRESH_TTL_MS = 30_000
+
+export function shouldRefreshInspectionHistory(
+  lastLoadedAt: number,
+  now = Date.now(),
+  force = false,
+): boolean {
+  if (force || lastLoadedAt <= 0) return true
+  return now - lastLoadedAt >= HISTORY_REFRESH_TTL_MS
+}
+
+export function shouldQueueInspectionHistoryRefresh(
+  historyLoading: boolean,
+  forceRefresh: boolean,
+  refreshQueued: boolean,
+): boolean {
+  return historyLoading && forceRefresh && !refreshQueued
+}
+
 export type QualityRequest = <T>(options: ServerRequestOptions) => Promise<T>
 export type QualityUpload = <T>(options: ServerUploadOptions) => Promise<T>
 
@@ -75,6 +94,36 @@ export interface QualityInspectionTaskDto {
   status?: string
   items?: QualityInspectionItemDto[]
   [key: string]: unknown
+}
+
+export function applyInspectionDateToTaskItems(
+  tasks: QualityInspectionTaskDto[],
+  taskId: number,
+  itemId: number,
+  inspectionDate: string,
+): QualityInspectionTaskDto[] {
+  const normalizedDate = normalizeInspectionDate(inspectionDate)
+  if (!normalizedDate) return tasks
+  return tasks.map((task) => {
+    if (task.id !== taskId) return task
+    return {
+      ...task,
+      signed_date: normalizedDate,
+      items: task.items?.map((item) => {
+        if (item.id !== itemId || !item.inspection_draft) return item
+        return {
+          ...item,
+          inspection_draft: {
+            ...item.inspection_draft,
+            ai_workbench_result: {
+              ...item.inspection_draft.ai_workbench_result,
+              inspection_date: normalizedDate,
+            },
+          },
+        }
+      }),
+    }
+  })
 }
 
 export interface TaskQuery {
@@ -132,6 +181,12 @@ export interface HistoryListData {
   page_size: number
 }
 
+export interface DeleteInspectionRecordResult {
+  task_id: number
+  item_id: number
+  deleted_scope: 'record' | 'standalone_task'
+}
+
 export interface HistoryViewItem {
   id: string
   origin: 'local' | 'remote'
@@ -174,6 +229,17 @@ export function listInspectionHistory(
     method: 'GET',
     path: '/customer-orders/api/purchase-orders/quality-inspections/history-records'
       + `?page=${page}&page_size=${pageSize}&source_type=all`,
+  })
+}
+
+export function deleteRemoteInspectionRecord(
+  taskId: number,
+  itemId: number,
+  request: QualityRequest = serverRequest,
+): Promise<DeleteInspectionRecordResult> {
+  return request<DeleteInspectionRecordResult>({
+    method: 'DELETE',
+    path: `/customer-orders/api/purchase-orders/quality-inspections/${taskId}/items/${itemId}/record`,
   })
 }
 

@@ -156,3 +156,34 @@ test('deleteInspectionHistory removes failed record image', async () => {
   assert.deepEqual(loadInspectionHistory(adapter), [])
   assert.deepEqual(adapter.removedPaths, [existing.imagePath])
 })
+
+test('deleteInspectionHistoriesByServerRecord removes all matching local copies and images', async () => {
+  const { deleteInspectionHistoriesByServerRecord } = require('../miniprogram/services/history-service') as typeof import('../miniprogram/services/history-service')
+  const matchingA = {
+    ...createStoredRecord(),
+    id: 'IR-A',
+    taskId: 12,
+    itemId: 34,
+    imagePath: '/a.jpg',
+  }
+  const matchingB = {
+    ...createStoredRecord(),
+    id: 'IR-B',
+    taskId: 12,
+    itemId: 34,
+    imagePath: '/b.jpg',
+  }
+  const untouched = {
+    ...createStoredRecord(),
+    id: 'IR-C',
+    taskId: 12,
+    itemId: 35,
+    imagePath: '/c.jpg',
+  }
+  const adapter = createAdapter([matchingA, matchingB, untouched])
+
+  const records = await deleteInspectionHistoriesByServerRecord(12, 34, adapter)
+
+  assert.deepEqual(records.map((item) => item.id), ['IR-C'])
+  assert.deepEqual(adapter.removedPaths.sort(), ['/a.jpg', '/b.jpg'])
+})

@@ -36,6 +36,7 @@ import {
   validateRecord,
 } from '../../domain/inspection-record'
 import {
+  deleteInspectionHistoriesByServerRecord,
   deleteInspectionHistory,
   loadInspectionHistory,
   saveHistorySyncState,
@@ -49,7 +50,9 @@ import { exportInspectionJson } from '../../services/export-service'
 import { getCurrentUser } from '../../services/auth-service'
 import { ServerClientError } from '../../services/server-client'
 import {
+  applyInspectionDateToTaskItems,
   createStandaloneInspection,
+  deleteRemoteInspectionRecord,
   getInspectionTask,
   HistoryViewItem,
   inspectionImageToDataUrl,
@@ -58,6 +61,8 @@ import {
   mergeInspectionHistory,
   QualityInspectionTaskDto,
   saveInspectionDraft,
+  shouldQueueInspectionHistoryRefresh,
+  shouldRefreshInspectionHistory,
   syncStoredInspection,
   taskItemToInspectionRecord,
 } from '../../services/quality-inspection-service'
@@ -111,9 +116,13 @@ Component({
     recordId: '',
     editingRecordId: '',
     historyRecords: [] as HistoryViewItem[],
+    historyLoading: false,
+    historyLoadedAt: 0,
+    historyRefreshQueued: false,
     historyError: '',
     historyRequestId: 0,
     historyOpeningId: '',
+    historyDeletingId: '',
     historyModalVisible: false,
     historyModalClosing: false,
     historyEditId: '',
@@ -133,9 +142,6 @@ Component({
   lifetimes: {
     attached() {
       getCurrentUser()
-        .then(() => {
-          this.refreshHistory()
-        })
         .catch((error: Error) => {
           if (error instanceof ServerClientError && error.statusCode === 401) {
             wx.reLaunch({ url: '/pages/login/login' })
@@ -146,11 +152,30 @@ Component({
     },
   },
   methods: {
-    refreshHistory(): Promise<void> {
+    refreshHistory(force = false): Promise<void> {
+      const forceRefresh = force === true
+      if (this.data.historyLoading) {
+        if (shouldQueueInspectionHistoryRefresh(
+          this.data.historyLoading,
+          forceRefresh,
+          this.data.historyRefreshQueued,
+        )) {
+          this.setData({ historyRefreshQueued: true })
+        }
+        return Promise.resolve()
+      }
+      if (!shouldRefreshInspectionHistory(
+        this.data.historyLoadedAt,
+        Date.now(),
+        forceRefresh,
+      )) return Promise.resolve()
       const requestId = this.data.historyRequestId + 1
       const local = loadInspectionHistory()
       this.setData({
-        historyRecords: mergeInspectionHistory(local, []),
+        historyRecords: this.data.historyRecords.length > 0
+          ? this.data.historyRecords
+          : mergeInspectionHistory(local, []),
+        historyLoading: true,
         historyError: '',
         historyRequestId: requestId,
       })
@@ -160,24 +185,42 @@ Component({
           this.setData({
             historyRecords: mergeInspectionHistory(loadInspectionHistory(), data.items),
             historyError: '',
+            historyLoadedAt: Date.now(),
           })
         })
         .catch((error: Error) => {
           if (this.data.historyRequestId !== requestId) return
           this.setData({
-            historyRecords: mergeInspectionHistory(loadInspectionHistory(), []),
+            historyRecords: this.data.historyRecords.length > 0
+              ? this.data.historyRecords
+              : mergeInspectionHistory(loadInspectionHistory(), []),
             historyError: `服务器记录加载失败：${error.message || '请稍后重试'}`,
+            historyLoadedAt: Date.now(),
           })
         })
+        .finally(() => {
+          if (this.data.historyRequestId === requestId) {
+            const queuedRefresh = this.data.historyRefreshQueued
+            this.setData({
+              historyLoading: false,
+              historyRefreshQueued: false,
+            })
+            if (queuedRefresh) this.refreshHistory(true)
+          }
+        })
+    },
+    retryHistoryRefresh() {
+      this.refreshHistory(true)
     },
     activateTab(activeTab: WorkspaceTab) {
+      const previousTab = this.data.activeTab
       this.setData({
         activeTab,
         ...(activeTab === 'scan'
           ? { selectedTaskId: 0, selectedItemId: 0 }
           : {}),
       })
-      if (activeTab === 'history') this.refreshHistory()
+      if (activeTab === 'history' && previousTab !== 'history') this.refreshHistory()
       if (activeTab === 'tasks') this.loadTasks(true)
     },
     switchTab(event: WechatMiniprogram.TouchEvent) {
@@ -297,6 +340,22 @@ Component({
           saveHistorySyncState(nextRecord) || nextRecord
         ),
         onUnauthorized: () => wx.reLaunch({ url: '/pages/login/login' }),
+      }).then((synced) => {
+        if (
+          synced.syncStatus === 'synced'
+          && synced.taskId
+          && synced.itemId
+        ) {
+          this.setData({
+            taskItems: applyInspectionDateToTaskItems(
+              this.data.taskItems,
+              synced.taskId,
+              synced.itemId,
+              synced.record.inspectionDate,
+            ),
+          })
+        }
+        return synced
       })
     },
     retryHistorySync(event: WechatMiniprogram.TouchEvent) {
@@ -311,7 +370,7 @@ Component({
         )),
       })
       this.syncHistoryRecord(stored)
-        .then((result) => this.refreshHistory().then(() => result))
+        .then((result) => this.refreshHistory(true).then(() => result))
         .then((result) => {
           wx.showToast({
             title: result.syncStatus === 'synced' ? '同步成功' : '同步失败，请重试',
@@ -542,7 +601,7 @@ Component({
       if (selected.origin === 'local') {
         const stored = loadInspectionHistory().find((item) => item.id === id)
         if (!stored) {
-          this.refreshHistory()
+          this.refreshHistory(true)
           return
         }
         this.showHistoryEditor({
@@ -690,7 +749,7 @@ Component({
         itemId: this.data.historyEditItemId || null,
       }, this.data.historyEditId)
         .then((stored) => this.syncHistoryRecord(stored))
-        .then((result) => this.refreshHistory().then(() => result))
+        .then((result) => this.refreshHistory(true).then(() => result))
         .then((result) => {
           this.hideHistoryModal()
           wx.showToast({
@@ -706,25 +765,52 @@ Component({
         .finally(() => this.setData({ historySaving: false }))
     },
     deleteHistory(event: WechatMiniprogram.TouchEvent) {
+      if (this.data.historyDeletingId) return
       const id = String(event.currentTarget.dataset.id || '')
       const selected = this.data.historyRecords.find((item) => item.id === id)
-      if (!selected || selected.origin !== 'local') return
+      if (!selected) return
+      const isRemote = selected.origin === 'remote'
       wx.showModal({
         title: '删除识别记录',
-        content: '仅删除本地副本和本地图片，服务器上的已同步记录不会删除。',
+        content: isRemote
+          ? '将删除服务器上的该条质检数据及关联的本地副本，删除后无法恢复。'
+          : '将删除这条本地识别记录和本地图片，删除后无法恢复。',
         confirmText: '删除',
         confirmColor: '#c93f4a',
         success: (result) => {
-          if (!result.confirm) return
-          deleteInspectionHistory(id)
-            .then(() => this.refreshHistory())
+          if (!result.confirm || this.data.historyDeletingId) return
+          this.setData({ historyDeletingId: id })
+          const deleting = isRemote
+            ? (() => {
+              const taskId = selected.taskId
+              const itemId = selected.itemId
+              if (taskId === null || itemId === null) {
+                return Promise.reject(new Error('服务器记录缺少任务或物料编号'))
+              }
+              return deleteRemoteInspectionRecord(taskId, itemId)
+                .then(() => deleteInspectionHistoriesByServerRecord(taskId, itemId))
+            })()
+            : deleteInspectionHistory(id)
+          deleting
+            .then(() => this.refreshHistory(true))
             .then(() => {
-              if (this.data.historyEditId === id) this.closeHistoryModal()
+              const editingSameRecord = this.data.historyEditId === id || (
+                isRemote
+                && this.data.historyEditTaskId === selected.taskId
+                && this.data.historyEditItemId === selected.itemId
+              )
+              if (editingSameRecord) this.hideHistoryModal()
+              if (isRemote && selected.sourceType === 'purchase_order') this.loadTasks(true)
               wx.showToast({ title: '已删除', icon: 'success' })
             })
             .catch((error: Error) => {
-              wx.showModal({ title: '删除失败', content: error.message, showCancel: false })
+              wx.showModal({
+                title: '删除失败',
+                content: error.message || '请稍后重试',
+                showCancel: false,
+              })
             })
+            .finally(() => this.setData({ historyDeletingId: '' }))
         },
       })
     },
@@ -821,7 +907,7 @@ Component({
             recognitionQueue: queue,
             recognitionQueueStats: getQueueStats(queue),
           })
-          this.refreshHistory()
+          this.refreshHistory(true)
           if (stored.syncStatus === 'failed') {
             wx.showToast({
               title: '已本地保存，可在历史记录重试',

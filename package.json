@@ -1,19 +1,30 @@
 {
   "name": "miniprogram-ts-sass-quickstart",
   "version": "1.0.0",
-  "description": "",
+  "description": "一个使用 TypeScript 和 SCSS 构建的微信小程序，用于拍摄或选择工业检验报告图片，通过视觉大模型识别表格，并在小程序中校对、编辑和保存识别结果。",
   "scripts": {
     "test": "tsx --test tests/*.test.ts",
     "typecheck": "tsc --noEmit"
   },
   "keywords": [],
   "author": "",
-  "license": "",
-  "dependencies": {
-  },
+  "license": "ISC",
   "devDependencies": {
     "miniprogram-api-typings": "^2.8.3-1",
     "tsx": "^4.20.3",
     "typescript": "^5.5.4"
-  }
+  },
+  "main": "index.js",
+  "directories": {
+    "doc": "docs",
+    "test": "tests"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/baishang-ui/wechat_upload.git"
+  },
+  "bugs": {
+    "url": "https://github.com/baishang-ui/wechat_upload/issues"
+  },
+  "homepage": "https://github.com/baishang-ui/wechat_upload#readme"
 }

@@ -400,3 +400,82 @@ test('sync without a local image preserves existing server draft images', async 
   assert.equal(imageRead, false)
   assert.deepEqual(uploadedImages, ['data:image/jpeg;base64,c2VydmVy'])
 })
+
+test('synced inspection date updates the cached task card and item draft', () => {
+  const {
+    applyInspectionDateToTaskItems,
+    inspectionRecordToDraft,
+  } = require('../miniprogram/services/quality-inspection-service') as typeof import('../miniprogram/services/quality-inspection-service')
+  const tasks = [
+    {
+      id: 10,
+      signed_date: '2026-07-23',
+      items: [{
+        id: 11,
+        inspection_draft: inspectionRecordToDraft({
+          ...createCompleteRecord(),
+          inspectionDate: '2026-07-23',
+        }),
+      }],
+    },
+    {
+      id: 20,
+      signed_date: '2026-07-01',
+      items: [{ id: 21 }],
+    },
+  ]
+
+  const updated = applyInspectionDateToTaskItems(tasks, 10, 11, '2026-07-22')
+
+  assert.equal(updated[0].signed_date, '2026-07-22')
+  assert.equal(
+    updated[0].items?.[0].inspection_draft?.ai_workbench_result.inspection_date,
+    '2026-07-22',
+  )
+  assert.equal(updated[1], tasks[1])
+  assert.equal(tasks[0].signed_date, '2026-07-23')
+  assert.equal(
+    tasks[0].items?.[0].inspection_draft?.ai_workbench_result.inspection_date,
+    '2026-07-23',
+  )
+})
+
+test('deleteRemoteInspectionRecord uses the item record DELETE endpoint', async () => {
+  const { deleteRemoteInspectionRecord } = require('../miniprogram/services/quality-inspection-service') as typeof import('../miniprogram/services/quality-inspection-service')
+  const calls: Array<Record<string, unknown>> = []
+  const request = async <T>(options: Record<string, unknown>): Promise<T> => {
+    calls.push(options)
+    return {
+      task_id: 12,
+      item_id: 34,
+      deleted_scope: 'record',
+    } as T
+  }
+
+  const result = await deleteRemoteInspectionRecord(12, 34, request)
+
+  assert.deepEqual(calls[0], {
+    method: 'DELETE',
+    path: '/customer-orders/api/purchase-orders/quality-inspections/12/items/34/record',
+  })
+  assert.equal(result.deleted_scope, 'record')
+})
+
+test('inspection history refresh policy caches normal visits for thirty seconds', () => {
+  const {
+    HISTORY_REFRESH_TTL_MS,
+    shouldQueueInspectionHistoryRefresh,
+    shouldRefreshInspectionHistory,
+  } = require('../miniprogram/services/quality-inspection-service') as typeof import('../miniprogram/services/quality-inspection-service')
+  const now = 1_000_000
+
+  assert.equal(HISTORY_REFRESH_TTL_MS, 30_000)
+  assert.equal(shouldRefreshInspectionHistory(0, now), true)
+  assert.equal(shouldRefreshInspectionHistory(now - 29_999, now), false)
+  assert.equal(shouldRefreshInspectionHistory(now - 30_000, now), true)
+  assert.equal(shouldRefreshInspectionHistory(now - 1_000, now, true), true)
+  assert.equal(shouldQueueInspectionHistoryRefresh(true, true, false), true)
+  assert.equal(shouldQueueInspectionHistoryRefresh(true, true, true), false)
+  assert.equal(shouldQueueInspectionHistoryRefresh(true, false, false), false)
+  assert.equal(shouldQueueInspectionHistoryRefresh(false, true, false), false)
+})

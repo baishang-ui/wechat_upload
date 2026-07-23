@@ -210,3 +210,28 @@ export async function deleteInspectionHistory(
   await removeFilesBestEffort(mutation.removedImagePaths, adapter)
   return mutation.records
 }
+
+export async function deleteInspectionHistoriesByServerRecord(
+  taskId: number,
+  itemId: number,
+  adapter: HistoryStorageAdapter = createDefaultAdapter(),
+): Promise<StoredInspectionRecord[]> {
+  const records = loadInspectionHistory(adapter)
+  const removed = records.filter((record) => (
+    record.taskId === taskId && record.itemId === itemId
+  ))
+  if (removed.length === 0) return records
+  const remaining = records.filter((record) => (
+    record.taskId !== taskId || record.itemId !== itemId
+  ))
+  try {
+    adapter.setStorage(HISTORY_STORAGE_KEY, remaining)
+  } catch {
+    throw new Error('无法删除识别记录，请重试')
+  }
+  const imagePaths = [...new Set(
+    removed.map((record) => record.imagePath).filter(Boolean),
+  )]
+  await removeFilesBestEffort(imagePaths, adapter)
+  return remaining
+}

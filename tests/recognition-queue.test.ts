@@ -10,6 +10,7 @@ import {
   createRecognitionQueueItem,
   failQueueItem,
   getNextQueuedItem,
+  getRecognitionProgress,
   getQueueStats,
   markQueueItemActive,
   markQueueItemRecognizing,
@@ -113,4 +114,27 @@ test('stats and removal reflect active ready and failed items', () => {
   assert.deepEqual(getQueueStats(queue), { active: 1, queued: 1, ready: 1, failed: 1, total: 4 })
   assert.equal(removeQueueItem(queue, 'ready').length, 3)
   assert.equal(removeQueueItem(queue, 'active').length, 4)
+})
+
+
+test('recognition progress maps every queue status to a stable stage percentage', () => {
+  assert.equal(getRecognitionProgress('queued'), 10)
+  assert.equal(getRecognitionProgress('preparing'), 35)
+  assert.equal(getRecognitionProgress('recognizing'), 70)
+  assert.equal(getRecognitionProgress('ready'), 100)
+  assert.equal(getRecognitionProgress('failed'), 70)
+  assert.equal(getRecognitionProgress('skipped'), 0)
+})
+
+test('queue item progress follows every status transition', () => {
+  let queue = [item('progress', 1)]
+  assert.equal(queue[0].progress, 10)
+  queue = markQueueItemActive(queue, 'progress')
+  assert.equal(queue[0].progress, 35)
+  queue = markQueueItemRecognizing(queue, 'progress')
+  assert.equal(queue[0].progress, 70)
+  queue = failQueueItem(queue, 'progress', 'network')
+  assert.equal(queue[0].progress, 70)
+  queue = retryQueueItem(queue, 'progress')
+  assert.equal(queue[0].progress, 10)
 })

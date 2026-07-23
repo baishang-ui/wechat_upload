@@ -56,7 +56,14 @@ test('serverRequest saves response cookie and carries it on the next request', a
     (state.requests[1].header as Record<string, string>).Cookie,
     'session=signed-cookie',
   )
-  assert.equal(SERVER_BASE_URL, 'https://www.binictools.cn:7876')
+  assert.equal(
+    state.requests[0].url,
+    `${SERVER_BASE_URL}/api/miniprogram/auth/login`,
+  )
+  assert.equal(
+    state.requests[1].url,
+    `${SERVER_BASE_URL}/api/miniprogram/auth/me`,
+  )
 })
 
 test('401 clears cookie and throws a user-readable error', async () => {
