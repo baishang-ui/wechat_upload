@@ -10,6 +10,7 @@ import {
   ProductType,
   RawApiRecord,
 } from '../domain/inspection-record'
+import { RecognitionConfidencePayload } from '../domain/recognition-review'
 import {
   serverRequest,
   ServerRequestOptions,
@@ -97,6 +98,7 @@ export interface StandaloneInspectionResult {
 export interface RecognitionProxyResult {
   record: RawApiRecord
   raw_content: string
+  confidence?: RecognitionConfidencePayload
 }
 
 export interface RemoteInspectionHistory {

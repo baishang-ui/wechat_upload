@@ -4,6 +4,10 @@ import {
   validateRecord,
 } from '../domain/inspection-record'
 import {
+  normalizeRecognitionConfidence,
+  RecognitionConfidencePayload,
+} from '../domain/recognition-review'
+import {
   QualityUpload,
   recognizeInspectionFile,
 } from './quality-inspection-service'
@@ -30,6 +34,7 @@ export interface RecognizeInspectionResult {
   imageId: string
   rawContent: string
   record: InspectionRecord
+  confidence: RecognitionConfidencePayload
 }
 
 function getDefaultImageApi(): ImageCompressionApi {
@@ -103,10 +108,12 @@ export async function recognizeInspection(
   if (!imagePath) throw new Error('请选择检验报告图片')
   const preparedPath = await prepareImageForUpload(imagePath, imageApi)
   const result = await recognizeInspectionFile(preparedPath, upload)
+  const record = normalizeApiRecord(result.record)
   return {
     imageId: `api-image-${Date.now()}`,
     rawContent: result.raw_content,
-    record: normalizeApiRecord(result.record),
+    record,
+    confidence: normalizeRecognitionConfidence(result.confidence, record.rows.length),
   }
 }
 

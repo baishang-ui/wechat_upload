@@ -46,11 +46,18 @@ test('recognizeInspection uploads to the shared backend without direct model cre
         sample_judgements: ['OK'],
       },
       raw_content: '{"report_title":"钢丝刷检验记录单"}',
+      confidence: {
+        fields: { customer: 0.95 },
+        items: [{ measurements: [0.55] }],
+        sample_judgements: [0.81],
+      },
     } as T
   }
   const result = await recognizeInspection('/tmp/report.jpg', imageApi, upload)
   assert.equal(calls[0].path, '/api/miniprogram/quality-inspections/recognize')
   assert.equal(result.record.customer, '客户A')
+  assert.equal(result.confidence.fields.customer, 0.95)
+  assert.equal(result.confidence.items[0].measurements[0], 0.55)
 
   const source = readFileSync(
     resolve('miniprogram/services/inspection-service.ts'),
@@ -59,6 +66,27 @@ test('recognizeInspection uploads to the shared backend without direct model cre
   assert.equal(source.includes('8865'), false)
   assert.equal(source.includes('TOKEN_STORAGE_KEY'), false)
   assert.equal(source.includes('Authorization'), false)
+})
+
+
+test('recognizeInspection accepts a legacy response without confidence', async () => {
+  const imageApi = createImageApi({ '/tmp/legacy.jpg': 100 })
+  const upload = async <T>(): Promise<T> => ({
+    record: {
+      report_title: '钢丝刷检验记录单',
+      customer: '客户A',
+      supplier: '供应商A',
+      model_spec: '100x20',
+      inspection_date: '2026-07-22',
+      items: [{ name: '材质', measurements: ['1.0'] }],
+      sample_judgements: ['OK'],
+    },
+    raw_content: '{}',
+  } as T)
+  const result = await recognizeInspection('/tmp/legacy.jpg', imageApi, upload)
+  assert.equal(result.confidence.fields.customer, null)
+  assert.equal(result.confidence.items.length, 1)
+  assert.equal(result.confidence.items[0].measurements.length, 10)
 })
 
 test('prepareImageForUpload keeps an image already below the request limit', async () => {
