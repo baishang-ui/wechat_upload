@@ -408,9 +408,9 @@ page {
   animation: content-rise .38s ease-out both;
 }
 
-.api-card { animation-delay: .04s; }
-.form-card { animation-delay: .08s; }
-.table-card { animation-delay: .12s; }
+.api-card { animation-delay: .08s; }
+.form-card { animation-delay: .12s; }
+.table-card { animation-delay: .16s; }
 
 .section-heading {
   display: flex;
@@ -1818,7 +1818,7 @@ page {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 12rpx;
-  animation: content-rise .38s .06s ease-out both;
+  animation: content-rise .38s .01s ease-out both;
 }
 
 .queue-summary-item {
@@ -1992,6 +1992,7 @@ page {
   align-items: center;
   justify-content: space-between;
   gap: 20rpx;
+  animation: content-rise .38s .04s ease-out both;
 }
 
 .review-risk-title {

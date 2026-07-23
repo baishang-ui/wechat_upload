@@ -46,8 +46,16 @@ test('scan workspace exposes recognition queue and confidence review states', ()
   const summary = scss.match(/\.recognition-queue-summary\s*\{([^}]*)\}/)?.[1] || ''
   assert.match(
     summary,
-    /animation:\s*content-rise\s+\.38s\s+\.06s\s+ease-out\s+both;/,
+    /animation:\s*content-rise\s+\.38s\s+\.01s\s+ease-out\s+both;/,
   )
+  const riskSummary = scss.match(/\.review-risk-summary\s*\{([^}]*)\}/)?.[1] || ''
+  assert.match(
+    riskSummary,
+    /animation:\s*content-rise\s+\.38s\s+\.04s\s+ease-out\s+both;/,
+  )
+  assert.match(scss, /\.api-card\s*\{\s*animation-delay:\s*\.08s;\s*\}/)
+  assert.match(scss, /\.form-card\s*\{\s*animation-delay:\s*\.12s;\s*\}/)
+  assert.match(scss, /\.table-card\s*\{\s*animation-delay:\s*\.16s;\s*\}/)
   assert.doesNotMatch(wxml, /screen === 'recognizing'/)
 })
 
