@@ -115,3 +115,85 @@ test('row measurements and sample judgements can be marked reviewed by stable pa
   assert.equal(judgement.rows[0].measurements[0].reviewed, true)
   assert.equal(judgement.sampleJudgements[0].reviewed, true)
 })
+
+function allOneConfidence() {
+  return normalizeRecognitionConfidence({
+    fields: {
+      customer: 1,
+      supplier: 1,
+      trademark: 1,
+      order_number: 1,
+      model_spec: 1,
+      arrival_quantity: 1,
+      inspection_date: 1,
+      notes: 1,
+      reviewer: 1,
+      inspector: 1,
+    },
+    items: [{
+      name: 1,
+      standard: 1,
+      specification: 1,
+      measurements: Array.from({ length: 10 }, () => 1),
+    }],
+    sample_judgements: Array.from({ length: 10 }, () => 1),
+  }, 1)
+}
+
+test('flat all-one confidence is treated as uncalibrated and non-empty OCR fields become warning', () => {
+  const hints = buildRecognitionReviewHints(record(), allOneConfidence())
+  assert.equal(hints.fields.customer.level, 'warning')
+  assert.match(hints.fields.customer.reason, /置信度分布失真/)
+  assert.equal(hints.fields.trademark.level, 'normal')
+})
+
+test('purchase prefill validates matching fields and marks mismatches danger', () => {
+  const recognized = record()
+  const expected = { ...record(), customer: 'Customer Expected' }
+  const mismatched = buildRecognitionReviewHints(recognized, allOneConfidence(), expected)
+  assert.equal(mismatched.fields.customer.level, 'danger')
+  assert.match(mismatched.fields.customer.reason, /采购任务数据不一致/)
+
+  const matching = buildRecognitionReviewHints(recognized, allOneConfidence(), record())
+  assert.equal(matching.fields.customer.level, 'normal')
+  assert.equal(matching.fields.model.level, 'normal')
+})
+
+test('measurements outside an explicit specification range are danger', () => {
+  const source = record()
+  source.rows[0] = {
+    ...source.rows[0],
+    specification: '10-12 mm',
+    measurements: ['13', '11', '', '', '', '', '', '', '', ''],
+  }
+  const hints = buildRecognitionReviewHints(source, allOneConfidence())
+  assert.equal(hints.rows[0].measurements[0].level, 'danger')
+  assert.match(hints.rows[0].measurements[0].reason, /规格范围/)
+  assert.notEqual(hints.rows[0].measurements[1].level, 'danger')
+})
+
+test('a judgement with a missing measurement is warning', () => {
+  const source = record()
+  source.rows[0] = {
+    ...source.rows[0],
+    measurements: ['1.0', '', '', '', '', '', '', '', '', ''],
+  }
+  source.sampleJudgements = ['OK', 'OK', '', '', '', '', '', '', '', '']
+  const hints = buildRecognitionReviewHints(source, allOneConfidence())
+  assert.equal(hints.rows[0].measurements[1].level, 'warning')
+  assert.match(hints.rows[0].measurements[1].reason, /判定存在但测量值为空/)
+})
+
+test('optional empty fields without scores do not create noisy warnings', () => {
+  const source = record()
+  source.trademark = ''
+  source.notes = ''
+  source.reviewer = ''
+  const hints = buildRecognitionReviewHints(
+    source,
+    normalizeRecognitionConfidence(undefined, 1),
+  )
+  assert.equal(hints.fields.trademark.level, 'normal')
+  assert.equal(hints.fields.notes.level, 'normal')
+  assert.equal(hints.fields.reviewer.level, 'normal')
+})

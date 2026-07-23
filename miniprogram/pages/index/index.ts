@@ -417,7 +417,7 @@ Component({
             }
             : result.record
           const normalizedResult = { ...result, record: recognizedRecord }
-          const hints = buildRecognitionReviewHints(recognizedRecord, result.confidence)
+          const hints = buildRecognitionReviewHints(recognizedRecord, result.confidence, taskPrefill)
           const completed = completeQueueItem(
             this.data.recognitionQueue,
             next.id,

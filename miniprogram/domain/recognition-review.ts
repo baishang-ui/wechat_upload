@@ -117,20 +117,123 @@ function isMeasurement(value: string): boolean {
   return /^[+-]?\d+(?:\.\d+)?(?:\s*(?:-|~|～|±)\s*[+-]?\d+(?:\.\d+)?)?(?:\s*[A-Za-z%℃°\u4e00-\u9fa5]+)?$/.test(normalized)
 }
 
+function normalizeComparable(value: string): string {
+  return value.toLocaleLowerCase().replace(/[^\p{L}\p{N}]+/gu, '')
+}
+
+function expectedComparison(actual: string, expected: string | undefined): 'none' | 'match' | 'mismatch' {
+  if (!expected || !expected.trim()) return 'none'
+  return normalizeComparable(actual) === normalizeComparable(expected) ? 'match' : 'mismatch'
+}
+
+function parseExplicitRange(specification: string): [number, number] | null {
+  const plusMinus = specification.match(/([+-]?\d+(?:\.\d+)?)\s*±\s*([+-]?\d+(?:\.\d+)?)/)
+  if (plusMinus) {
+    const center = Number(plusMinus[1])
+    const tolerance = Math.abs(Number(plusMinus[2]))
+    return [center - tolerance, center + tolerance]
+  }
+  const range = specification.match(/([+-]?\d+(?:\.\d+)?)\s*(?:-|~|～)\s*([+-]?\d+(?:\.\d+)?)/)
+  if (!range) return null
+  const first = Number(range[1])
+  const second = Number(range[2])
+  return [Math.min(first, second), Math.max(first, second)]
+}
+
+function measurementRangeError(specification: string, measurement: string): string {
+  const range = parseExplicitRange(specification)
+  const normalized = measurement.trim()
+  if (!range || !normalized || !/^[+-]?\d+(?:\.\d+)?(?:\s*[A-Za-z%℃°\u4e00-\u9fa5]+)?$/.test(normalized)) return ''
+  const value = Number.parseFloat(normalized)
+  if (value >= range[0] && value <= range[1]) return ''
+  return `测量值 ${value} 超出规格范围 ${range[0]}–${range[1]}`
+}
+
+function isDegenerateConfidence(
+  record: InspectionRecord,
+  confidence: RecognitionConfidencePayload,
+): boolean {
+  const pairs: Array<[string, number | null]> = [
+    [record.customer, confidence.fields.customer],
+    [record.supplier, confidence.fields.supplier],
+    [record.trademark, confidence.fields.trademark],
+    [record.orderNumber, confidence.fields.order_number],
+    [record.model, confidence.fields.model_spec],
+    [record.arrivalQuantity, confidence.fields.arrival_quantity],
+    [record.inspectionDate, confidence.fields.inspection_date],
+    [record.notes, confidence.fields.notes],
+    [record.reviewer, confidence.fields.reviewer],
+    [record.inspector, confidence.fields.inspector],
+  ]
+  record.rows.forEach((row, index) => {
+    const item = confidence.items[index]
+    pairs.push([row.item, item?.name ?? null])
+    pairs.push([row.requirement, item?.standard ?? null])
+    pairs.push([row.specification, item?.specification ?? null])
+    row.measurements.forEach((value, measurementIndex) => {
+      pairs.push([value, item?.measurements[measurementIndex] ?? null])
+    })
+  })
+  record.sampleJudgements.forEach((value, index) => {
+    pairs.push([value, confidence.sample_judgements[index] ?? null])
+  })
+  const scores = pairs
+    .filter(([value, score]) => isNonEmpty(value) && score !== null)
+    .map(([, score]) => score as number)
+  if (scores.length < 8) return false
+  const counts = new Map<string, { count: number, score: number }>()
+  scores.forEach((score) => {
+    const key = score.toFixed(4)
+    const existing = counts.get(key)
+    counts.set(key, { count: (existing?.count ?? 0) + 1, score })
+  })
+  const dominant = [...counts.values()].sort((a, b) => b.count - a.count)[0]
+  return dominant.score >= 0.95 && dominant.count / scores.length >= 0.9
+}
+
 function hintCssClass(level: ReviewRiskLevel, reviewed: boolean): string {
   if (reviewed || level === 'normal') return ''
   return `is-confidence-${level}`
 }
 
+interface CreateHintOptions {
+  value?: string
+  optional?: boolean
+  formatError?: string
+  logicDanger?: string
+  logicWarning?: string
+  degenerate?: boolean
+  expected?: string
+}
+
 function createHint(
   score: number | null,
-  formatError = '',
+  options: CreateHintOptions = {},
 ): FieldReviewHint {
+  const value = options.value ?? ''
+  const comparison = expectedComparison(value, options.expected)
   let level: ReviewRiskLevel = 'normal'
   let reason = ''
-  if (formatError) {
+  if (options.formatError) {
     level = 'danger'
-    reason = formatError
+    reason = options.formatError
+  } else if (options.logicDanger) {
+    level = 'danger'
+    reason = options.logicDanger
+  } else if (comparison === 'mismatch') {
+    level = 'danger'
+    reason = '识别结果与采购任务数据不一致，请重点核对'
+  } else if (options.logicWarning) {
+    level = 'warning'
+    reason = options.logicWarning
+  } else if (options.optional && !isNonEmpty(value)) {
+    level = 'normal'
+  } else if (comparison === 'match') {
+    level = 'normal'
+    reason = '已与采购任务数据核对'
+  } else if (options.degenerate && isNonEmpty(value)) {
+    level = 'warning'
+    reason = '模型置信度分布失真，建议人工核对'
   } else if (score === null) {
     level = 'warning'
     reason = '模型未提供准确度，请人工核对'
@@ -184,33 +287,66 @@ export function createEmptyReviewHints(): RecognitionReviewHints {
 export function buildRecognitionReviewHints(
   record: InspectionRecord,
   confidence: RecognitionConfidencePayload,
+  expectedRecord?: InspectionRecord | null,
 ): RecognitionReviewHints {
+  const degenerate = isDegenerateConfidence(record, confidence)
   const fields: Record<string, FieldReviewHint> = {
-    customer: createHint(
-      confidence.fields.customer,
-      isNonEmpty(record.customer) ? '' : '客户为空，请重点核对',
-    ),
-    supplier: createHint(
-      confidence.fields.supplier,
-      isNonEmpty(record.supplier) ? '' : '供应商为空，请重点核对',
-    ),
-    trademark: createHint(confidence.fields.trademark),
-    orderNumber: createHint(confidence.fields.order_number),
-    model: createHint(
-      confidence.fields.model_spec,
-      isNonEmpty(record.model) ? '' : '型号/规格为空，请重点核对',
-    ),
-    arrivalQuantity: createHint(
-      confidence.fields.arrival_quantity,
-      isQuantity(record.arrivalQuantity) ? '' : '到货数量格式异常，请重点核对',
-    ),
-    inspectionDate: createHint(
-      confidence.fields.inspection_date,
-      isDate(record.inspectionDate) ? '' : '检验日期为空或格式异常，请重点核对',
-    ),
-    notes: createHint(confidence.fields.notes),
-    reviewer: createHint(confidence.fields.reviewer),
-    inspector: createHint(confidence.fields.inspector),
+    customer: createHint(confidence.fields.customer, {
+      value: record.customer,
+      formatError: isNonEmpty(record.customer) ? '' : '客户为空，请重点核对',
+      degenerate,
+      expected: expectedRecord?.customer,
+    }),
+    supplier: createHint(confidence.fields.supplier, {
+      value: record.supplier,
+      formatError: isNonEmpty(record.supplier) ? '' : '供应商为空，请重点核对',
+      degenerate,
+      expected: expectedRecord?.supplier,
+    }),
+    trademark: createHint(confidence.fields.trademark, {
+      value: record.trademark,
+      optional: true,
+      degenerate,
+    }),
+    orderNumber: createHint(confidence.fields.order_number, {
+      value: record.orderNumber,
+      optional: true,
+      degenerate,
+      expected: expectedRecord?.orderNumber,
+    }),
+    model: createHint(confidence.fields.model_spec, {
+      value: record.model,
+      formatError: isNonEmpty(record.model) ? '' : '型号/规格为空，请重点核对',
+      degenerate,
+      expected: expectedRecord?.model,
+    }),
+    arrivalQuantity: createHint(confidence.fields.arrival_quantity, {
+      value: record.arrivalQuantity,
+      optional: true,
+      formatError: isQuantity(record.arrivalQuantity) ? '' : '到货数量格式异常，请重点核对',
+      degenerate,
+      expected: expectedRecord?.arrivalQuantity,
+    }),
+    inspectionDate: createHint(confidence.fields.inspection_date, {
+      value: record.inspectionDate,
+      formatError: isDate(record.inspectionDate) ? '' : '检验日期为空或格式异常，请重点核对',
+      degenerate,
+    }),
+    notes: createHint(confidence.fields.notes, {
+      value: record.notes,
+      optional: true,
+      degenerate,
+    }),
+    reviewer: createHint(confidence.fields.reviewer, {
+      value: record.reviewer,
+      optional: true,
+      degenerate,
+    }),
+    inspector: createHint(confidence.fields.inspector, {
+      value: record.inspector,
+      optional: true,
+      degenerate,
+    }),
   }
   const rows = record.rows.map((row, index) => {
     const scores = confidence.items[index] ?? {
@@ -220,20 +356,43 @@ export function buildRecognitionReviewHints(
       measurements: Array.from({ length: 10 }, () => null),
     }
     return {
-      item: createHint(
-        scores.name,
-        isNonEmpty(row.item) ? '' : '检验项目为空，请重点核对',
-      ),
-      requirement: createHint(scores.standard),
-      specification: createHint(scores.specification),
+      item: createHint(scores.name, {
+        value: row.item,
+        formatError: isNonEmpty(row.item) ? '' : '检验项目为空，请重点核对',
+        degenerate,
+      }),
+      requirement: createHint(scores.standard, {
+        value: row.requirement,
+        optional: true,
+        degenerate,
+      }),
+      specification: createHint(scores.specification, {
+        value: row.specification,
+        optional: true,
+        degenerate,
+      }),
       measurements: row.measurements.map((value, measurementIndex) => createHint(
         scores.measurements[measurementIndex] ?? null,
-        isMeasurement(value) ? '' : '测量值格式异常，请重点核对',
+        {
+          value,
+          optional: true,
+          formatError: isMeasurement(value) ? '' : '测量值格式异常，请重点核对',
+          logicDanger: measurementRangeError(row.specification, value),
+          logicWarning: !isNonEmpty(value) && isNonEmpty(record.sampleJudgements[measurementIndex] ?? '')
+            ? '样本判定存在但测量值为空，建议核对'
+            : '',
+          degenerate,
+        },
       )),
     }
   })
-  const sampleJudgements = record.sampleJudgements.map((_, index) => createHint(
+  const sampleJudgements = record.sampleJudgements.map((value, index) => createHint(
     confidence.sample_judgements[index] ?? null,
+    {
+      value,
+      optional: true,
+      degenerate,
+    },
   ))
   return withCounts({
     fields,
