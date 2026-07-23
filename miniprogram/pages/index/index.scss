@@ -1798,13 +1798,18 @@ page {
 .queue-add-actions {
   margin-top: 34rpx;
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 16rpx;
+  grid-template-columns: 1fr;
+  gap: 14rpx;
 }
 
 .queue-add-actions .primary-button,
 .queue-add-actions .secondary-button {
+  min-width: 0;
+  height: 88rpx;
   margin-top: 0;
+  padding: 0 24rpx;
+  font-size: 28rpx;
+  white-space: nowrap;
 }
 
 .recognition-queue-summary {

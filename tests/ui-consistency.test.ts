@@ -45,3 +45,14 @@ test('scan workspace exposes recognition queue and confidence review states', ()
   assert.match(scss, /\.is-confidence-warning/)
   assert.doesNotMatch(wxml, /screen === 'recognizing'/)
 })
+
+test('recognition queue add buttons remain full-width and single-line', () => {
+  const scss = source('miniprogram/pages/index/index.scss')
+  const layout = scss.match(/\.queue-add-actions\s*\{([^}]*)\}/)?.[1] || ''
+  const buttons = scss.match(
+    /\.queue-add-actions \.primary-button,\s*\n\.queue-add-actions \.secondary-button\s*\{([^}]*)\}/,
+  )?.[1] || ''
+  assert.match(layout, /grid-template-columns:\s*1fr;/)
+  assert.doesNotMatch(layout, /1fr\s+1fr/)
+  assert.match(buttons, /white-space:\s*nowrap;/)
+})

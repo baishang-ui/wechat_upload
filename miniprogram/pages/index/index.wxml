@@ -9,7 +9,7 @@
         <view class="hero-title">连续识别检验报告</view>
         <view class="hero-desc">识别过程中仍可继续添加图片，系统会按照加入顺序逐张处理。</view>
         <view class="queue-add-actions">
-          <button class="primary-button queue-add-camera" bindtap="takePhoto">拍摄检验报告</button>
+          <button class="primary-button queue-add-camera" bindtap="takePhoto">拍摄报告</button>
           <button class="secondary-button queue-add-album" bindtap="chooseFromAlbum">从相册批量添加</button>
         </view>
       </view>
