@@ -172,3 +172,83 @@ test('history page throttles automatic refreshes without flashing cached records
   assert.match(page, /if \(queuedRefresh\) this\.refreshHistory\(true\)/)
   assert.ok((page.match(/refreshHistory\(true\)/g) || []).length >= 4)
 })
+
+test('all top navigation bars use the shared glass material', () => {
+  const navigationScss = source('miniprogram/components/navigation-bar/navigation-bar.scss')
+  const loginJson = source('miniprogram/pages/login/login.json')
+  const loginWxml = source('miniprogram/pages/login/login.wxml')
+  const indexWxml = source('miniprogram/pages/index/index.wxml')
+  const logsWxml = source('miniprogram/pages/logs/logs.wxml')
+  const skeletonWxml = source('miniprogram/pages/index/index.skeleton.wxml')
+  const skeletonWxss = source('miniprogram/pages/index/index.skeleton.wxss')
+
+  assert.match(navigationScss, /background:\s*rgba\(246,\s*249,\s*252,\s*\.48\)/)
+  const navigationBlur = navigationScss.match(/backdrop-filter:\s*blur\((\d+rpx)\)\s+saturate\(132%\)/)?.[1]
+  assert.ok(navigationBlur)
+  assert.match(navigationScss, new RegExp(`-webkit-backdrop-filter:\\s*blur\\(${navigationBlur}\\)\\s+saturate\\(132%\\)`))
+  assert.match(navigationScss, /border-bottom:/)
+
+  assert.match(loginJson, /"navigationStyle"\s*:\s*"custom"/)
+  assert.match(loginJson, /"navigation-bar"\s*:\s*"\/components\/navigation-bar\/navigation-bar"/)
+  assert.match(loginWxml, /<navigation-bar[^>]*title="账号登录"[^>]*back="\{\{false\}\}"/)
+
+  for (const wxml of [loginWxml, indexWxml, logsWxml]) {
+    assert.match(wxml, /background="rgba\(246, 249, 252, \.48\)"/)
+  }
+
+  assert.match(skeletonWxml, /background:\s*rgba\(246, 249, 252, \.48\)/)
+  assert.match(skeletonWxss, new RegExp(`backdrop-filter:\\s*blur\\(${navigationBlur}\\)\\s+saturate\\(132%\\)`))
+})
+
+test('glass navigation remains fixed with spacing derived from the unified height', () => {
+  const navigationScss = source('miniprogram/components/navigation-bar/navigation-bar.scss')
+  const navigationTs = source('miniprogram/components/navigation-bar/navigation-bar.ts')
+  const indexWxml = source('miniprogram/pages/index/index.wxml')
+  const indexScss = source('miniprogram/pages/index/index.scss')
+  const loginWxml = source('miniprogram/pages/login/login.wxml')
+  const loginScss = source('miniprogram/pages/login/login.scss')
+  const logsWxml = source('miniprogram/pages/logs/logs.wxml')
+  const logsScss = source('miniprogram/pages/logs/logs.scss')
+  const skeletonWxml = source('miniprogram/pages/index/index.skeleton.wxml')
+  const skeletonWxss = source('miniprogram/pages/index/index.skeleton.wxss')
+
+  assert.match(navigationScss, /\.weui-navigation-bar\s*\{\s*position:\s*fixed;/)
+  assert.doesNotMatch(navigationScss, /position:\s*sticky/)
+  assert.match(navigationScss, /top:\s*0;/)
+  assert.match(navigationScss, /left:\s*0;/)
+  assert.match(navigationScss, /right:\s*0;/)
+
+  assert.match(indexWxml, /^<navigation-bar[^>]*>[^]*?<scroll-view[^>]*class="page-scroll"/)
+  assert.match(logsWxml, /<navigation-bar[^>]*>[^]*?<scroll-view[^>]*class="scrollarea"/)
+  assert.match(skeletonWxml, /<view is="components\/navigation-bar\/navigation-bar">[^]*?<scroll-view[^>]*class="page-scroll"/)
+
+  const indexShell = indexScss.match(/\.page-shell\s*\{([^}]*)\}/)?.[1] || ''
+  assert.match(navigationScss, /height:\s*calc\(var\(--height\) \+ env\(safe-area-inset-top\) \+ 8px\)/)
+  assert.match(navigationScss, /padding-top:\s*calc\(env\(safe-area-inset-top\) \+ 8px\)/)
+  assert.match(navigationTs, /const SAFE_AREA_TOP_EXTRA = 8[^]*const adjustedSafeAreaTop = safeAreaTop \+ SAFE_AREA_TOP_EXTRA/)
+  assert.doesNotMatch(navigationTs, /isDevtools \|\| isAndroid \?/)
+  assert.match(indexShell, /padding:\s*calc\(36px \+ env\(safe-area-inset-top\) \+ 8px \+ 32rpx\)/)
+  assert.match(loginScss, /padding:\s*calc\(36px \+ env\(safe-area-inset-top\) \+ 8px \+ 72rpx\)/)
+  assert.match(logsScss, /padding-top:\s*calc\(36px \+ env\(safe-area-inset-top\) \+ 8px\)/)
+  assert.match(skeletonWxml, /height: calc\(var\(--height\) \+ 55px\); padding-top: 55px;/)
+  assert.match(skeletonWxss, /\.bar--weui-navigation-bar\s*\{\s*--height:\s*36px;[^}]*position:\s*fixed;/)
+
+  assert.match(navigationTs, /triggerEvent\('heightchange', \{ height: navigationBarHeight \}\)/)
+  assert.match(indexWxml, /<navigation-bar[^>]*bindheightchange="onNavigationHeightChange"/)
+  assert.match(indexWxml, /class="page-shell"[^>]*padding-top: calc\(\{\{navigationBarHeight\}\}px \+ 32rpx\)/)
+  assert.match(loginWxml, /<navigation-bar[^>]*bindheightchange="onNavigationHeightChange"/)
+  assert.match(loginWxml, /class="login-page"[^>]*padding-top: calc\(\{\{navigationBarHeight\}\}px \+ 72rpx\)/)
+  assert.match(logsWxml, /<navigation-bar[^>]*bindheightchange="onNavigationHeightChange"/)
+  assert.match(logsWxml, /class="scrollarea"[^>]*padding-top: \{\{navigationBarHeight\}\}px/)
+})
+
+test('all glass navigation variants share one content height', () => {
+  const navigationScss = source('miniprogram/components/navigation-bar/navigation-bar.scss')
+  const skeletonWxss = source('miniprogram/pages/index/index.skeleton.wxss')
+  const baseHeight = navigationScss.match(/\.weui-navigation-bar\s*\{[^}]*--height:\s*(\d+px)/)?.[1]
+  const androidHeight = navigationScss.match(/\.weui-navigation-bar \.android\s*\{[^}]*--height:\s*(\d+px)/)?.[1]
+
+  assert.equal(baseHeight, '36px')
+  assert.equal(androidHeight, baseHeight)
+  assert.match(skeletonWxss, new RegExp(`\\.bar--weui-navigation-bar\\s*\\{[^}]*--height:\\s*${baseHeight}`))
+})

@@ -19,7 +19,7 @@
   <view class="sk-container">
     <view is="components/navigation-bar/navigation-bar">
       <view class="weui-navigation-bar bar--weui-navigation-bar">
-        <view class="weui-navigation-bar__inner bar--weui-navigation-bar__inner ios bar--ios" style="color: #17233d; background: #f3f6f8; ; padding-right: 94px; height: calc(var(--height) + 47px); padding-top: 47px;">
+        <view class="weui-navigation-bar__inner bar--weui-navigation-bar__inner ios bar--ios" style="color: #17233d; background: rgba(246, 249, 252, .48); ; padding-right: 94px; height: calc(var(--height) + 55px); padding-top: 55px;">
           <view class="weui-navigation-bar__left bar--weui-navigation-bar__left" style="width: 94px;"></view>
           <view class="weui-navigation-bar__center bar--weui-navigation-bar__center">
             <text class="sk-transparent sk-text-14-2857-963 sk-text" style="background-position-x: 50%;">检验报告识别</text>
@@ -29,7 +29,7 @@
       </view>
     </view>
     <scroll-view enhanced="true" scroll-y="true" class="page-scroll" enable-back-to-top="true">
-      <view class="page-shell" style="scroll-snap-align: none;">
+      <view class="page-shell" style="scroll-snap-align: none; padding-top: calc(91px + 32rpx);">
         <view class="hero-card queue-capture-card">
           <view class="eyebrow sk-transparent sk-text-14-2857-928 sk-text" style="background-position-x: 50%;">AI INSPECTION QUEUE</view>
           <view class="hero-title sk-transparent sk-text-10-0000-601 sk-text" style="background-position-x: 50%;">连续识别检验报告</view>

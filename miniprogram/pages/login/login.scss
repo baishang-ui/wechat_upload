@@ -7,9 +7,8 @@ page {
 }
 
 .login-page {
-  min-height: 100vh;
   box-sizing: border-box;
-  padding: calc(120rpx + env(safe-area-inset-top)) 28rpx calc(64rpx + env(safe-area-inset-bottom));
+  padding: calc(36px + env(safe-area-inset-top) + 8px + 72rpx) 28rpx calc(64rpx + env(safe-area-inset-bottom));
 }
 
 .login-shell {

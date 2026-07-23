@@ -1,3 +1,6 @@
+const NAVIGATION_CONTENT_HEIGHT = 36
+const SAFE_AREA_TOP_EXTRA = 8
+
 Component({
   options: {
     multipleSlots: true // 在组件定义时的选项中启用多slot支持
@@ -16,7 +19,7 @@ Component({
     },
     background: {
       type: String,
-      value: ''
+      value: 'rgba(246, 249, 252, .48)'
     },
     color: {
       type: String,
@@ -63,13 +66,16 @@ Component({
       wx.getSystemInfo({
         success: (res) => {
           const isAndroid = res.platform === 'android'
-          const isDevtools = res.platform === 'devtools'
+          const safeAreaTop = res.safeArea?.top || res.statusBarHeight || 0
+          const adjustedSafeAreaTop = safeAreaTop + SAFE_AREA_TOP_EXTRA
+          const navigationBarHeight = NAVIGATION_CONTENT_HEIGHT + adjustedSafeAreaTop
           this.setData({
             ios: !isAndroid,
             innerPaddingRight: `padding-right: ${res.windowWidth - rect.left}px`,
-            leftWidth: `width: ${res.windowWidth - rect.left }px`,
-            safeAreaTop: isDevtools || isAndroid ? `height: calc(var(--height) + ${res.safeArea.top}px); padding-top: ${res.safeArea.top}px` : ``
+            leftWidth: `width: ${res.windowWidth - rect.left}px`,
+            safeAreaTop: `height: calc(var(--height) + ${adjustedSafeAreaTop}px); padding-top: ${adjustedSafeAreaTop}px`
           })
+          this.triggerEvent('heightchange', { height: navigationBarHeight })
         }
       })
     },

@@ -1,12 +1,17 @@
 import { getCurrentUser, login } from '../../services/auth-service'
 import { ServerClientError } from '../../services/server-client'
 
+interface NavigationHeightChangeEvent {
+  detail: { height: number }
+}
+
 interface LoginInputEvent {
   detail: { value: string }
 }
 
 Page({
   data: {
+    navigationBarHeight: 91,
     username: '',
     password: '',
     submitting: false,
@@ -22,6 +27,10 @@ Page({
         this.setData({ errorMessage: error.message })
       }
     }
+  },
+
+  onNavigationHeightChange(event: NavigationHeightChangeEvent) {
+    this.setData({ navigationBarHeight: event.detail.height })
   },
 
   onUsernameInput(event: LoginInputEvent) {

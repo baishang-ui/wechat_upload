@@ -5,6 +5,8 @@ page {
 }
 .scrollarea {
   flex: 1;
+  box-sizing: border-box;
+  padding-top: calc(36px + env(safe-area-inset-top) + 8px);
   overflow-y: hidden;
 }
 .log-item {

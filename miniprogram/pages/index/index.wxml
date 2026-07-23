@@ -1,7 +1,6 @@
-<navigation-bar title="{{activeTab === 'scan' ? '检验报告识别' : activeTab === 'tasks' ? '采购待检任务' : '识别记录'}}" back="{{false}}" color="#17233d" background="#f3f6f8"></navigation-bar>
-
+<navigation-bar title="{{activeTab === 'scan' ? '检验报告识别' : activeTab === 'tasks' ? '采购待检任务' : '识别记录'}}" back="{{false}}" color="#17233d" background="rgba(246, 249, 252, .48)" bindheightchange="onNavigationHeightChange"></navigation-bar>
 <scroll-view class="page-scroll" scroll-y enhanced show-scrollbar="{{false}}" bindscrolltolower="loadMoreTasks">
-  <view class="page-shell">
+  <view class="page-shell" style="padding-top: calc({{navigationBarHeight}}px + 32rpx);">
     <block wx:if="{{activeTab === 'scan'}}">
     <block wx:if="{{screen === 'capture'}}">
       <view class="hero-card queue-capture-card">

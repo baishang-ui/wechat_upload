@@ -1,6 +1,6 @@
 <!--logs.wxml-->
-<navigation-bar title="查看启动日志" back="{{true}}" color="black" background="#FFF"></navigation-bar>
-<scroll-view class="scrollarea" scroll-y type="list">
+<navigation-bar title="查看启动日志" back="{{true}}" color="#17233d" background="rgba(246, 249, 252, .48)" bindheightchange="onNavigationHeightChange"></navigation-bar>
+<scroll-view class="scrollarea" style="padding-top: {{navigationBarHeight}}px;" scroll-y type="list">
   <block wx:for="{{logs}}" wx:key="timeStamp" wx:for-item="log">
     <view class="log-item">{{index + 1}}. {{log.date}}</view>
   </block>

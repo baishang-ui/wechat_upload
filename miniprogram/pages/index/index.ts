@@ -68,6 +68,10 @@ import {
   taskItemToInspectionRecord,
 } from '../../services/quality-inspection-service'
 
+interface NavigationHeightChangeEvent {
+  detail: { height: number }
+}
+
 interface HistoryEditorInput {
   localId: string
   displayId: string
@@ -92,6 +96,7 @@ let recognitionProgressItemId = ''
 
 Component({
   data: {
+    navigationBarHeight: 91,
     activeTab: 'scan' as WorkspaceTab,
     taskItems: [] as QualityInspectionTaskDto[],
     taskPage: 1,
@@ -160,6 +165,9 @@ Component({
     },
   },
   methods: {
+    onNavigationHeightChange(event: NavigationHeightChangeEvent) {
+      this.setData({ navigationBarHeight: event.detail.height })
+    },
     refreshHistory(force = false): Promise<void> {
       const forceRefresh = force === true
       if (this.data.historyLoading) {

@@ -153,3 +153,20 @@
     overflow: hidden;
     background-color: transparent;
   }
+
+.bar--weui-navigation-bar__inner {
+    background: rgba(246, 249, 252, .48) !important;
+    border-bottom: 1rpx solid rgba(255, 255, 255, .72);
+    box-shadow: 0 10rpx 30rpx rgba(27, 47, 70, .08);
+    -webkit-backdrop-filter: blur(18rpx) saturate(132%);
+    backdrop-filter: blur(18rpx) saturate(132%);
+  }
+
+.bar--weui-navigation-bar {
+    --height: 36px;
+    position: fixed;
+    z-index: 30;
+    top: 0;
+    left: 0;
+    right: 0;
+  }

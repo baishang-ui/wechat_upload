@@ -1,4 +1,6 @@
 {
-  "navigationBarTitleText": "账号登录",
-  "navigationStyle": "default"
+  "navigationStyle": "custom",
+  "usingComponents": {
+    "navigation-bar": "/components/navigation-bar/navigation-bar"
+  }
 }
