@@ -4,7 +4,7 @@
 
 **Goal:** Add the missing entrance animation to the accuracy review prompt card and preserve the review page’s DOM-order stagger.
 
-**Architecture:** Reuse the existing `content-rise` keyframes and verify the delay sequence through the source-level UI consistency test. Because `miniprogram/pages/index/index.scss` already contains an unrelated uncommitted `.01s` queue-summary delay, execute in the current workspace and remove that pre-existing patch from the staged index before committing.
+**Architecture:** Reuse the existing `content-rise` keyframes and verify the delay sequence through the source-level UI consistency test. Execute in the current workspace. Per the user’s explicit choice after baseline verification, formalize the existing `.01s` queue-summary delay and update its UI contract in the same commit.
 
 **Tech Stack:** WeChat Mini Program SCSS, TypeScript, Node test runner through `tsx --test`, Git partial staging.
 
@@ -13,7 +13,7 @@
 - Accuracy review prompt uses `content-rise .38s .04s ease-out both`.
 - API, report-information, and inspection-data delays become `.08s`, `.12s`, and `.16s` respectively.
 - Do not add JavaScript state or new keyframes.
-- Preserve the current uncommitted `.recognition-queue-summary` delay change from `.06s` to `.01s` exactly.
+- Preserve and formally commit the current `.recognition-queue-summary` delay change from `.06s` to `.01s`, with its test updated to `.01s`.
 - Do not stage or commit unrelated changes in `miniprogram/config/server.ts`, `miniprogram/styles/_design-tokens.scss`, `package-lock.json`, `package.json`, `project.config.json`, or `tests/server-client.test.ts`.
 
 ---
@@ -28,16 +28,9 @@
 - Consumes: existing `@keyframes content-rise`.
 - Produces: a `.04s / .08s / .12s / .16s` review-card entrance sequence.
 
-- [ ] **Step 1: Capture the pre-existing target-file patch**
+- [ ] **Step 1: Confirm the approved queue-summary contract update**
 
-Run before making any implementation edits:
-
-```bash
-git diff -- miniprogram/pages/index/index.scss > /tmp/review-risk-preexisting-index.patch
-cat /tmp/review-risk-preexisting-index.patch
-```
-
-Expected: the patch contains only the unrelated `.recognition-queue-summary` delay change from `.06s` to `.01s`.
+Update the existing `.recognition-queue-summary` UI assertion from `.06s` to `.01s`. This formalizes the user-approved delay and removes the known baseline mismatch.
 
 - [ ] **Step 2: Write the failing UI contract assertions**
 
@@ -95,23 +88,20 @@ git diff --check
 
 Expected: all UI tests and all project tests pass, TypeScript exits with code 0, and no whitespace errors are reported.
 
-- [ ] **Step 6: Stage only this task’s changes**
-
-Stage the test and SCSS, then remove the saved pre-existing `.01s` patch from the staged index only:
+- [ ] **Step 6: Stage only this task’s files**
 
 ```bash
 git add tests/ui-consistency.test.ts miniprogram/pages/index/index.scss
-git apply --cached --reverse /tmp/review-risk-preexisting-index.patch
 git diff --cached --check
 git diff --cached -- miniprogram/pages/index/index.scss tests/ui-consistency.test.ts
 ```
 
 Expected staged diff:
 
+- formalizes the `.06s` to `.01s` recognition-summary delay and test contract;
 - adds the review-risk animation;
 - changes API/form/table delays;
-- adds UI assertions;
-- does **not** contain the `.06s` to `.01s` recognition-summary change.
+- adds the new UI assertions.
 
 - [ ] **Step 7: Commit the isolated fix**
 
@@ -126,4 +116,4 @@ git status --short
 git diff -- miniprogram/pages/index/index.scss
 ```
 
-Expected: the user’s `.06s` to `.01s` change remains unstaged in the working tree; all other unrelated local changes remain untouched.
+Expected: the `.01s` queue-summary delay is committed with the review-card animation; all other unrelated local changes remain untouched.
