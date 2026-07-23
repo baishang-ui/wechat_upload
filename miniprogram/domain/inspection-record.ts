@@ -68,6 +68,21 @@ function asString(value: unknown): string {
   return String(value).trim()
 }
 
+
+export function normalizeInspectionDate(value: string): string {
+  const text = asString(value)
+  const separated = text.match(/^(\d{4})([-./])(\d{1,2})\2(\d{1,2})$/)
+  const chinese = text.match(/^(\d{4})年(\d{1,2})月(\d{1,2})日$/)
+  const year = Number(separated?.[1] ?? chinese?.[1])
+  const month = Number(separated?.[3] ?? chinese?.[2])
+  const day = Number(separated?.[4] ?? chinese?.[3])
+  if (!year || !month || !day || month > 12) return ''
+  const leapYear = year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0)
+  const daysInMonth = [31, leapYear ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]
+  if (day > daysInMonth[month - 1]) return ''
+  return `${String(year).padStart(4, '0')}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`
+}
+
 function asObject(value: unknown): Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
     ? value as Record<string, unknown>
@@ -244,6 +259,9 @@ export function validateRecord(record: InspectionRecord): string[] {
     .filter(([field]) => !String(record[field]).trim())
     .map(([, label]) => label)
 
+  if (record.inspectionDate.trim() && !normalizeInspectionDate(record.inspectionDate)) {
+    missing.push('检验日期格式（YYYY-MM-DD）')
+  }
   if (record.rows.length === 0) {
     missing.push('检验项目')
   }

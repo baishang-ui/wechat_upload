@@ -6,6 +6,7 @@ const assert: typeof strictAssert = strictAssert
 import {
   createMockRecord,
   normalizeApiRecord,
+  normalizeInspectionDate,
   normalizeTenValues,
   updateMeasurement,
   updateSampleJudgement,
@@ -60,4 +61,26 @@ test('validateRecord reports required fields and accepts a complete record', () 
   const record = createCompleteRecord()
   assert.deepEqual(validateRecord(record), [])
   assert.deepEqual(validateRecord({ ...record, customer: '', model: '' }), ['客户', '型号/规格'])
+})
+
+
+test('normalizeInspectionDate canonicalizes supported OCR date forms', () => {
+  assert.equal(normalizeInspectionDate('2016-6-24'), '2016-06-24')
+  assert.equal(normalizeInspectionDate('2016.6.24'), '2016-06-24')
+  assert.equal(normalizeInspectionDate('2016/6/24'), '2016-06-24')
+  assert.equal(normalizeInspectionDate('2016年6月24日'), '2016-06-24')
+})
+
+test('normalizeInspectionDate rejects unsupported and impossible dates', () => {
+  assert.equal(normalizeInspectionDate('2026-02-30'), '')
+  assert.equal(normalizeInspectionDate('2016-6/24'), '')
+  assert.equal(normalizeInspectionDate('not-a-date'), '')
+})
+
+test('validateRecord reports a non-empty invalid inspection date', () => {
+  const record = createCompleteRecord()
+  assert.deepEqual(
+    validateRecord({ ...record, inspectionDate: '2026-02-30' }),
+    ['检验日期格式（YYYY-MM-DD）'],
+  )
 })
