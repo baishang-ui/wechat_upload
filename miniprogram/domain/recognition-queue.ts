@@ -5,6 +5,16 @@ import {
 } from './recognition-review'
 
 export const MAX_RECOGNITION_QUEUE_SIZE = 10
+export const RECOGNITION_PROGRESS_DURATION_MS = 6_000
+const RECOGNITION_PROGRESS_START = 8
+const RECOGNITION_PROGRESS_CEILING = 92
+const RECOGNITION_PROGRESS_CHECKPOINTS = [
+  { ratio: 0, progress: RECOGNITION_PROGRESS_START },
+  { ratio: 0.25, progress: 15 },
+  { ratio: 0.5, progress: 32 },
+  { ratio: 0.75, progress: 62 },
+  { ratio: 1, progress: RECOGNITION_PROGRESS_CEILING },
+] as const
 
 export type RecognitionQueueStatus =
   | 'queued'
@@ -16,13 +26,33 @@ export type RecognitionQueueStatus =
 
 export function getRecognitionProgress(status: RecognitionQueueStatus): number {
   switch (status) {
-    case 'queued': return 10
-    case 'preparing': return 35
-    case 'recognizing': return 70
+    case 'queued': return 0
+    case 'preparing': return RECOGNITION_PROGRESS_START
+    case 'recognizing': return RECOGNITION_PROGRESS_START
     case 'ready': return 100
-    case 'failed': return 70
+    case 'failed': return 0
     case 'skipped': return 0
   }
+}
+
+export function getTimedRecognitionProgress(
+  elapsedMs: number,
+  durationMs = RECOGNITION_PROGRESS_DURATION_MS,
+): number {
+  const safeDuration = Math.max(1, durationMs)
+  const ratio = Math.min(1, Math.max(0, elapsedMs) / safeDuration)
+
+  for (let index = 1; index < RECOGNITION_PROGRESS_CHECKPOINTS.length; index += 1) {
+    const previous = RECOGNITION_PROGRESS_CHECKPOINTS[index - 1]
+    const next = RECOGNITION_PROGRESS_CHECKPOINTS[index]
+    if (ratio > next.ratio) continue
+    const segmentRatio = (ratio - previous.ratio) / (next.ratio - previous.ratio)
+    return Math.round(
+      previous.progress + (next.progress - previous.progress) * segmentRatio,
+    )
+  }
+
+  return RECOGNITION_PROGRESS_CEILING
 }
 
 export interface RecognitionQueueResult {
@@ -129,10 +159,13 @@ export function updateQueueItem(
   return queue.map((item) => {
     if (item.id !== id) return item
     const next = { ...item, ...update }
-    return {
-      ...next,
-      progress: getRecognitionProgress(next.status),
-    }
+    const statusChanged = update.status !== undefined && update.status !== item.status
+    const progress = update.progress !== undefined
+      ? Math.min(100, Math.max(0, Math.round(update.progress)))
+      : statusChanged
+        ? getRecognitionProgress(next.status)
+        : item.progress
+    return { ...next, progress }
   })
 }
 
@@ -165,6 +198,7 @@ export function markQueueItemRecognizing(
   if (!selected || selected.status !== 'preparing') return queue
   return updateQueueItem(queue, id, {
     status: 'recognizing',
+    progress: selected.progress,
     stage: '正在调用视觉大模型',
   })
 }
@@ -209,6 +243,7 @@ export function failQueueItem(
   }
   return updateQueueItem(queue, id, {
     status: 'failed',
+    progress: selected.progress,
     stage: '识别失败',
     error,
   })

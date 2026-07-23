@@ -11,12 +11,15 @@ import {
   failQueueItem,
   getNextQueuedItem,
   getRecognitionProgress,
+  getTimedRecognitionProgress,
   getQueueStats,
+  RECOGNITION_PROGRESS_DURATION_MS,
   markQueueItemActive,
   markQueueItemRecognizing,
   removeQueueItem,
   requestQueueItemSkip,
   retryQueueItem,
+  updateQueueItem,
 } from '../miniprogram/domain/recognition-queue'
 import { createEmptyReviewHints, normalizeRecognitionConfidence } from '../miniprogram/domain/recognition-review'
 
@@ -117,24 +120,53 @@ test('stats and removal reflect active ready and failed items', () => {
 })
 
 
-test('recognition progress maps every queue status to a stable stage percentage', () => {
-  assert.equal(getRecognitionProgress('queued'), 10)
-  assert.equal(getRecognitionProgress('preparing'), 35)
-  assert.equal(getRecognitionProgress('recognizing'), 70)
-  assert.equal(getRecognitionProgress('ready'), 100)
-  assert.equal(getRecognitionProgress('failed'), 70)
-  assert.equal(getRecognitionProgress('skipped'), 0)
+test('timed recognition progress starts slowly and accelerates within six seconds', () => {
+  assert.equal(RECOGNITION_PROGRESS_DURATION_MS, 6_000)
+  assert.equal(getTimedRecognitionProgress(-1), 8)
+  assert.equal(getTimedRecognitionProgress(0), 8)
+  assert.equal(getTimedRecognitionProgress(750), 12)
+  assert.equal(getTimedRecognitionProgress(1_500), 15)
+  assert.equal(getTimedRecognitionProgress(2_250), 24)
+  assert.equal(getTimedRecognitionProgress(3_000), 32)
+  assert.equal(getTimedRecognitionProgress(3_750), 47)
+  assert.equal(getTimedRecognitionProgress(4_500), 62)
+  assert.equal(getTimedRecognitionProgress(5_250), 77)
+  assert.equal(getTimedRecognitionProgress(6_000), 92)
+  assert.equal(getTimedRecognitionProgress(12_000), 92)
 })
 
-test('queue item progress follows every status transition', () => {
+test('timed recognition progress scales checkpoints for a custom duration', () => {
+  assert.equal(getTimedRecognitionProgress(3_000, 12_000), 15)
+  assert.equal(getTimedRecognitionProgress(6_000, 12_000), 32)
+  assert.equal(getTimedRecognitionProgress(9_000, 12_000), 62)
+  assert.equal(getTimedRecognitionProgress(12_000, 12_000), 92)
+})
+
+test('recognition progress preserves timer updates across status transitions', () => {
   let queue = [item('progress', 1)]
-  assert.equal(queue[0].progress, 10)
+  assert.equal(getRecognitionProgress('queued'), 0)
+  assert.equal(queue[0].progress, 0)
+
   queue = markQueueItemActive(queue, 'progress')
-  assert.equal(queue[0].progress, 35)
+  assert.equal(queue[0].progress, 8)
+  queue = updateQueueItem(queue, 'progress', { progress: 40 })
+  assert.equal(queue[0].progress, 40)
   queue = markQueueItemRecognizing(queue, 'progress')
-  assert.equal(queue[0].progress, 70)
+  assert.equal(queue[0].progress, 40)
   queue = failQueueItem(queue, 'progress', 'network')
-  assert.equal(queue[0].progress, 70)
+  assert.equal(queue[0].progress, 40)
   queue = retryQueueItem(queue, 'progress')
-  assert.equal(queue[0].progress, 10)
+  assert.equal(queue[0].progress, 0)
+})
+
+test('completed recognition progress reaches one hundred immediately', () => {
+  let queue = markQueueItemRecognizing(markQueueItemActive([item('done', 1)], 'done'), 'done')
+  queue = updateQueueItem(queue, 'done', { progress: 55 })
+  queue = completeQueueItem(queue, 'done', {
+    imageId: 'image-done',
+    rawContent: '{}',
+    record: createMockRecord(),
+    confidence: normalizeRecognitionConfidence(undefined, 1),
+  }, createEmptyReviewHints())
+  assert.equal(queue[0].progress, 100)
 })
