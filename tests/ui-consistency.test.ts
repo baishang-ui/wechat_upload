@@ -126,10 +126,33 @@ test('recognition cards expose status-aware progress bars', () => {
   assert.match(scss, /\.queue-progress-fill--ready/)
 })
 
+test('recognition cards advance progress on a 300ms wall-clock timer while a request is active', () => {
+  const page = source('miniprogram/pages/index/index.ts')
+  const skipQueueRecognition = page.match(
+    /skipQueueRecognition\(event: WechatMiniprogram\.TouchEvent\) \{([\s\S]*?)\n    \},\n    removeQueueRecognition/,
+  )?.[1] || ''
+
+  assert.match(page, /RECOGNITION_PROGRESS_TICK_MS\s*=\s*300/)
+  assert.match(page, /getTimedRecognitionProgress/)
+  assert.match(page, /startRecognitionProgress\(id: string\)/)
+  assert.match(
+    page,
+    /recognitionProgressTimer = setInterval\(tick, RECOGNITION_PROGRESS_TICK_MS\)[\s\S]*?tick\(\)/,
+  )
+  assert.match(page, /updateQueueItem\([\s\S]*?progress/)
+  assert.match(page, /this\.startRecognitionProgress\(next\.id\)/)
+  assert.match(page, /this\.stopRecognitionProgress\(\)/)
+  assert.match(page, /detached\(\)\s*\{[\s\S]*?stopRecognitionProgress/)
+  assert.match(
+    skipQueueRecognition,
+    /if \(id === this\.data\.activeRecognitionQueueId\) \{\s*this\.stopRecognitionProgress\(\)\s*\}/,
+  )
+})
+
 test('history page throttles automatic refreshes without flashing cached records', () => {
   const page = source('miniprogram/pages/index/index.ts')
   const wxml = source('miniprogram/pages/index/index.wxml')
-  const attached = page.match(/attached\(\)\s*\{([\s\S]*?)\n    \},\n  \},\n  methods:/)?.[1] || ''
+  const attached = page.match(/attached\(\)\s*\{([\s\S]*?)\n    \},/)?.[1] || ''
 
   assert.doesNotMatch(attached, /refreshHistory\(/)
   assert.match(page, /historyLoadedAt:\s*0/)

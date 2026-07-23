@@ -6,6 +6,7 @@ import {
   failQueueItem,
   getNextQueuedItem,
   getQueueStats,
+  getTimedRecognitionProgress,
   markQueueItemActive,
   markQueueItemRecognizing,
   MAX_RECOGNITION_QUEUE_SIZE,
@@ -84,6 +85,10 @@ type WorkspaceTab = 'scan' | 'tasks' | 'history'
 const productLabels = PRODUCT_OPTIONS.map((option) => option.label)
 const measurementHeaders = Array.from({ length: MEASUREMENT_COUNT }, (_, index) => index + 1)
 const judgementOptions: Judgement[] = ['', 'OK', 'NG']
+const RECOGNITION_PROGRESS_TICK_MS = 300
+let recognitionProgressTimer: ReturnType<typeof setInterval> | null = null
+let recognitionProgressStartedAt = 0
+let recognitionProgressItemId = ''
 
 Component({
   data: {
@@ -149,6 +154,9 @@ Component({
           }
           wx.showToast({ title: error.message || '会话检查失败', icon: 'none' })
         })
+    },
+    detached() {
+      this.stopRecognitionProgress()
     },
   },
   methods: {
@@ -422,6 +430,44 @@ Component({
         recognitionQueueStats: getQueueStats(visibleQueue),
       })
     },
+    stopRecognitionProgress() {
+      if (recognitionProgressTimer !== null) {
+        clearInterval(recognitionProgressTimer)
+      }
+      recognitionProgressTimer = null
+      recognitionProgressStartedAt = 0
+      recognitionProgressItemId = ''
+    },
+    startRecognitionProgress(id: string) {
+      this.stopRecognitionProgress()
+      recognitionProgressItemId = id
+      recognitionProgressStartedAt = Date.now()
+      const tick = () => {
+        if (recognitionProgressItemId !== id) return
+        const current = this.data.recognitionQueue.find((item) => item.id === id)
+        if (
+          !current
+          || (current.status !== 'preparing' && current.status !== 'recognizing')
+        ) {
+          this.stopRecognitionProgress()
+          return
+        }
+        const progress = Math.max(
+          current.progress,
+          getTimedRecognitionProgress(Date.now() - recognitionProgressStartedAt),
+        )
+        if (progress === current.progress) return
+        this.setData({
+          recognitionQueue: updateQueueItem(
+            this.data.recognitionQueue,
+            id,
+            { progress },
+          ),
+        })
+      }
+      recognitionProgressTimer = setInterval(tick, RECOGNITION_PROGRESS_TICK_MS)
+      tick()
+    },
     enqueueRecognitionFiles(imagePaths: string[]) {
       if (imagePaths.length === 0) return
       const createdAt = Date.now()
@@ -453,7 +499,7 @@ Component({
         activeRecognitionQueueId: next.id,
         recognitionQueue: activeQueue,
         recognitionQueueStats: getQueueStats(activeQueue),
-      })
+      }, () => this.startRecognitionProgress(next.id))
       setTimeout(() => {
         const current = this.data.recognitionQueue.find((item) => item.id === next.id)
         if (!current || current.status !== 'preparing') return
@@ -494,6 +540,7 @@ Component({
           this.applyRecognitionQueue(failed)
         })
         .finally(() => {
+          this.stopRecognitionProgress()
           this.setData({ activeRecognitionQueueId: '' }, () => this.runRecognitionQueue())
         })
     },
@@ -546,6 +593,9 @@ Component({
     },
     skipQueueRecognition(event: WechatMiniprogram.TouchEvent) {
       const id = String(event.currentTarget.dataset.id || '')
+      if (id === this.data.activeRecognitionQueueId) {
+        this.stopRecognitionProgress()
+      }
       this.applyRecognitionQueue(requestQueueItemSkip(this.data.recognitionQueue, id))
     },
     removeQueueRecognition(event: WechatMiniprogram.TouchEvent) {
