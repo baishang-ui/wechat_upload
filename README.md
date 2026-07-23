@@ -1,143 +1,390 @@
-# 检验报告 OCR 微信小程序
+# 智能质检报告微信小程序
 
-一个使用 TypeScript 和 SCSS 构建的微信小程序，用于拍摄或选择工业检验报告图片，通过视觉大模型识别表格，并在小程序中校对、编辑和保存识别结果。
+面向工业检验报告的微信小程序客户端。小程序通过统一业务后端完成账号认证、图片识别、采购待检任务读取、独立报告创建、质检草稿保存和历史记录同步；客户端负责图片队列、结果校对、本地容错及 JSON 导出。
 
-## 功能
+## 核心能力
 
-- 相机拍摄或从相册选择一张检验报告。
-- 上传前自动压缩图片，避免模型网关返回 `413 Request Entity Too Large`。
-- 调用 OpenAI 兼容的 `qwen35` 视觉模型接口。
-- 自动处理横向或旋转的检验报告。
-- 显示模型返回的原始 JSON。
-- 将识别结果转换为可编辑的十列表格。
-- 支持六类报告：钢丝刷、拉绒片、树脂砂轮、百叶轮、网格砂和金刚石锯片。
-- 使用本地文件与本地存储保存最近 30 条识别记录。
-- 在记录页通过底部弹窗重新打开并编辑历史表格。
-- 将当前识别结果或历史记录导出为单表 JSON 文件。
-- 毛玻璃胶囊底栏、滑块位移动画、列表入场动画和安全区适配。
+- 账号登录和 Session Cookie 复用，未登录或会话失效时自动返回登录页。
+- 拍照或从相册批量添加检验报告，最多 10 个未完成任务。
+- 识别任务按加入顺序逐张处理，识别期间仍可继续添加图片。
+- 上传前自动压缩图片，并限制识别图片不超过 600 KB。
+- 通过业务后端的识别代理处理 JPEG、PNG 图片，客户端不保存模型密钥。
+- 将 OCR 结果归一化为可编辑的十样本检验表格。
+- 结合模型置信度与确定性格式检查，显示红色“重点核对”和黄色“建议核对”提示。
+- 支持钢丝刷、拉绒片、树脂砂轮、百叶轮、网格砂和金刚石锯片等报告类型。
+- 读取采购待检任务、预填采购信息，并将审核后的检验草稿回写数据库。
+- 独立报告使用稳定客户端 UUID 幂等创建，网络失败后可安全重试。
+- 合并本地记录与服务器历史记录，支持重新打开、编辑、同步和失败重试。
+- 将检验结果导出为 `inspection-table/v1` JSON 文件并通过微信文件分享。
+- 使用统一设计令牌、毛玻璃底部导航、卡片阶梯入场动画和安全区适配。
+
+## 页面与业务流程
+
+### 1. 登录
+
+1. 用户输入智能销售系统账号和密码。
+2. 小程序请求后端登录接口。
+3. 后端返回 Session Cookie，小程序保存 Cookie 并用于后续请求。
+4. 再次启动时，小程序通过当前用户接口验证会话；收到 `401` 时清除本地 Cookie 并返回登录页。
+
+### 2. 连续识别
+
+1. 在“检验报告识别”页拍照，或从相册批量添加图片。
+2. 图片进入本地识别队列，依次经历等待、图片处理、识别、待审核或失败状态。
+3. 用户可在后台识别期间继续添加报告，也可跳过、删除或重试任务。
+4. 识别完成后进入审核页面，核对报告信息、检验项目、十个样本值和判定结果。
+5. 保存时先写入本地历史，再同步至业务后端；同步失败不会丢失本地记录。
+
+### 3. 采购待检任务
+
+1. 在“采购待检任务”页按状态、搜索词和分页读取任务。
+2. 展开任务并选择具体采购明细。
+3. 客户、供应商、物料、规格、数量和日期等信息会预填到识别表单。
+4. 识别并审核报告后，结果保存到对应任务和明细的质检草稿中。
+
+### 4. 识别记录
+
+- 同时显示本地记录和服务器历史记录。
+- 已同步的本地副本会按服务端任务与明细编号去重。
+- 本地记录可查看图片、原始识别内容、同步状态和失败原因。
+- 同步失败的记录可点击“重试同步”。
+- 删除本地副本不会删除已经同步到服务器的记录。
+
+## 系统架构
+
+```mermaid
+flowchart LR
+  U["微信用户"] --> MP["微信小程序"]
+  MP --> LS["本地存储与本地图片"]
+  MP --> API["统一业务后端"]
+  API --> AUTH["登录与 Session"]
+  API --> OCR["质检识别代理"]
+  OCR --> MODEL["视觉模型服务"]
+  API --> QI["采购单与质检接口"]
+  QI --> DB["业务数据库"]
+```
+
+小程序只访问统一业务后端，不直接调用视觉模型网关，也不保存模型 API Key。模型地址、模型名称和模型凭据由后端管理。
 
 ## 技术栈
 
 - 微信小程序
-- TypeScript
+- TypeScript `^5.5.4`
 - WXML
 - SCSS
+- glass-easel 组件框架
+- 微信小程序基础库 `2.32.3`
 - Node.js 测试运行器
 - `tsx`
+- `miniprogram-api-typings`
 
 ## 项目结构
 
 ```text
 miniprogram/
+  app.json                         页面、网络超时和运行时配置
+  config/
+    server.ts                      后端地址、请求超时和 Session 存储键
   domain/
-    inspection-record.ts     OCR 数据归一化与表格更新
-    inspection-history.ts    本地历史排序、更新和数量限制
-    inspection-export.ts     版本化单表 JSON 导出契约
+    inspection-record.ts          OCR 数据归一化、日期校验和表格编辑
+    inspection-history.ts         本地历史、迁移、同步状态和数量限制
+    inspection-export.ts          inspection-table/v1 导出契约
+    recognition-queue.ts          连续识别队列及状态转换
+    recognition-review.ts         置信度归一化和红黄审核提示
   services/
-    inspection-service.ts    图片压缩、视觉模型调用与 JSON 解析
-    history-service.ts       微信本地存储与持久图片管理
-    export-service.ts        JSON 文件写入与微信文件分享
-  pages/index/
-    index.ts                 页面状态与交互
-    index.wxml               识别、历史和编辑弹窗
-    index.scss               页面、动画和毛玻璃样式
+    auth-service.ts               登录、当前用户和退出
+    server-client.ts              JSON 请求、文件上传、Cookie 和错误映射
+    inspection-service.ts         图片压缩和识别结果归一化
+    quality-inspection-service.ts 采购任务、独立报告、草稿和历史接口
+    history-service.ts            本地存储及持久图片管理
+    export-service.ts             JSON 文件生成和微信文件分享
+  pages/
+    login/                         账号登录页
+    index/                         识别队列、审核、采购任务和历史记录
+    logs/                          小程序模板日志页
+  styles/
+    _design-tokens.scss            登录页和工作区共享设计令牌
 tests/
-  *.test.ts                  数据、压缩和本地历史测试
+  *.test.ts                        领域逻辑、服务、API 契约和 UI 文档测试
+docs/superpowers/
+  specs/                           已确认的功能设计
+  plans/                           对应实施计划
 ```
 
-## 安装
+## 环境要求
 
-需要 Node.js 18 或更高版本。
+- 微信开发者工具。
+- Node.js 18 或更高版本（推荐）。
+- npm。
+- 一个正在运行、并实现本文接口约定的统一业务后端。
+- 真机测试时，需要手机能够访问后端地址。
+
+## 安装
 
 ```bash
 npm install
 ```
 
-## 运行
+## 后端配置
 
-1. 打开微信开发者工具。
-2. 导入本项目目录。
-3. 确认小程序根目录为 `miniprogram/`。
-4. 开发阶段关闭“校验合法域名、web-view（业务域名）、TLS 版本以及 HTTPS 证书”。
-5. 编译并在模拟器或真机中测试拍照和相册权限。
-
-当前模型接口：
+后端地址位于：
 
 ```text
-POST http://www.binictools.cn:8865/api/llm/v1/chat/completions
+miniprogram/config/server.ts
 ```
 
-模型名称为 `qwen35`。图片以 OpenAI 兼容的 `image_url` Base64 数据发送。
+本地开发示例：
 
-## API Token
-
-项目不会在源码中保存真实 API Token。若服务端启用 Bearer Token 校验，可在微信开发者工具控制台中临时设置：
-
-```js
-wx.setStorageSync('llmApiToken', 'YOUR_API_TOKEN')
+```ts
+export const SERVER_BASE_URL = 'http://localhost:7875'
 ```
 
-清除本地 Token：
+生产环境示例：
 
-```js
-wx.removeStorageSync('llmApiToken')
+```ts
+export const SERVER_BASE_URL = 'https://www.binictools.cn:7876'
 ```
 
-小程序客户端无法安全保存长期密钥。正式发布时应由业务后端代理模型请求。
+同一文件还定义：
 
-## 图片压缩
+```ts
+export const SERVER_REQUEST_TIMEOUT_MS = 30_000
+export const SERVER_UPLOAD_TIMEOUT_MS = 120_000
+export const SESSION_COOKIE_STORAGE_KEY = 'smartSalesSession:v1'
+```
 
-模型网关的请求体上限约为 1 MB，而 Base64 会使图片体积增加约 33%。小程序在请求前将图片压缩到不超过 600 KB，压缩质量依次尝试：
+> `localhost` 只适用于微信开发者工具模拟器访问本机服务。真机中的 `localhost` 指向手机自身，真机联调应改为手机可访问的局域网地址或 HTTPS 域名。
+
+## 在微信开发者工具中运行
+
+1. 安装依赖：`npm install`。
+2. 打开微信开发者工具，选择“导入项目”。
+3. 选择仓库根目录。
+4. 确认小程序源码目录为 `miniprogram/`。
+5. 检查 `project.config.json` 中的 AppID 是否适用于当前开发账号。
+6. 根据环境设置 `miniprogram/config/server.ts`。
+7. 本地开发阶段可临时关闭“校验合法域名、web-view（业务域名）、TLS 版本以及 HTTPS 证书”。
+8. 编译项目，使用有效业务账号登录。
+9. 分别验证拍照、相册选择、文件分享和网络权限。
+
+正式发布前必须重新启用域名校验，并在微信公众平台配置合法 HTTPS 域名。
+
+## 认证与请求约定
+
+### Session Cookie
+
+- 登录接口返回的 `session=...` Cookie 保存到 `smartSalesSession:v1`。
+- `serverRequest` 和 `serverUpload` 会自动在后续请求中携带 `Cookie` 请求头。
+- 收到 `401 Unauthorized` 时会清除本地 Session。
+- 退出登录无论网络请求是否成功，都会清除本地 Session。
+
+### 响应格式
+
+客户端期望后端返回统一 JSON 包装：
+
+```json
+{
+  "success": true,
+  "data": {}
+}
+```
+
+失败响应使用 `error` 或 `detail` 提供可读信息：
+
+```json
+{
+  "success": false,
+  "error": "错误说明"
+}
+```
+
+客户端会对 `400`、`401`、`403`、`404`、`409`、`413`、`422`、`429` 和 `502` 显示后端错误信息；其他状态统一提示服务器暂时不可用。
+
+### 超时
+
+- 普通 JSON 请求：30 秒。
+- 图片上传：120 秒。
+
+## 主要后端接口
+
+| 方法与路径 | 用途 |
+| --- | --- |
+| `POST /api/miniprogram/auth/login` | 账号登录并建立 Session |
+| `GET /api/miniprogram/auth/me` | 验证 Session 并读取当前用户 |
+| `POST /api/miniprogram/auth/logout` | 退出登录 |
+| `POST /api/miniprogram/quality-inspections/recognize` | 上传单张报告图片并返回识别记录、原始内容和置信度 |
+| `GET /customer-orders/api/purchase-orders/quality-inspections` | 分页读取采购待检任务 |
+| `GET /customer-orders/api/purchase-orders/quality-inspections/{taskId}` | 读取任务及明细详情 |
+| `POST /customer-orders/api/quality-inspections/standalone` | 幂等创建独立质检任务和明细 |
+| `POST /customer-orders/api/purchase-orders/quality-inspections/{taskId}/items/{itemId}/draft` | 保存质检草稿和报告图片 |
+| `GET /customer-orders/api/purchase-orders/quality-inspections/history-records` | 读取采购与独立报告的服务器历史记录 |
+
+采购任务列表会固定请求采购来源；历史记录接口使用 `source_type=all` 合并采购报告与独立报告。
+
+## 识别队列与图片处理
+
+### 队列行为
+
+- 队列最多保留 **10 个未完成任务**。
+- 相机每次添加一张图片。
+- 相册单次最多选择 9 张，并受队列剩余容量限制。
+- 同一时间只有一个任务处于准备或识别状态。
+- 失败任务不会阻塞后续排队任务。
+- 跳过正在处理的任务时，会在当前异步工作结束后丢弃其结果。
+
+### 图片压缩
+
+识别前先读取文件大小。超过 600 KB 时按以下质量依次压缩：
 
 ```text
 70 -> 50 -> 35 -> 20
 ```
 
-若压缩后仍超过限制，会提示用户靠近报告重新拍摄。
+每次压缩后重新检查大小；仍超过 600 KB 时提示用户靠近报告重新拍摄。后端识别代理接受有效的 JPEG 或 PNG 文件，并再次校验图片类型、内容和大小。
 
-## 本地记录
+### 准确度审核
 
-- 存储键：`inspectionHistory:v1`
-- 最多保存：30 条
-- 排序方式：最近更新时间倒序
-- 新记录会通过 `saveFile` 保存报告图片。
-- 更新记录会复用原图片，不会重复保存。
-- 删除或超出数量限制时会清理对应本地图片。
-- 本地记录不会跨设备同步。
+识别响应可包含字段、检验项目和十个样本值的置信度。客户端会结合置信度与确定性检查生成审核提示：
+
+- 红色：重点核对。
+- 黄色：建议人工确认。
+- 正常：格式和置信度未发现明显风险。
+
+日期、数量、测量值范围、缺失测量值和采购预填信息不一致等问题可以覆盖模型给出的高置信度。用户修改字段后，对应提示会被标记为已人工审核。
+
+## 质检任务与数据库同步
+
+### 采购任务报告
+
+1. 用户选择采购任务和明细。
+2. 小程序使用任务数据预填报告信息。
+3. 识别、审核并本地保存。
+4. 小程序直接向所选 `taskId`、`itemId` 保存质检草稿。
+
+### 独立报告
+
+1. 新本地记录生成稳定 UUID `clientRecordId`。
+2. 小程序调用独立报告接口创建服务端任务和明细。
+3. 后端按 `client_record_id` 保证重试幂等。
+4. 返回 `task_id`、`item_id` 后，小程序保存质检草稿。
+5. 已获得服务端编号的记录重试时不会重复创建任务。
+
+### 同步状态
+
+本地记录包含以下状态：
+
+- `local`：仅本地保存。
+- `syncing`：正在创建任务或保存草稿。
+- `synced`：已同步。
+- `failed`：同步失败，可重试。
+
+同步过程中会先持久化状态和服务端编号，避免后续步骤失败时丢失重试上下文。收到 `401` 时会触发重新登录流程。
+
+### 日期规范化
+
+数据库接口要求 `YYYY-MM-DD`。客户端在同步前支持将以下格式规范化：
+
+```text
+2016-6-24       -> 2016-06-24
+2016.6.24       -> 2016-06-24
+2016/6/24       -> 2016-06-24
+2016年6月24日   -> 2016-06-24
+```
+
+不存在的日期（如 `2026-02-30`）会在客户端拦截，不发送请求。
+
+## 本地记录与服务器历史
+
+- 当前存储键：`inspectionHistory:v2`。
+- 旧存储键：`inspectionHistory:v1`，首次读取时自动迁移到 v2。
+- 本地最多保存 30 条，按最近更新时间倒序排列。
+- 新图片通过 `wx.saveFile` 转为持久文件。
+- 更新同一记录时保留稳定的 `clientRecordId` 和原图片。
+- 超出 30 条或删除本地记录时，会清理对应持久图片。
+- 中断在 `syncing` 状态的记录，下次读取时恢复为 `failed` 并提示重试。
+- 服务器历史与本地历史按 `taskId:itemId` 去重后合并显示。
+- 删除本地副本不会调用服务端删除接口，不会删除已经同步的数据库记录。
 
 ## JSON 导出
 
-单份检验报告导出为 UTF-8 JSON 文件，契约版本为 `inspection-table/v1`。文件包含：
+导出契约版本为 `inspection-table/v1`，生成 UTF-8 JSON 文件：
 
-- `record_id` 和 `exported_at`。
-- `meta` 基本信息、备注和审核信息。
-- `table.columns` 固定列定义。
-- `table.rows` 检验项目行和末尾判定行。
+```text
+inspection-<record-id>.json
+```
 
-导出不会包含本地图片路径、图片 Base64、模型原始返回或本地同步状态。小程序生成 `.json` 文件后直接打开微信文件分享；首次分享失败时会自动重试一次，不会复制到剪贴板。
+导出内容包括：
 
-上传功能尚未实现。未来上传层应将完整 UTF-8 JSON 文本转换为 Base64 后发送，不改变导出 JSON 的字段结构。完整契约见 `docs/superpowers/specs/2026-07-21-inspection-json-export-design.md`。
+- `record_id`、`exported_at`。
+- 客户、供应商、规格、数量、日期、备注和审核人员等 `meta` 信息。
+- 固定列定义和检验项目表格。
+- 最后一行十个样本的判定结果。
 
-## 测试
+导出不会包含本地图片路径、图片 Base64、模型原始返回、本地同步状态或错误信息。文件写入微信用户数据目录后，通过 `shareFileMessage` 分享；首次分享失败时等待 150 ms 并重试一次。
 
-运行全部单元测试：
+## 测试与类型检查
+
+运行全部测试：
 
 ```bash
 npm test
 ```
 
-运行 TypeScript 严格检查：
+运行 TypeScript 类型检查：
 
 ```bash
 npm run typecheck
 ```
 
-## 正式发布注意事项
+测试覆盖领域数据归一化、历史迁移、图片压缩、识别队列、置信度审核、认证、Cookie、接口路径、同步流程、JSON 导出、UI 结构和 README 内容契约。测试文件位于 `tests/`，通过 Node.js 内置测试运行器和 `tsx` 执行。
 
-当前接口使用 HTTP，只适合开发环境。正式微信小程序需要：
+## 常见问题
 
-- 使用已备案并配置到微信公众平台的 HTTPS 域名。
-- 将模型 Token 保存在业务后端，而不是小程序中。
-- 由业务后端代理视觉模型请求。
-- 增加服务器端检验记录保存接口，实现跨设备同步和权限控制。
-- 根据业务要求增加用户登录、审计和数据保留策略。
+### `401 Unauthorized`
+
+Session 已失效或未登录。客户端会清除 `smartSalesSession:v1`，重新登录后再操作。
+
+### `403 Forbidden`
+
+当前账号缺少采购或质量检验权限。请在业务后台检查用户角色和权限配置。
+
+### `409 Conflict`
+
+独立报告的 `client_record_id` 已存在，但本次创建字段与服务端已有内容不一致。不要复用其他记录的本地 UUID；检查本地记录是否被异常覆盖。
+
+### `413 Request Entity Too Large` 或“图片不能超过 600 KB”
+
+靠近报告重新拍摄，减少无关背景；确认压缩后的图片不超过 600 KB。
+
+### `422 Unprocessable Entity`
+
+请求字段未通过后端校验。优先检查检验日期、数量和必填字段。检验日期应能规范化为 `YYYY-MM-DD`。
+
+### 请求超时或网络连接失败
+
+确认后端进程正在运行，`SERVER_BASE_URL` 可访问，防火墙允许对应端口，并检查普通请求 30 秒、上传请求 120 秒的超时设置。
+
+### 模拟器正常，真机无法访问 `localhost`
+
+手机中的 `localhost` 不是开发电脑。请使用手机可访问的局域网 IP，或配置合法 HTTPS 测试域名。
+
+### 微信提示域名、TLS 或证书不合法
+
+开发阶段可在开发者工具中临时关闭合法域名校验；真机预览、体验版和正式版必须使用公众平台已配置的 HTTPS 域名及有效证书。
+
+### 登录成功但接口仍提示未登录
+
+检查响应是否返回 `session` Cookie、后续请求是否携带 `Cookie` 请求头，以及代理层是否保留 `Set-Cookie`。
+
+## 正式发布检查
+
+- 将 `SERVER_BASE_URL` 设置为正式 HTTPS 地址。
+- 在微信公众平台配置 request 和 uploadFile 合法域名。
+- 确认证书链、TLS 版本和域名备案符合微信要求。
+- 模型地址、模型 API Key、数据库凭据只保存在业务后端。
+- 验证账号权限、Session 生命周期和退出登录行为。
+- 使用真机验证拍照、相册、图片压缩、上传、文件分享和安全区布局。
+- 分别验证采购任务报告、独立报告、失败重试和服务器历史合并。
+- 检查 `401`、`403`、`409`、`413`、`422` 和超时提示。
+- 发布前运行 `npm test` 与 `npm run typecheck`。
+- 重新启用开发阶段临时关闭的域名和证书校验。
