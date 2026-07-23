@@ -1,5 +1,28 @@
 import { StoredInspectionRecord } from '../../domain/inspection-history'
 import {
+  appendRecognitionQueue,
+  completeQueueItem,
+  createRecognitionQueueItem,
+  failQueueItem,
+  getNextQueuedItem,
+  getQueueStats,
+  markQueueItemActive,
+  markQueueItemRecognizing,
+  MAX_RECOGNITION_QUEUE_SIZE,
+  RecognitionQueueItem,
+  removeQueueItem,
+  requestQueueItemSkip,
+  retryQueueItem,
+  updateQueueItem,
+} from '../../domain/recognition-queue'
+import {
+  buildRecognitionReviewHints,
+  createEmptyReviewHints,
+  hasUnreviewedDanger,
+  markReviewHintReviewed,
+  RecognitionReviewHints,
+} from '../../domain/recognition-review'
+import {
   createMockRecord,
   InspectionRecord,
   InspectionRowField,
@@ -20,7 +43,6 @@ import {
 } from '../../services/history-service'
 import {
   recognizeInspection,
-  RecognizeInspectionResult,
   submitInspection,
 } from '../../services/inspection-service'
 import { exportInspectionJson } from '../../services/export-service'
@@ -57,7 +79,6 @@ type WorkspaceTab = 'scan' | 'tasks' | 'history'
 const productLabels = PRODUCT_OPTIONS.map((option) => option.label)
 const measurementHeaders = Array.from({ length: MEASUREMENT_COUNT }, (_, index) => index + 1)
 const judgementOptions: Judgement[] = ['', 'OK', 'NG']
-const PROGRESS_COMPLETION_DURATION = 420
 
 Component({
   data: {
@@ -74,9 +95,11 @@ Component({
     imagePath: '',
     imageId: '',
     rawContent: '',
-    recognitionStage: '正在读取图片',
-    recognitionCompleting: false,
-    recognitionRequestId: 0,
+    recognitionQueue: [] as RecognitionQueueItem[],
+    recognitionQueueStats: getQueueStats([]),
+    activeRecognitionQueueId: '',
+    reviewQueueItemId: '',
+    reviewHints: createEmptyReviewHints() as RecognitionReviewHints,
     productLabels,
     productIndex: 0,
     measurementHeaders,
@@ -318,36 +341,70 @@ Component({
       this.chooseImage(['album'])
     },
     chooseImage(sourceType: Array<'album' | 'camera'>) {
+      const remaining = MAX_RECOGNITION_QUEUE_SIZE - this.data.recognitionQueueStats.total
+      if (remaining <= 0) {
+        wx.showToast({ title: '识别队列最多保留 10 张图片', icon: 'none' })
+        return
+      }
       wx.chooseMedia({
-        count: 1,
+        count: sourceType.includes('album') ? Math.min(9, remaining) : 1,
         mediaType: ['image'],
         sourceType,
         sizeType: ['compressed'],
-        success: (result) => this.startRecognition(result.tempFiles[0].tempFilePath),
+        success: (result) => this.enqueueRecognitionFiles(
+          result.tempFiles.map((file) => file.tempFilePath),
+        ),
       })
     },
-    startRecognition(imagePath: string) {
-      const requestId = this.data.recognitionRequestId + 1
+    applyRecognitionQueue(queue: RecognitionQueueItem[]) {
+      const visibleQueue = queue.filter((item) => item.status !== 'skipped')
       this.setData({
-        screen: 'recognizing',
+        recognitionQueue: visibleQueue,
+        recognitionQueueStats: getQueueStats(visibleQueue),
+      })
+    },
+    enqueueRecognitionFiles(imagePaths: string[]) {
+      if (imagePaths.length === 0) return
+      const createdAt = Date.now()
+      const sourceType = this.data.selectedTaskId && this.data.selectedItemId
+        ? 'purchase_order' as const
+        : 'standalone' as const
+      const additions = imagePaths.map((imagePath, index) => createRecognitionQueueItem({
+        id: `RQ-${createdAt}-${index}-${Math.random().toString(16).slice(2, 8)}`,
         imagePath,
-        imageId: '',
-        rawContent: '',
-        recordId: '',
-        editingRecordId: '',
-        recognitionStage: '正在读取图片',
-        recognitionCompleting: false,
-        recognitionRequestId: requestId,
+        createdAt: createdAt + index,
+        sourceType,
+        taskId: sourceType === 'purchase_order' ? this.data.selectedTaskId : null,
+        itemId: sourceType === 'purchase_order' ? this.data.selectedItemId : null,
+        taskPrefill: sourceType === 'purchase_order' ? this.data.record : null,
+      }))
+      const queue = appendRecognitionQueue(this.data.recognitionQueue, additions)
+      this.setData({
+        screen: 'capture',
+        recognitionQueue: queue,
+        recognitionQueueStats: getQueueStats(queue),
+      }, () => this.runRecognitionQueue())
+    },
+    runRecognitionQueue() {
+      if (this.data.activeRecognitionQueueId) return
+      const next = getNextQueuedItem(this.data.recognitionQueue)
+      if (!next) return
+      const activeQueue = markQueueItemActive(this.data.recognitionQueue, next.id)
+      this.setData({
+        activeRecognitionQueueId: next.id,
+        recognitionQueue: activeQueue,
+        recognitionQueueStats: getQueueStats(activeQueue),
       })
       setTimeout(() => {
-        if (this.data.recognitionRequestId === requestId && !this.data.recognitionCompleting) {
-          this.setData({ recognitionStage: '正在调用视觉大模型' })
-        }
+        const current = this.data.recognitionQueue.find((item) => item.id === next.id)
+        if (!current || current.status !== 'preparing') return
+        const recognizingQueue = markQueueItemRecognizing(this.data.recognitionQueue, next.id)
+        this.applyRecognitionQueue(recognizingQueue)
       }, 350)
-      recognizeInspection(imagePath)
-        .then((result: RecognizeInspectionResult) => {
-          if (this.data.recognitionRequestId !== requestId) return
-          const taskPrefill = this.data.selectedTaskId ? this.data.record : null
+      recognizeInspection(next.imagePath)
+        .then((result) => {
+          const current = this.data.recognitionQueue.find((item) => item.id === next.id)
+          const taskPrefill = current?.taskPrefill
           const recognizedRecord = taskPrefill
             ? {
               ...result.record,
@@ -359,36 +416,96 @@ Component({
               inspectionDate: result.record.inspectionDate || taskPrefill.inspectionDate,
             }
             : result.record
-          const productIndex = PRODUCT_OPTIONS.findIndex(
-            (option) => option.value === recognizedRecord.productType,
+          const normalizedResult = { ...result, record: recognizedRecord }
+          const hints = buildRecognitionReviewHints(recognizedRecord, result.confidence)
+          const completed = completeQueueItem(
+            this.data.recognitionQueue,
+            next.id,
+            normalizedResult,
+            hints,
           )
-          this.setData({
-            recognitionCompleting: true,
-            recognitionStage: '识别完成，正在整理结果',
-          })
-          setTimeout(() => {
-            if (this.data.recognitionRequestId !== requestId) return
-            this.setData({
-              screen: 'review',
-              imageId: result.imageId,
-              rawContent: result.rawContent,
-              record: recognizedRecord,
-              productIndex: Math.max(productIndex, 0),
-              recognitionCompleting: false,
-            })
-          }, PROGRESS_COMPLETION_DURATION)
+          this.applyRecognitionQueue(completed)
         })
         .catch((error: Error) => {
-          if (this.data.recognitionRequestId !== requestId) return
-          wx.showModal({ title: '识别失败', content: error.message, showCancel: false })
-          this.setData({ screen: 'capture', recognitionCompleting: false })
+          const failed = failQueueItem(
+            this.data.recognitionQueue,
+            next.id,
+            error.message || '识别失败',
+          )
+          this.applyRecognitionQueue(failed)
+        })
+        .finally(() => {
+          this.setData({ activeRecognitionQueueId: '' }, () => this.runRecognitionQueue())
         })
     },
-    cancelRecognition() {
+    openQueueReview(event: WechatMiniprogram.TouchEvent) {
+      const id = String(event.currentTarget.dataset.id || '')
+      const item = this.data.recognitionQueue.find((candidate) => candidate.id === id)
+      if (!item || item.status !== 'ready' || !item.result || !item.reviewHints) return
+      const productIndex = PRODUCT_OPTIONS.findIndex(
+        (option) => option.value === item.result?.record.productType,
+      )
+      this.setData({
+        screen: 'review',
+        reviewQueueItemId: id,
+        imagePath: item.imagePath,
+        imageId: item.result.imageId,
+        rawContent: item.result.rawContent,
+        record: item.result.record,
+        reviewHints: item.reviewHints,
+        productIndex: Math.max(productIndex, 0),
+        selectedTaskId: item.taskId || 0,
+        selectedItemId: item.itemId || 0,
+        recordId: '',
+        editingRecordId: '',
+      })
+    },
+    backToRecognitionQueue() {
+      const id = this.data.reviewQueueItemId
+      let queue = this.data.recognitionQueue
+      const item = queue.find((candidate) => candidate.id === id)
+      if (item?.result) {
+        queue = updateQueueItem(queue, id, {
+          result: { ...item.result, record: this.data.record },
+          reviewHints: this.data.reviewHints,
+        })
+      }
       this.setData({
         screen: 'capture',
-        recognitionCompleting: false,
-        recognitionRequestId: this.data.recognitionRequestId + 1,
+        reviewQueueItemId: '',
+        recognitionQueue: queue,
+        recognitionQueueStats: getQueueStats(queue),
+      })
+    },
+    retryQueueRecognition(event: WechatMiniprogram.TouchEvent) {
+      const id = String(event.currentTarget.dataset.id || '')
+      const queue = retryQueueItem(this.data.recognitionQueue, id)
+      this.setData({
+        recognitionQueue: queue,
+        recognitionQueueStats: getQueueStats(queue),
+      }, () => this.runRecognitionQueue())
+    },
+    skipQueueRecognition(event: WechatMiniprogram.TouchEvent) {
+      const id = String(event.currentTarget.dataset.id || '')
+      this.applyRecognitionQueue(requestQueueItemSkip(this.data.recognitionQueue, id))
+    },
+    removeQueueRecognition(event: WechatMiniprogram.TouchEvent) {
+      const id = String(event.currentTarget.dataset.id || '')
+      const item = this.data.recognitionQueue.find((candidate) => candidate.id === id)
+      if (!item) return
+      const remove = () => this.applyRecognitionQueue(removeQueueItem(this.data.recognitionQueue, id))
+      if (item.status !== 'ready') {
+        remove()
+        return
+      }
+      wx.showModal({
+        title: '删除待审核结果',
+        content: '删除后需要重新添加图片识别，是否继续？',
+        confirmText: '删除',
+        confirmColor: '#c93f4a',
+        success: (result) => {
+          if (result.confirm) remove()
+        },
       })
     },
     previewImage() {
@@ -623,6 +740,7 @@ Component({
       const field = event.currentTarget.dataset.field as keyof InspectionRecord
       this.setData({
         record: updateRecordField(this.data.record, field, event.detail.value),
+        reviewHints: markReviewHintReviewed(this.data.reviewHints, `record.${String(field)}`),
       })
     },
     onRowInput(event: WechatMiniprogram.Input) {
@@ -630,6 +748,10 @@ Component({
       const field = event.currentTarget.dataset.field as InspectionRowField
       this.setData({
         record: updateRowField(this.data.record, rowIndex, field, event.detail.value),
+        reviewHints: markReviewHintReviewed(
+          this.data.reviewHints,
+          `rows.${rowIndex}.${field}`,
+        ),
       })
     },
     onMeasurementInput(event: WechatMiniprogram.Input) {
@@ -637,6 +759,10 @@ Component({
       const measurementIndex = Number(event.currentTarget.dataset.measurementIndex)
       this.setData({
         record: updateMeasurement(this.data.record, rowIndex, measurementIndex, event.detail.value),
+        reviewHints: markReviewHintReviewed(
+          this.data.reviewHints,
+          `rows.${rowIndex}.measurements.${measurementIndex}`,
+        ),
       })
     },
     onJudgementChange(event: WechatMiniprogram.CustomEvent<{ value: string }>) {
@@ -644,6 +770,10 @@ Component({
       const judgement = judgementOptions[Number(event.detail.value)]
       this.setData({
         record: updateSampleJudgement(this.data.record, sampleIndex, judgement),
+        reviewHints: markReviewHintReviewed(
+          this.data.reviewHints,
+          `sampleJudgements.${sampleIndex}`,
+        ),
       })
     },
     submitRecord() {
@@ -653,6 +783,21 @@ Component({
         wx.showToast({ title: `请完善${missing[0]}`, icon: 'none' })
         return
       }
+      if (hasUnreviewedDanger(this.data.reviewHints)) {
+        wx.showModal({
+          title: '仍有重点核对字段',
+          content: `还有 ${this.data.reviewHints.dangerCount} 个红色字段未人工修改，确认数据无误后仍可保存。`,
+          confirmText: '确认保存',
+          success: (result) => {
+            if (result.confirm) this.performSubmitRecord()
+          },
+        })
+        return
+      }
+      this.performSubmitRecord()
+    },
+    performSubmitRecord() {
+      if (this.data.submitting) return
       this.setData({ submitting: true })
       submitInspection(this.data.imageId, this.data.record)
         .then(() => saveInspectionHistory({
@@ -665,10 +810,16 @@ Component({
         }, this.data.editingRecordId))
         .then((stored) => this.syncHistoryRecord(stored))
         .then((stored) => {
+          const queue = this.data.reviewQueueItemId
+            ? removeQueueItem(this.data.recognitionQueue, this.data.reviewQueueItemId)
+            : this.data.recognitionQueue
           this.setData({
             screen: 'success',
             recordId: stored.id,
             editingRecordId: stored.id,
+            reviewQueueItemId: '',
+            recognitionQueue: queue,
+            recognitionQueueStats: getQueueStats(queue),
           })
           this.refreshHistory()
           if (stored.syncStatus === 'failed') {
@@ -692,9 +843,10 @@ Component({
         rawContent: '',
         recordId: '',
         editingRecordId: '',
+        reviewQueueItemId: '',
+        reviewHints: createEmptyReviewHints(),
         productIndex: 0,
         record: createMockRecord(),
-        recognitionRequestId: this.data.recognitionRequestId + 1,
       })
     },
   },

@@ -31,3 +31,17 @@ test('pending inspection page exposes unified toolbar, state and task metadata c
   assert.match(wxml, /class="task-card-kicker"/)
   assert.match(wxml, /class="task-card-details"/)
 })
+
+test('scan workspace exposes recognition queue and confidence review states', () => {
+  const wxml = source('miniprogram/pages/index/index.wxml')
+  const scss = source('miniprogram/pages/index/index.scss')
+  assert.match(wxml, /class="[^"]*recognition-queue-summary/)
+  assert.match(wxml, /class="recognition-queue-list"/)
+  assert.match(wxml, /recognition-queue-item/)
+  assert.match(wxml, /queue-add-camera/)
+  assert.match(wxml, /queue-add-album/)
+  assert.match(wxml, /review-risk-summary/)
+  assert.match(scss, /\.is-confidence-danger/)
+  assert.match(scss, /\.is-confidence-warning/)
+  assert.doesNotMatch(wxml, /screen === 'recognizing'/)
+})

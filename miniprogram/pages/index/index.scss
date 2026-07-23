@@ -1789,3 +1789,257 @@ page {
   font-size: 22rpx;
   font-weight: 700;
 }
+
+/* Recognition queue */
+.queue-capture-card {
+  padding-bottom: 38rpx;
+}
+
+.queue-add-actions {
+  margin-top: 34rpx;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16rpx;
+}
+
+.queue-add-actions .primary-button,
+.queue-add-actions .secondary-button {
+  margin-top: 0;
+}
+
+.recognition-queue-summary {
+  margin-top: 20rpx;
+  padding: 24rpx;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12rpx;
+}
+
+.queue-summary-item {
+  padding: 18rpx 8rpx;
+  color: $ui-text-secondary;
+  background: $ui-field-background;
+  border-radius: 18rpx;
+  text-align: center;
+}
+
+.queue-summary-item text {
+  display: block;
+  color: $ui-text-primary;
+  font-size: 34rpx;
+  line-height: 1.2;
+  font-weight: 750;
+}
+
+.queue-summary-item view {
+  margin-top: 6rpx;
+  font-size: 21rpx;
+}
+
+.queue-summary-item.is-active text { color: $ui-primary; }
+.queue-summary-item.is-ready text { color: $ui-success; }
+.queue-summary-item.is-failed text { color: $ui-danger; }
+
+.recognition-queue-list {
+  margin-top: 20rpx;
+  display: flex;
+  flex-direction: column;
+  gap: 18rpx;
+}
+
+.recognition-queue-item {
+  padding: 22rpx;
+  display: flex;
+  gap: 22rpx;
+  animation: content-rise .32s ease-out both;
+}
+
+.queue-item-thumb {
+  width: 150rpx;
+  height: 176rpx;
+  flex: none;
+  background: #e9eef5;
+  border-radius: 18rpx;
+}
+
+.queue-item-main {
+  min-width: 0;
+  flex: 1;
+}
+
+.queue-item-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14rpx;
+}
+
+.queue-item-title {
+  min-width: 0;
+  overflow: hidden;
+  color: $ui-text-primary;
+  font-size: 27rpx;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.queue-status {
+  padding: 7rpx 13rpx;
+  flex: none;
+  color: #58677c;
+  background: #edf1f6;
+  border-radius: 999rpx;
+  font-size: 19rpx;
+  font-weight: 700;
+}
+
+.queue-status--preparing,
+.queue-status--recognizing {
+  color: $ui-primary;
+  background: #edf3ff;
+}
+
+.queue-status--ready {
+  color: $ui-success;
+  background: $ui-success-background;
+}
+
+.queue-status--failed {
+  color: $ui-danger;
+  background: $ui-danger-background;
+}
+
+.queue-item-stage {
+  min-height: 62rpx;
+  margin-top: 14rpx;
+  color: $ui-text-secondary;
+  font-size: 22rpx;
+  line-height: 1.5;
+}
+
+.queue-risk-row {
+  margin-top: 10rpx;
+  display: flex;
+  gap: 10rpx;
+}
+
+.queue-risk {
+  padding: 6rpx 12rpx;
+  border-radius: 999rpx;
+  font-size: 19rpx;
+  font-weight: 700;
+}
+
+.queue-risk.is-danger {
+  color: #bd3340;
+  background: #fff0f1;
+}
+
+.queue-risk.is-warning {
+  color: #9a6a00;
+  background: #fff8df;
+}
+
+.queue-item-actions {
+  margin-top: 14rpx;
+  display: flex;
+  justify-content: flex-end;
+  gap: 10rpx;
+}
+
+.queue-action {
+  width: auto;
+  min-width: 96rpx;
+  height: 54rpx;
+  margin: 0;
+  padding: 0 18rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #526174;
+  background: #edf1f6;
+  border-radius: 14rpx;
+  font-size: 21rpx;
+  line-height: 1;
+}
+
+.queue-action.is-primary {
+  color: #fff;
+  background: $ui-primary;
+}
+
+.queue-action::after { border: 0; }
+
+.queue-empty-card {
+  margin-top: 20rpx;
+}
+
+.queue-empty-card .hero-desc {
+  margin: 12rpx 0 24rpx;
+}
+
+.review-risk-summary {
+  margin-top: 20rpx;
+  padding: 24rpx 28rpx;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20rpx;
+}
+
+.review-risk-title {
+  color: $ui-text-primary;
+  font-size: 27rpx;
+  font-weight: 700;
+}
+
+.review-risk-counts {
+  display: flex;
+  gap: 10rpx;
+}
+
+.review-risk-count {
+  padding: 8rpx 14rpx;
+  border-radius: 999rpx;
+  font-size: 20rpx;
+  font-weight: 700;
+}
+
+.review-risk-count.is-danger {
+  color: #bd3340;
+  background: #fff0f1;
+}
+
+.review-risk-count.is-warning {
+  color: #9a6a00;
+  background: #fff8df;
+}
+
+.field.is-confidence-danger,
+.table-cell.is-confidence-danger {
+  background: #fff0f1;
+  border-color: #e35b67;
+  box-shadow: inset 0 0 0 1rpx rgba(227, 91, 103, .16);
+}
+
+.field.is-confidence-warning,
+.table-cell.is-confidence-warning {
+  background: #fff8df;
+  border-color: #e2b63f;
+  box-shadow: inset 0 0 0 1rpx rgba(226, 182, 63, .16);
+}
+
+@media (max-width: 360px) {
+  .queue-add-actions {
+    grid-template-columns: 1fr;
+  }
+
+  .recognition-queue-item {
+    gap: 16rpx;
+  }
+
+  .queue-item-thumb {
+    width: 124rpx;
+  }
+}

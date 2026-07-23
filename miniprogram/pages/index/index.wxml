@@ -4,40 +4,51 @@
   <view class="page-shell">
     <block wx:if="{{activeTab === 'scan'}}">
     <block wx:if="{{screen === 'capture'}}">
-      <view class="hero-card">
-        <view class="eyebrow">AI INSPECTION</view>
-        <view class="hero-title">拍照识别检验报告</view>
-        <view class="hero-desc">一次拍摄一张报告，系统将自动提取表格并供你逐项确认。</view>
-        <view class="document-illustration">
-          <view class="document-sheet">
-            <view class="sheet-line sheet-line--wide"></view>
-            <view class="sheet-line"></view>
-            <view class="sheet-grid">
-              <view wx:for="{{illustrationCells}}" wx:key="*this" class="sheet-cell"></view>
+      <view class="hero-card queue-capture-card">
+        <view class="eyebrow">AI INSPECTION QUEUE</view>
+        <view class="hero-title">连续识别检验报告</view>
+        <view class="hero-desc">识别过程中仍可继续添加图片，系统会按照加入顺序逐张处理。</view>
+        <view class="queue-add-actions">
+          <button class="primary-button queue-add-camera" bindtap="takePhoto">拍摄检验报告</button>
+          <button class="secondary-button queue-add-album" bindtap="chooseFromAlbum">从相册批量添加</button>
+        </view>
+      </view>
+
+      <view class="recognition-queue-summary card">
+        <view class="queue-summary-item is-active"><text>{{recognitionQueueStats.active}}</text><view>识别中</view></view>
+        <view class="queue-summary-item"><text>{{recognitionQueueStats.queued}}</text><view>等待</view></view>
+        <view class="queue-summary-item is-ready"><text>{{recognitionQueueStats.ready}}</text><view>待审核</view></view>
+        <view class="queue-summary-item is-failed"><text>{{recognitionQueueStats.failed}}</text><view>失败</view></view>
+      </view>
+
+      <view wx:if="{{recognitionQueue.length > 0}}" class="recognition-queue-list">
+        <view wx:for="{{recognitionQueue}}" wx:key="id" wx:for-item="queueItem" class="recognition-queue-item card">
+          <image class="queue-item-thumb" src="{{queueItem.imagePath}}" mode="aspectFill"></image>
+          <view class="queue-item-main">
+            <view class="queue-item-head">
+              <view class="queue-item-title">{{queueItem.sourceType === 'purchase_order' ? '采购待检报告' : '独立检验报告'}}</view>
+              <view class="queue-status queue-status--{{queueItem.status}}">{{queueItem.status === 'queued' ? '等待识别' : queueItem.status === 'preparing' ? '图片处理中' : queueItem.status === 'recognizing' ? '正在识别' : queueItem.status === 'ready' ? '待审核' : '识别失败'}}</view>
+            </view>
+            <view class="queue-item-stage">{{queueItem.error || queueItem.stage}}</view>
+            <view wx:if="{{queueItem.reviewHints}}" class="queue-risk-row">
+              <text wx:if="{{queueItem.reviewHints.dangerCount}}" class="queue-risk is-danger">红色 {{queueItem.reviewHints.dangerCount}}</text>
+              <text wx:if="{{queueItem.reviewHints.warningCount}}" class="queue-risk is-warning">黄色 {{queueItem.reviewHints.warningCount}}</text>
+            </view>
+            <view class="queue-item-actions">
+              <button wx:if="{{queueItem.status === 'ready'}}" class="queue-action is-primary" data-id="{{queueItem.id}}" bindtap="openQueueReview">审核结果</button>
+              <button wx:if="{{queueItem.status === 'failed'}}" class="queue-action is-primary" data-id="{{queueItem.id}}" bindtap="retryQueueRecognition">重试</button>
+              <button wx:if="{{queueItem.status === 'queued' || queueItem.status === 'failed' || queueItem.status === 'ready'}}" class="queue-action" data-id="{{queueItem.id}}" bindtap="removeQueueRecognition">删除</button>
+              <button wx:if="{{queueItem.status === 'preparing' || queueItem.status === 'recognizing'}}" class="queue-action" data-id="{{queueItem.id}}" bindtap="skipQueueRecognition">跳过</button>
             </view>
           </view>
-          <view class="scan-line"></view>
         </view>
-        <button class="primary-button" bindtap="takePhoto">拍摄检验报告</button>
-        <button class="secondary-button" bindtap="chooseFromAlbum">从相册选择</button>
       </view>
 
-      <view class="tips-card">
-        <view class="section-title">拍摄建议</view>
+      <view wx:else class="tips-card queue-empty-card">
+        <view class="section-title">识别队列为空</view>
+        <view class="hero-desc">拍摄或从相册添加检验报告，最多可保留 10 个未完成任务。</view>
         <view class="tip"><text class="tip-index">1</text><text>完整拍入表格四角，避免裁切</text></view>
         <view class="tip"><text class="tip-index">2</text><text>保持光线均匀，避免阴影和反光</text></view>
-        <view class="tip"><text class="tip-index">3</text><text>横向表格可直接拍摄，服务器会处理方向</text></view>
-      </view>
-    </block>
-
-    <block wx:elif="{{screen === 'recognizing'}}">
-      <view class="status-card">
-        <image class="status-image" src="{{imagePath}}" mode="aspectFill"></image>
-        <view class="loader"></view>
-        <view class="status-title">正在识别检验报告</view>
-        <view class="status-desc">{{recognitionStage}}</view>
-        <view class="progress"><view class="progress-bar {{recognitionCompleting ? 'progress-bar--complete' : ''}}"></view></view>
-        <button class="text-button" bindtap="cancelRecognition">取消识别</button>
       </view>
     </block>
 
@@ -49,8 +60,16 @@
           <view class="review-title">{{editingRecordId ? '编辑识别记录' : '请核对识别结果'}}</view>
         </view>
         <view class="review-foot">
-          <view class="review-desc">请核对图像与识别字段。</view>
-          <view class="review-actions"><button class="mini-button review-retake" bindtap="resetFlow">重新拍摄</button></view>
+          <view class="review-desc">红色字段需要重点核对，黄色字段建议人工确认。</view>
+          <view class="review-actions"><button class="mini-button review-retake" bindtap="backToRecognitionQueue">返回队列</button></view>
+        </view>
+      </view>
+
+      <view class="review-risk-summary card">
+        <view class="review-risk-title">准确度审核提示</view>
+        <view class="review-risk-counts">
+          <view class="review-risk-count is-danger">重点核对 {{reviewHints.dangerCount}}</view>
+          <view class="review-risk-count is-warning">建议核对 {{reviewHints.warningCount}}</view>
         </view>
       </view>
 
@@ -70,13 +89,13 @@
           </picker>
         </view>
         <view class="field-grid">
-          <view class="field"><text class="field-label">客户 *</text><input value="{{record.customer}}" data-field="customer" bindinput="onRecordInput" /></view>
-          <view class="field"><text class="field-label">供应商 *</text><input value="{{record.supplier}}" data-field="supplier" bindinput="onRecordInput" /></view>
-          <view class="field"><text class="field-label">商标</text><input value="{{record.trademark}}" data-field="trademark" bindinput="onRecordInput" /></view>
-          <view class="field"><text class="field-label">订单编号</text><input value="{{record.orderNumber}}" data-field="orderNumber" bindinput="onRecordInput" /></view>
-          <view class="field"><text class="field-label">型号/规格 *</text><input value="{{record.model}}" data-field="model" bindinput="onRecordInput" /></view>
-          <view class="field"><text class="field-label">到货数量</text><input value="{{record.arrivalQuantity}}" data-field="arrivalQuantity" bindinput="onRecordInput" /></view>
-          <view class="field full-field"><text class="field-label">检验日期 *</text><input value="{{record.inspectionDate}}" data-field="inspectionDate" bindinput="onRecordInput" /></view>
+          <view class="field {{reviewHints.fields.customer.cssClass}}"><text class="field-label">客户 *</text><input value="{{record.customer}}" data-field="customer" bindinput="onRecordInput" /></view>
+          <view class="field {{reviewHints.fields.supplier.cssClass}}"><text class="field-label">供应商 *</text><input value="{{record.supplier}}" data-field="supplier" bindinput="onRecordInput" /></view>
+          <view class="field {{reviewHints.fields.trademark.cssClass}}"><text class="field-label">商标</text><input value="{{record.trademark}}" data-field="trademark" bindinput="onRecordInput" /></view>
+          <view class="field {{reviewHints.fields.orderNumber.cssClass}}"><text class="field-label">订单编号</text><input value="{{record.orderNumber}}" data-field="orderNumber" bindinput="onRecordInput" /></view>
+          <view class="field {{reviewHints.fields.model.cssClass}}"><text class="field-label">型号/规格 *</text><input value="{{record.model}}" data-field="model" bindinput="onRecordInput" /></view>
+          <view class="field {{reviewHints.fields.arrivalQuantity.cssClass}}"><text class="field-label">到货数量</text><input value="{{record.arrivalQuantity}}" data-field="arrivalQuantity" bindinput="onRecordInput" /></view>
+          <view class="field full-field {{reviewHints.fields.inspectionDate.cssClass}}"><text class="field-label">检验日期 *</text><input value="{{record.inspectionDate}}" data-field="inspectionDate" bindinput="onRecordInput" /></view>
         </view>
       </view>
 
@@ -91,10 +110,10 @@
               <view wx:for="{{measurementHeaders}}" wx:key="*this" class="table-cell cell-value">{{item}}</view>
             </view>
             <view wx:for="{{record.rows}}" wx:key="id" wx:for-item="row" wx:for-index="rowIndex" class="table-row">
-              <view class="table-cell cell-item"><input value="{{row.item}}" data-row-index="{{rowIndex}}" data-field="item" bindinput="onRowInput" /></view>
-              <view class="table-cell cell-requirement"><input value="{{row.requirement}}" data-row-index="{{rowIndex}}" data-field="requirement" bindinput="onRowInput" /></view>
-              <view class="table-cell cell-spec"><input value="{{row.specification}}" data-row-index="{{rowIndex}}" data-field="specification" bindinput="onRowInput" /></view>
-              <view wx:for="{{row.measurements}}" wx:key="index" wx:for-item="measurement" wx:for-index="measurementIndex" class="table-cell cell-value">
+              <view class="table-cell cell-item {{reviewHints.rows[rowIndex].item.cssClass}}"><input value="{{row.item}}" data-row-index="{{rowIndex}}" data-field="item" bindinput="onRowInput" /></view>
+              <view class="table-cell cell-requirement {{reviewHints.rows[rowIndex].requirement.cssClass}}"><input value="{{row.requirement}}" data-row-index="{{rowIndex}}" data-field="requirement" bindinput="onRowInput" /></view>
+              <view class="table-cell cell-spec {{reviewHints.rows[rowIndex].specification.cssClass}}"><input value="{{row.specification}}" data-row-index="{{rowIndex}}" data-field="specification" bindinput="onRowInput" /></view>
+              <view wx:for="{{row.measurements}}" wx:key="index" wx:for-item="measurement" wx:for-index="measurementIndex" class="table-cell cell-value {{reviewHints.rows[rowIndex].measurements[measurementIndex].cssClass}}">
                 <input value="{{measurement}}" data-row-index="{{rowIndex}}" data-measurement-index="{{measurementIndex}}" bindinput="onMeasurementInput" />
               </view>
             </view>
@@ -102,7 +121,7 @@
               <view class="table-cell cell-item">判定</view>
               <view class="table-cell cell-requirement"></view>
               <view class="table-cell cell-spec"></view>
-              <view wx:for="{{record.sampleJudgements}}" wx:key="index" wx:for-item="judgement" wx:for-index="sampleIndex" class="table-cell cell-value judgement-cell">
+              <view wx:for="{{record.sampleJudgements}}" wx:key="index" wx:for-item="judgement" wx:for-index="sampleIndex" class="table-cell cell-value judgement-cell {{reviewHints.sampleJudgements[sampleIndex].cssClass}}">
                 <picker mode="selector" range="{{judgementOptions}}" value="{{judgement === 'OK' ? 1 : judgement === 'NG' ? 2 : 0}}" data-sample-index="{{sampleIndex}}" bindchange="onJudgementChange">
                   <view class="judgement {{judgement === 'NG' ? 'judgement--ng' : ''}}">{{judgement || '—'}}</view>
                 </picker>
@@ -114,15 +133,15 @@
 
       <view class="card form-card">
         <view class="section-heading">补充信息</view>
-        <view class="field full-field"><text class="field-label">备注</text><textarea value="{{record.notes}}" data-field="notes" bindinput="onRecordInput"></textarea></view>
+        <view class="field full-field {{reviewHints.fields.notes.cssClass}}"><text class="field-label">备注</text><textarea value="{{record.notes}}" data-field="notes" bindinput="onRecordInput"></textarea></view>
         <view class="field-grid">
-          <view class="field"><text class="field-label">审核人</text><input value="{{record.reviewer}}" data-field="reviewer" bindinput="onRecordInput" /></view>
-          <view class="field"><text class="field-label">检验员</text><input value="{{record.inspector}}" data-field="inspector" bindinput="onRecordInput" /></view>
+          <view class="field {{reviewHints.fields.reviewer.cssClass}}"><text class="field-label">审核人</text><input value="{{record.reviewer}}" data-field="reviewer" bindinput="onRecordInput" /></view>
+          <view class="field {{reviewHints.fields.inspector.cssClass}}"><text class="field-label">检验员</text><input value="{{record.inspector}}" data-field="inspector" bindinput="onRecordInput" /></view>
         </view>
       </view>
 
       <view class="bottom-actions">
-        <button class="secondary-button" bindtap="resetFlow">重新识别</button>
+        <button class="secondary-button" bindtap="backToRecognitionQueue">返回队列</button>
         <button class="primary-button" loading="{{submitting}}" disabled="{{submitting}}" bindtap="submitRecord">{{editingRecordId ? '保存更新' : '确认保存'}}</button>
       </view>
       <button class="export-button review-export" loading="{{exporting}}" disabled="{{exporting}}" bindtap="exportCurrentRecord">导出 JSON</button>
