@@ -1818,6 +1818,7 @@ page {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 12rpx;
+  animation: content-rise .38s .06s ease-out both;
 }
 
 .queue-summary-item {

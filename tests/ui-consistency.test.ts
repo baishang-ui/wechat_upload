@@ -43,6 +43,11 @@ test('scan workspace exposes recognition queue and confidence review states', ()
   assert.match(wxml, /review-risk-summary/)
   assert.match(scss, /\.is-confidence-danger/)
   assert.match(scss, /\.is-confidence-warning/)
+  const summary = scss.match(/\.recognition-queue-summary\s*\{([^}]*)\}/)?.[1] || ''
+  assert.match(
+    summary,
+    /animation:\s*content-rise\s+\.38s\s+\.06s\s+ease-out\s+both;/,
+  )
   assert.doesNotMatch(wxml, /screen === 'recognizing'/)
 })
 
