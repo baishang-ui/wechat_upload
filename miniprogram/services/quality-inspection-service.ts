@@ -120,6 +120,7 @@ export interface RemoteInspectionHistory {
   latest_inspection_date?: string | null
   updated_at?: string | null
   latest_result?: string | null
+  thumbnail_image?: string | null
   [key: string]: unknown
 }
 
@@ -244,7 +245,7 @@ export function mergeInspectionHistory(
     updatedAt: remoteTimestamp(item),
     updatedLabel: formatHistoryTime(remoteTimestamp(item)),
     inspectionDate: asString(item.latest_inspection_date),
-    imagePath: '',
+    imagePath: asString(item.thumbnail_image),
     rawContent: '',
     record: null,
     productLabel: asString(item.material_name || item.material_code) || '检验报告',

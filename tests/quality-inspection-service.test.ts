@@ -333,10 +333,12 @@ test('merged history deduplicates synced local records by task and item', () => 
     source_type: 'standalone' as const,
     updated_at: '2026-07-22T12:00:00Z',
     material_name: '钢丝刷',
+    thumbnail_image: 'data:image/jpeg;base64,dGh1bWI=',
   }
   const merged = mergeInspectionHistory([local], [remote])
   assert.equal(merged.length, 1)
   assert.equal(merged[0].origin, 'remote')
+  assert.equal(merged[0].imagePath, remote.thumbnail_image)
 })
 
 test('merged history keeps failed local records and sorts newest first', () => {
