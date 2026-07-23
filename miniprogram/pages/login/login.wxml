@@ -1,38 +1,51 @@
 <view class="login-page">
-  <view class="login-card">
-    <view class="brand-mark">BINIC</view>
-    <view class="login-title">质量检验工作台</view>
-    <view class="login-subtitle">使用智能销售系统账号登录</view>
+  <view class="login-shell">
+    <view class="login-intro">
+      <view class="brand-mark">BINIC INSPECTION</view>
+      <view class="login-title">质量检验工作台</view>
+      <view class="login-subtitle">连接智能销售系统，处理采购待检任务与检验报告。</view>
+    </view>
 
-    <view class="field-label">用户名</view>
-    <input
-      class="login-input"
-      value="{{username}}"
-      placeholder="请输入用户名"
-      maxlength="100"
-      bindinput="onUsernameInput"
-    />
+    <view class="login-card">
+      <view class="login-form-heading">账号登录</view>
+      <view class="login-form-description">使用智能销售系统账号继续</view>
 
-    <view class="field-label">密码</view>
-    <input
-      class="login-input"
-      value="{{password}}"
-      password
-      placeholder="请输入密码"
-      maxlength="256"
-      bindinput="onPasswordInput"
-      confirm-type="done"
-      bindconfirm="submitLogin"
-    />
+      <view class="login-field">
+        <view class="field-label">用户名</view>
+        <input
+          class="login-input"
+          value="{{username}}"
+          placeholder="请输入用户名"
+          maxlength="100"
+          bindinput="onUsernameInput"
+        />
+      </view>
 
-    <view wx:if="{{errorMessage}}" class="error-message">{{errorMessage}}</view>
+      <view class="login-field">
+        <view class="field-label">密码</view>
+        <input
+          class="login-input"
+          value="{{password}}"
+          password
+          placeholder="请输入密码"
+          maxlength="256"
+          bindinput="onPasswordInput"
+          confirm-type="done"
+          bindconfirm="submitLogin"
+        />
+      </view>
 
-    <button
-      class="login-button"
-      type="primary"
-      loading="{{submitting}}"
-      disabled="{{submitting}}"
-      bindtap="submitLogin"
-    >登录</button>
+      <view wx:if="{{errorMessage}}" class="error-message">
+        <view class="error-dot"></view>
+        <text>{{errorMessage}}</text>
+      </view>
+
+      <button
+        class="login-button"
+        loading="{{submitting}}"
+        disabled="{{submitting}}"
+        bindtap="submitLogin"
+      >登录</button>
+    </view>
   </view>
 </view>
