@@ -6,6 +6,7 @@ const assert: typeof strictAssert = strictAssert
 import { createMockRecord } from '../miniprogram/domain/inspection-record'
 import {
   appendRecognitionQueue,
+  claimQueuedRecognitionItems,
   completeQueueItem,
   createRecognitionQueueItem,
   failQueueItem,
@@ -16,6 +17,7 @@ import {
   RECOGNITION_PROGRESS_DURATION_MS,
   markQueueItemActive,
   markQueueItemRecognizing,
+  MAX_CONCURRENT_RECOGNITIONS,
   removeQueueItem,
   requestQueueItemSkip,
   retryQueueItem,
@@ -42,15 +44,41 @@ test('queue appends in order and caps unfinished tasks at ten', () => {
   assert.deepEqual(queue.map((entry) => entry.id), inputs.slice(0, 10).map((entry) => entry.id))
 })
 
-test('queue selects the first queued item and allows only one active item', () => {
+test('queue claims the first two queued items and leaves later items waiting', () => {
+  const queue = [item('first', 1), item('second', 2), item('third', 3)]
+  const claimed = claimQueuedRecognitionItems(queue)
+
+  assert.equal(MAX_CONCURRENT_RECOGNITIONS, 2)
+  assert.deepEqual(claimed.claimed.map((entry) => entry.id), ['first', 'second'])
+  assert.deepEqual(
+    claimed.queue.map((entry) => entry.status),
+    ['preparing', 'preparing', 'queued'],
+  )
+  assert.equal(getQueueStats(claimed.queue).active, 2)
+})
+
+test('queue fills exactly one released recognition slot', () => {
+  const initial = claimQueuedRecognitionItems([
+    item('first', 1),
+    item('second', 2),
+    item('third', 3),
+  ])
+  const released = failQueueItem(initial.queue, 'first', 'network')
+  const replenished = claimQueuedRecognitionItems(released)
+
+  assert.deepEqual(replenished.claimed.map((entry) => entry.id), ['third'])
+  assert.deepEqual(
+    replenished.queue.map((entry) => entry.status),
+    ['failed', 'preparing', 'preparing'],
+  )
+})
+
+test('markQueueItemActive respects a configurable concurrency cap', () => {
   const queue = [item('first', 1), item('second', 2)]
-  assert.equal(getNextQueuedItem(queue)?.id, 'first')
-  const active = markQueueItemActive(queue, 'first')
-  const rejectedSecond = markQueueItemActive(active, 'second')
-  assert.equal(rejectedSecond.find((entry) => entry.id === 'first')?.status, 'preparing')
-  assert.equal(rejectedSecond.find((entry) => entry.id === 'second')?.status, 'queued')
-  const recognizing = markQueueItemRecognizing(active, 'first')
-  assert.equal(recognizing[0].status, 'recognizing')
+  const first = markQueueItemActive(queue, 'first', 1)
+  const blocked = markQueueItemActive(first, 'second', 1)
+
+  assert.deepEqual(blocked.map((entry) => entry.status), ['preparing', 'queued'])
 })
 
 test('failed items do not block the next queued item and retry reuses the id', () => {

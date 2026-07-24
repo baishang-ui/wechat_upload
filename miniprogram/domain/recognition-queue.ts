@@ -5,6 +5,7 @@ import {
 } from './recognition-review'
 
 export const MAX_RECOGNITION_QUEUE_SIZE = 10
+export const MAX_CONCURRENT_RECOGNITIONS = 2
 export const RECOGNITION_PROGRESS_DURATION_MS = 6_000
 const RECOGNITION_PROGRESS_START = 8
 const RECOGNITION_PROGRESS_CEILING = 92
@@ -169,25 +170,56 @@ export function updateQueueItem(
   })
 }
 
-function hasActiveItem(queue: RecognitionQueueItem[], exceptId = ''): boolean {
-  return queue.some((item) => (
-    item.id !== exceptId
-    && (item.status === 'preparing' || item.status === 'recognizing')
-  ))
+function getActiveRecognitionCount(queue: RecognitionQueueItem[]): number {
+  return queue.filter((item) => (
+    item.status === 'preparing' || item.status === 'recognizing'
+  )).length
 }
 
 export function markQueueItemActive(
   queue: RecognitionQueueItem[],
   id: string,
+  maxConcurrent = MAX_CONCURRENT_RECOGNITIONS,
 ): RecognitionQueueItem[] {
   const selected = queue.find((item) => item.id === id)
-  if (!selected || selected.status !== 'queued' || hasActiveItem(queue, id)) return queue
+  if (
+    !selected
+    || selected.status !== 'queued'
+    || getActiveRecognitionCount(queue) >= Math.max(1, maxConcurrent)
+  ) {
+    return queue
+  }
   return updateQueueItem(queue, id, {
     status: 'preparing',
     stage: '正在处理图片',
     error: '',
     skipRequested: false,
   })
+}
+
+export interface ClaimedRecognitionQueueItems {
+  queue: RecognitionQueueItem[]
+  claimed: RecognitionQueueItem[]
+}
+
+export function claimQueuedRecognitionItems(
+  queue: RecognitionQueueItem[],
+  maxConcurrent = MAX_CONCURRENT_RECOGNITIONS,
+): ClaimedRecognitionQueueItems {
+  const safeMaxConcurrent = Math.max(1, maxConcurrent)
+  let nextQueue = queue
+  const claimed: RecognitionQueueItem[] = []
+
+  while (getActiveRecognitionCount(nextQueue) < safeMaxConcurrent) {
+    const next = getNextQueuedItem(nextQueue)
+    if (!next) break
+    nextQueue = markQueueItemActive(nextQueue, next.id, safeMaxConcurrent)
+    const active = nextQueue.find((item) => item.id === next.id)
+    if (!active || active.status !== 'preparing') break
+    claimed.push(active)
+  }
+
+  return { queue: nextQueue, claimed }
 }
 
 export function markQueueItemRecognizing(
