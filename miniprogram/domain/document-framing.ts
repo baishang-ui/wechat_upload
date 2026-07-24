@@ -72,7 +72,7 @@ const MAX_ANALYSIS_DIMENSION = 192
 const MIN_EDGE_ENERGY = 18
 const TRACKING_HOLD_MS = 600
 const READY_AFTER_MS = 600
-const AUTO_CAPTURE_DELAY_MS = 1000
+const AUTO_CAPTURE_DELAY_MS = 600
 
 function clamp(value: number, minimum: number, maximum: number): number {
   return Math.min(maximum, Math.max(minimum, value))

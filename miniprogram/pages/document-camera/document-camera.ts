@@ -10,10 +10,22 @@ import {
   updateAutoCapture,
   updateDocumentTracking,
 } from '../../domain/document-framing'
-import { getPhotoOrientationPlan } from '../../domain/photo-orientation'
+import {
+  getLandscapeFallbackRotation,
+  getPhotoOrientationPlan,
+} from '../../domain/photo-orientation'
 
 interface ConfirmedPhotoPayload {
   tempFilePath?: string
+}
+
+interface PhotoOrientationCanvas extends WechatMiniprogram.Canvas {
+  width: number
+  height: number
+}
+
+interface PhotoOrientationCanvasQueryResult extends WechatMiniprogram.IAnyObject {
+  node?: PhotoOrientationCanvas
 }
 
 interface CaptureModeEvent {
@@ -26,7 +38,6 @@ interface CaptureModeEvent {
 
 const SEARCH_DETECTION_INTERVAL_MS = 320
 const TRACKING_DETECTION_INTERVAL_MS = 180
-const PHOTO_ORIENTATION_CANVAS_ID = 'photo-orientation-canvas'
 
 let cameraContext: WechatMiniprogram.CameraContext | null = null
 let cameraFrameListener: WechatMiniprogram.CameraFrameListener | null = null
@@ -35,6 +46,14 @@ let autoCaptureSnapshot: AutoCaptureSnapshot = createAutoCaptureSnapshot()
 let lastDetectionAt = 0
 let detectionRunning = false
 let captureRunning = false
+let latestDeviceGamma: number | null = null
+let captureDeviceGamma: number | null = null
+let captureDeviceOrientation: 'portrait' | 'landscape' = 'portrait'
+let deviceMotionListening = false
+
+const deviceMotionChangeHandler: WechatMiniprogram.OnDeviceMotionChangeCallback = ({ gamma }) => {
+  latestDeviceGamma = Number.isFinite(gamma) ? gamma : null
+}
 
 function getImageInfo(source: string): Promise<WechatMiniprogram.GetImageInfoSuccessCallbackResult> {
   return new Promise((resolve, reject) => {
@@ -43,6 +62,22 @@ function getImageInfo(source: string): Promise<WechatMiniprogram.GetImageInfoSuc
       success: resolve,
       fail: reject,
     })
+  })
+}
+
+function waitForNextTick(): Promise<void> {
+  return new Promise((resolve) => wx.nextTick(resolve))
+}
+
+function loadCanvasImage(
+  canvas: PhotoOrientationCanvas,
+  source: string,
+): Promise<WechatMiniprogram.Image> {
+  return new Promise((resolve, reject) => {
+    const image = canvas.createImage()
+    image.onload = () => resolve(image)
+    image.onerror = (error) => reject(error || new Error('Canvas 无法读取相机照片'))
+    image.src = source
   })
 }
 
@@ -61,6 +96,37 @@ function stopFrameListener(): void {
   cameraFrameListener?.stop()
   cameraFrameListener = null
   detectionRunning = false
+}
+
+function startDeviceMotionTracking(): void {
+  if (
+    deviceMotionListening
+    || typeof wx.startDeviceMotionListening !== 'function'
+    || typeof wx.onDeviceMotionChange !== 'function'
+    || typeof wx.offDeviceMotionChange !== 'function'
+    || typeof wx.stopDeviceMotionListening !== 'function'
+  ) return
+
+  deviceMotionListening = true
+  wx.onDeviceMotionChange(deviceMotionChangeHandler)
+  wx.startDeviceMotionListening({
+    interval: 'normal',
+    fail: () => {
+      if (!deviceMotionListening) return
+      wx.offDeviceMotionChange(deviceMotionChangeHandler)
+      deviceMotionListening = false
+      latestDeviceGamma = null
+    },
+  })
+}
+
+function stopDeviceMotionTracking(): void {
+  if (deviceMotionListening) {
+    wx.offDeviceMotionChange(deviceMotionChangeHandler)
+    wx.stopDeviceMotionListening()
+  }
+  deviceMotionListening = false
+  latestDeviceGamma = null
 }
 
 function frameStateFromTracking(snapshot: DocumentTrackingSnapshot): DocumentFrameState {
@@ -128,21 +194,27 @@ Component({
         cameraErrorTop: cameraTopInset + 120,
       })
       cameraContext = wx.createCameraContext()
+      startDeviceMotionTracking()
     },
     detached() {
       stopFrameListener()
+      stopDeviceMotionTracking()
       cancelAutoCapture()
       cameraContext = null
       captureRunning = false
+      captureDeviceGamma = null
+      captureDeviceOrientation = 'portrait'
       resetDetection()
     },
   },
   pageLifetimes: {
     show() {
+      startDeviceMotionTracking()
       if (!this.data.previewPath) this.startFrameDetection()
     },
     hide() {
       stopFrameListener()
+      stopDeviceMotionTracking()
       cancelAutoCapture()
       this.setData({ autoCaptureStatus: 'idle', countdown: 0 })
     },
@@ -235,7 +307,7 @@ Component({
         ? 0
         : Math.max(0, now - autoCaptureSnapshot.startedAt)
       const shutterProgress = autoCaptureSnapshot.status === 'countdown'
-        ? Math.max(0, 100 - elapsed / 10)
+        ? Math.max(0, 100 - elapsed / 6)
         : trackingSnapshot.stableProgress * 100
       const shouldCapture = autoCaptureSnapshot.shouldCapture
       this.setData({
@@ -290,6 +362,8 @@ Component({
         return
       }
       captureRunning = true
+      captureDeviceGamma = latestDeviceGamma
+      captureDeviceOrientation = wx.getSystemInfoSync().deviceOrientation
       cancelAutoCapture()
       stopFrameListener()
       this.setData({
@@ -300,10 +374,18 @@ Component({
       cameraContext.takePhoto({
         quality: 'high',
         success: ({ tempImagePath }) => {
-          this.preparePreview(tempImagePath)
+          this.setData({
+            previewPath: tempImagePath,
+            previewMessage: '正在读取照片方向并校正…',
+            captureProcessing: true,
+          }, () => {
+            void this.preparePreview(tempImagePath)
+          })
         },
         fail: () => {
           captureRunning = false
+          captureDeviceGamma = null
+          captureDeviceOrientation = 'portrait'
           this.setData({ captureProcessing: false })
           wx.showToast({ title: '拍摄失败，请重试', icon: 'none' })
           this.startFrameDetection()
@@ -312,14 +394,19 @@ Component({
     },
     async preparePreview(originalPath: string) {
       let previewPath = originalPath
-      let previewMessage = '已保留相机高清原图，请确认报告内容完整清晰'
+      let previewMessage = '照片方向正常，已保留相机高清原图'
       try {
         previewPath = await this.normalizePhotoOrientation(originalPath)
         if (previewPath !== originalPath) {
           previewMessage = '照片方向已自动转正，并保持原始高清尺寸'
         }
-      } catch {
-        previewMessage = '方向校正未完成，已保留相机高清原图'
+      } catch (error) {
+        console.error('[document-camera] 照片方向校正失败', error)
+        previewMessage = '照片转正失败，已保留原始照片，请重拍或继续使用'
+        wx.showToast({
+          title: '照片转正失败，已保留原图',
+          icon: 'none',
+        })
       }
       this.setData({
         previewPath,
@@ -327,45 +414,117 @@ Component({
         captureProcessing: false,
       })
       captureRunning = false
+      captureDeviceGamma = null
+      captureDeviceOrientation = 'portrait'
+    },
+    getPhotoOrientationCanvas(): Promise<PhotoOrientationCanvas> {
+      return new Promise((resolve, reject) => {
+        wx.createSelectorQuery()
+          .in(this)
+          .select('#photo-orientation-canvas')
+          .fields({ node: true, size: true }, (result) => {
+            const { node } = result as PhotoOrientationCanvasQueryResult
+            if (node) {
+              resolve(node)
+              return
+            }
+            reject(new Error('未找到照片方向校正画布'))
+          })
+          .exec()
+      })
+    },
+    exportOrientationCanvas(
+      canvas: PhotoOrientationCanvas,
+      width: number,
+      height: number,
+    ): Promise<string> {
+      return new Promise((resolve, reject) => {
+        wx.canvasToTempFilePath({
+          canvas,
+          x: 0,
+          y: 0,
+          width,
+          height,
+          destWidth: width,
+          destHeight: height,
+          fileType: 'jpg',
+          quality: 1,
+          success: ({ tempFilePath }) => resolve(tempFilePath),
+          fail: reject,
+        }, this)
+      })
     },
     async normalizePhotoOrientation(originalPath: string): Promise<string> {
       const image = await getImageInfo(originalPath)
-      const plan = getPhotoOrientationPlan(image.orientation, image.width, image.height)
+      const fallbackRotation = getLandscapeFallbackRotation(
+        captureDeviceGamma,
+        captureDeviceOrientation,
+      )
+      const plan = getPhotoOrientationPlan(
+        image.orientation,
+        image.width,
+        image.height,
+        fallbackRotation,
+      )
+
+      console.info('[document-camera] 照片方向信息', {
+        orientation: image.orientation,
+        width: image.width,
+        height: image.height,
+        captureDeviceGamma,
+        captureDeviceOrientation,
+        fallbackRotation,
+        plan,
+      })
+
       if (!plan.requiresNormalization) return originalPath
 
-      await new Promise<void>((resolve) => {
-        this.setData({
-          orientationCanvasWidth: plan.outputWidth,
-          orientationCanvasHeight: plan.outputHeight,
-        }, resolve)
+      this.setData({
+        orientationCanvasWidth: plan.outputWidth,
+        orientationCanvasHeight: plan.outputHeight,
+      })
+      await waitForNextTick()
+
+      const canvas = await this.getPhotoOrientationCanvas()
+      canvas.width = plan.outputWidth
+      canvas.height = plan.outputHeight
+      const context = canvas.getContext('2d')
+      if (!context) throw new Error('无法创建照片方向校正上下文')
+
+      const canvasImage = await loadCanvasImage(canvas, originalPath)
+      context.clearRect(0, 0, plan.outputWidth, plan.outputHeight)
+      context.save()
+      context.transform(...plan.matrix)
+      context.drawImage(canvasImage, 0, 0, image.width, image.height)
+      context.restore()
+      await waitForNextTick()
+
+      const normalizedPath = await this.exportOrientationCanvas(
+        canvas,
+        plan.outputWidth,
+        plan.outputHeight,
+      )
+      const normalizedImage = await getImageInfo(normalizedPath)
+      const expectedPortrait = plan.outputHeight > plan.outputWidth
+      const actualPortrait = normalizedImage.height > normalizedImage.width
+
+      console.info('[document-camera] 照片方向校正完成', {
+        normalizedPath,
+        width: normalizedImage.width,
+        height: normalizedImage.height,
+        orientation: normalizedImage.orientation,
       })
 
-      return new Promise((resolve, reject) => {
-        const context = wx.createCanvasContext(PHOTO_ORIENTATION_CANVAS_ID, this)
-        context.clearRect(0, 0, plan.outputWidth, plan.outputHeight)
-        context.save()
-        context.transform(...plan.matrix)
-        context.drawImage(originalPath, 0, 0, image.width, image.height)
-        context.restore()
-        context.draw(false, () => {
-          wx.canvasToTempFilePath({
-            canvasId: PHOTO_ORIENTATION_CANVAS_ID,
-            x: 0,
-            y: 0,
-            width: plan.outputWidth,
-            height: plan.outputHeight,
-            destWidth: plan.outputWidth,
-            destHeight: plan.outputHeight,
-            fileType: 'jpg',
-            quality: 1,
-            success: ({ tempFilePath }) => resolve(tempFilePath),
-            fail: reject,
-          }, this)
-        })
-      })
+      if (expectedPortrait !== actualPortrait) {
+        throw new Error(`照片导出方向未生效：${normalizedImage.width}x${normalizedImage.height}`)
+      }
+      return normalizedPath
     },
     retakePhoto() {
+      if (this.data.captureProcessing) return
       captureRunning = false
+      captureDeviceGamma = null
+      captureDeviceOrientation = 'portrait'
       resetDetection()
       this.setData({
         previewPath: '',
@@ -379,6 +538,10 @@ Component({
       }, () => this.startFrameDetection())
     },
     usePhoto() {
+      if (this.data.captureProcessing) {
+        wx.showToast({ title: '照片方向仍在处理中', icon: 'none' })
+        return
+      }
       const tempFilePath = this.data.previewPath
       if (!tempFilePath) return
       try {

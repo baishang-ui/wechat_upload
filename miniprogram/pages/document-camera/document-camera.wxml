@@ -1,9 +1,10 @@
 <view class="document-camera-page">
   <canvas
+    type="2d"
+    id="photo-orientation-canvas"
     class="photo-orientation-canvas"
     canvas-id="photo-orientation-canvas"
-    width="{{orientationCanvasWidth}}"
-    height="{{orientationCanvasHeight}}"
+    style="width: {{orientationCanvasWidth}}px; height: {{orientationCanvasHeight}}px;"
   ></canvas>
   <view
     class="camera-viewport"
@@ -36,7 +37,9 @@
         hover-start-time="0"
         hover-stay-time="80"
         bindtap="closeCamera"
-      >关闭</cover-view>
+      >
+        <cover-view class="camera-close-label">关闭</cover-view>
+      </cover-view>
       <cover-view class="camera-title">拍摄检验报告</cover-view>
       <cover-view class="camera-topbar-placeholder"></cover-view>
     </cover-view>
@@ -116,12 +119,34 @@
     <image class="document-preview-image" src="{{previewPath}}" mode="aspectFit"></image>
     <view class="document-preview-gradient"></view>
     <view class="document-preview-copy">
-      <view class="document-preview-title">确认拍摄结果</view>
+      <view class="document-preview-title">{{captureProcessing ? '正在校正照片方向' : '确认拍摄结果'}}</view>
       <view class="document-preview-message">{{previewMessage}}</view>
     </view>
     <view class="document-preview-actions">
-      <button class="preview-secondary-button" bindtap="retakePhoto">重拍</button>
-      <button class="preview-primary-button" bindtap="usePhoto">使用照片</button>
+      <view
+        class="preview-secondary-button"
+        bindtap="retakePhoto"
+        hover-class="preview-action-button--pressed"
+        hover-start-time="0"
+        hover-stay-time="80"
+        role="button"
+        aria-label="重拍"
+        aria-disabled="{{captureProcessing}}"
+      >
+        <text class="preview-action-label">重拍</text>
+      </view>
+      <view
+        class="preview-primary-button"
+        bindtap="usePhoto"
+        hover-class="preview-action-button--pressed"
+        hover-start-time="0"
+        hover-stay-time="80"
+        role="button"
+        aria-label="使用照片"
+        aria-disabled="{{captureProcessing}}"
+      >
+        <text class="preview-action-label">使用照片</text>
+      </view>
     </view>
   </view>
 </view>

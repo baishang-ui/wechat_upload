@@ -247,7 +247,7 @@ test('automatic capture counts down and movement cancels it', async () => {
   assert.deepEqual(capture, createAutoCaptureSnapshot())
 })
 
-test('automatic capture emits one trigger after one stable second', async () => {
+test('automatic capture emits one trigger after 600 stable milliseconds', async () => {
   const {
     createAutoCaptureSnapshot,
     updateAutoCapture,
@@ -261,7 +261,15 @@ test('automatic capture emits one trigger after one stable second', async () => 
   capture = updateAutoCapture(capture, {
     mode: 'auto',
     trackingPhase: 'ready',
-    now: 1500,
+    now: 1099,
+  })
+  assert.equal(capture.status, 'countdown')
+  assert.equal(capture.shouldCapture, false)
+
+  capture = updateAutoCapture(capture, {
+    mode: 'auto',
+    trackingPhase: 'ready',
+    now: 1100,
   })
 
   assert.equal(capture.status, 'triggered')

@@ -72,25 +72,54 @@ test('document camera uses only a fixed guide and has no dynamic tracking canvas
 test('document camera keeps high-quality pixels and only re-encodes photos that need EXIF orientation normalization', () => {
   const cameraWxml = readProjectFile('miniprogram/pages/document-camera/document-camera.wxml')
   const cameraTs = readProjectFile('miniprogram/pages/document-camera/document-camera.ts')
+  const cameraScss = readProjectFile('miniprogram/pages/document-camera/document-camera.scss')
 
   assert.match(cameraTs, /quality:\s*'high'/)
   assert.match(cameraWxml, /canvas-id="photo-orientation-canvas"/)
+  assert.match(cameraWxml, /style="width: \{\{orientationCanvasWidth\}\}px; height: \{\{orientationCanvasHeight\}\}px;"/)
+  assert.doesNotMatch(cameraScss, /\.photo-orientation-canvas\s*\{[\s\S]*width:\s*1px;[\s\S]*height:\s*1px;/)
   assert.match(cameraTs, /wx\.getImageInfo\(/)
   assert.match(cameraTs, /getPhotoOrientationPlan\(/)
+  assert.match(cameraTs, /getLandscapeFallbackRotation\(\s*captureDeviceGamma,\s*captureDeviceOrientation,\s*\)/)
   assert.match(cameraTs, /if \(!plan\.requiresNormalization\) return originalPath/)
   assert.match(cameraTs, /normalizePhotoOrientation\(originalPath\)/)
+  assert.match(cameraTs, /wx\.nextTick\(resolve\)/)
   assert.match(cameraTs, /canvasToTempFilePath\([\s\S]*quality:\s*1/)
   assert.match(cameraTs, /方向已自动转正/)
   assert.doesNotMatch(cameraTs, /perspectiveCorrectDocumentPhoto|cropDocumentPhoto/)
   assert.match(cameraTs, /cancelAutoCapture\(\)/)
   assert.match(cameraTs, /detached\(\)[\s\S]*cancelAutoCapture\(\)/)
+  assert.match(cameraTs, /wx\.startDeviceMotionListening\(\{[\s\S]*interval:\s*'normal'/)
+  assert.match(cameraTs, /wx\.onDeviceMotionChange\(deviceMotionChangeHandler\)/)
+  assert.match(cameraTs, /captureDeviceGamma = latestDeviceGamma/)
+  assert.match(cameraTs, /captureDeviceOrientation = wx\.getSystemInfoSync\(\)\.deviceOrientation/)
+  assert.match(cameraTs, /getLandscapeFallbackRotation\(\s*captureDeviceGamma,\s*captureDeviceOrientation,\s*\)/)
+  assert.match(cameraTs, /hide\(\)[\s\S]*stopDeviceMotionTracking\(\)/)
+  assert.match(cameraTs, /detached\(\)[\s\S]*stopDeviceMotionTracking\(\)/)
 })
 
-test('document camera shutter progress matches the one-second automatic countdown', () => {
+test('photo orientation processing is immediately visible and never fails silently', () => {
+  const cameraWxml = readProjectFile('miniprogram/pages/document-camera/document-camera.wxml')
+  const cameraTs = readProjectFile('miniprogram/pages/document-camera/document-camera.ts')
+  const cameraScss = readProjectFile('miniprogram/pages/document-camera/document-camera.scss')
+
+  assert.match(cameraWxml, /<canvas[\s\S]*type="2d"[\s\S]*id="photo-orientation-canvas"/)
+  assert.match(cameraTs, /success:\s*\(\{ tempImagePath \}\) => \{[\s\S]*previewPath:\s*tempImagePath[\s\S]*previewMessage:\s*'正在读取照片方向并校正…'[\s\S]*preparePreview\(tempImagePath\)/)
+  assert.match(cameraTs, /catch \(error\) \{[\s\S]*console\.error\('\[document-camera\] 照片方向校正失败'[\s\S]*wx\.showToast\(\{[\s\S]*title:\s*'照片转正失败，已保留原图'/)
+  assert.match(cameraTs, /createSelectorQuery\(\)[\s\S]*select\('#photo-orientation-canvas'\)[\s\S]*fields\(\{ node:\s*true, size:\s*true \}/)
+  assert.match(cameraTs, /canvas\.createImage\(\)/)
+  assert.match(cameraTs, /canvasToTempFilePath\(\{[\s\S]*canvas,/)
+  assert.match(cameraScss, /\.document-preview-image\s*\{[\s\S]*z-index:\s*1;/)
+  assert.match(cameraScss, /\.document-preview-gradient\s*\{[\s\S]*z-index:\s*2;/)
+  assert.match(cameraScss, /\.document-preview-copy\s*\{[\s\S]*z-index:\s*3;/)
+  assert.match(cameraScss, /\.document-preview-actions\s*\{[\s\S]*z-index:\s*4;/)
+})
+
+test('document camera shutter progress matches the 600ms automatic countdown', () => {
   const cameraTs = readProjectFile('miniprogram/pages/document-camera/document-camera.ts')
 
-  assert.match(cameraTs, /100 - elapsed \/ 10/)
-  assert.doesNotMatch(cameraTs, /100 - elapsed \/ 30/)
+  assert.match(cameraTs, /100 - elapsed \/ 6/)
+  assert.doesNotMatch(cameraTs, /100 - elapsed \/ 10/)
 })
 
 test('automatic mode is disabled when realtime frame tracking is unavailable', () => {
@@ -141,9 +170,25 @@ test('document camera centers and polishes the close control without a native ov
   const cameraScss = readProjectFile('miniprogram/pages/document-camera/document-camera.scss')
 
   assert.match(cameraWxml, /class="camera-close"[\s\S]*hover-class="camera-close--pressed"/)
-  assert.match(cameraScss, /\.camera-close\s*\{[\s\S]*display:\s*flex;[\s\S]*align-items:\s*center;[\s\S]*justify-content:\s*center;/)
-  assert.match(cameraScss, /\.camera-close\s*\{[\s\S]*line-height:\s*1;/)
+  assert.match(cameraWxml, /class="camera-close-label">关闭<\/cover-view>/)
+  assert.match(cameraScss, /\.camera-close\s*\{[\s\S]*position:\s*relative;/)
+  assert.match(cameraScss, /\.camera-close-label\s*\{[\s\S]*position:\s*absolute;[\s\S]*top:\s*50%;[\s\S]*left:\s*50%;/)
+  assert.match(cameraScss, /\.camera-close-label\s*\{[\s\S]*transform:\s*translate\(-50%, -50%\);/)
   assert.match(cameraScss, /\.camera-close--pressed\s*\{[\s\S]*transform:\s*scale\(/)
+})
+
+test('confirmation actions use custom controls with absolutely centered labels', () => {
+  const cameraWxml = readProjectFile('miniprogram/pages/document-camera/document-camera.wxml')
+  const cameraScss = readProjectFile('miniprogram/pages/document-camera/document-camera.scss')
+
+  assert.doesNotMatch(cameraWxml, /<button[^>]*preview-(secondary|primary)-button/)
+  assert.match(cameraWxml, /class="preview-secondary-button"[\s\S]*bindtap="retakePhoto"[\s\S]*hover-class="preview-action-button--pressed"/)
+  assert.match(cameraWxml, /class="preview-primary-button"[\s\S]*bindtap="usePhoto"[\s\S]*hover-class="preview-action-button--pressed"/)
+  assert.match(cameraWxml, /class="preview-action-label">重拍<\/text>/)
+  assert.match(cameraWxml, /class="preview-action-label">使用照片<\/text>/)
+  assert.match(cameraScss, /\.preview-secondary-button,[\s\S]*\.preview-primary-button\s*\{[\s\S]*position:\s*relative;/)
+  assert.match(cameraScss, /\.preview-action-label\s*\{[\s\S]*position:\s*absolute;[\s\S]*top:\s*50%;[\s\S]*left:\s*50%;[\s\S]*transform:\s*translate\(-50%, -50%\);/)
+  assert.match(cameraScss, /\.preview-action-button--pressed\s*\{[\s\S]*transform:\s*scale\(/)
 })
 
 test('capture mode switch uses the same translating indicator motion as the home bottom bar', () => {
@@ -174,7 +219,7 @@ test('document camera reserves an explicit top safe area and keeps the close con
   assert.match(cameraWxml, /camera-top-safe-area/)
   assert.match(cameraWxml, /height: \{\{cameraTopInset\}\}px/)
   assert.match(cameraWxml, /<cover-view class="camera-topbar" style="top: \{\{cameraTopInset\}\}px;">/)
-  assert.match(cameraWxml, /<cover-view[\s\S]*class="camera-close"[\s\S]*bindtap="closeCamera"[\s\S]*>关闭<\/cover-view>/)
+  assert.match(cameraWxml, /<cover-view[\s\S]*class="camera-close"[\s\S]*bindtap="closeCamera"[\s\S]*class="camera-close-label">关闭<\/cover-view>[\s\S]*<\/cover-view>/)
   assert.match(cameraTs, /cameraTopInset:\s*\d+/)
   assert.match(cameraTs, /getMenuButtonBoundingClientRect\(\)/)
   assert.match(cameraTs, /statusBarHeight/)
