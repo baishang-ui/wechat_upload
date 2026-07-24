@@ -463,7 +463,11 @@ Component({
         }
         const progress = Math.max(
           current.progress,
-          getTimedRecognitionProgress(Date.now() - startedAt),
+          getTimedRecognitionProgress(
+            Date.now() - startedAt,
+            undefined,
+            current.progressProfile,
+          ),
         )
         if (progress === current.progress) return
         this.applyRecognitionQueue(updateQueueItem(this.data.recognitionQueue, id, { progress }))

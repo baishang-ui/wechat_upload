@@ -12,6 +12,7 @@ import {
   failQueueItem,
   getNextQueuedItem,
   getRecognitionProgress,
+  getRecognitionProgressProfile,
   getTimedRecognitionProgress,
   getQueueStats,
   RECOGNITION_PROGRESS_DURATION_MS,
@@ -148,26 +149,44 @@ test('stats and removal reflect active ready and failed items', () => {
 })
 
 
-test('timed recognition progress starts slowly and accelerates within six seconds', () => {
-  assert.equal(RECOGNITION_PROGRESS_DURATION_MS, 6_000)
-  assert.equal(getTimedRecognitionProgress(-1), 8)
-  assert.equal(getTimedRecognitionProgress(0), 8)
-  assert.equal(getTimedRecognitionProgress(750), 12)
-  assert.equal(getTimedRecognitionProgress(1_500), 15)
-  assert.equal(getTimedRecognitionProgress(2_250), 24)
-  assert.equal(getTimedRecognitionProgress(3_000), 32)
-  assert.equal(getTimedRecognitionProgress(3_750), 47)
-  assert.equal(getTimedRecognitionProgress(4_500), 62)
-  assert.equal(getTimedRecognitionProgress(5_250), 77)
-  assert.equal(getTimedRecognitionProgress(6_000), 92)
-  assert.equal(getTimedRecognitionProgress(12_000), 92)
+test('recognition progress profiles are stable per card and vary between cards', () => {
+  const first = getRecognitionProgressProfile('RQ-first')
+  const sameFirst = getRecognitionProgressProfile('RQ-first')
+  const second = getRecognitionProgressProfile('RQ-second')
+
+  assert.deepEqual(sameFirst, first)
+  assert.notDeepEqual(second, first)
+  assert.ok(first.sixSecondTarget >= 84 && first.sixSecondTarget <= 91)
+  assert.ok(first.tailCeiling >= 95 && first.tailCeiling <= 98)
+  assert.ok(first.tailCeiling > first.sixSecondTarget)
 })
 
-test('timed recognition progress scales checkpoints for a custom duration', () => {
-  assert.equal(getTimedRecognitionProgress(3_000, 12_000), 15)
-  assert.equal(getTimedRecognitionProgress(6_000, 12_000), 32)
-  assert.equal(getTimedRecognitionProgress(9_000, 12_000), 62)
-  assert.equal(getTimedRecognitionProgress(12_000, 12_000), 92)
+test('timed recognition progress starts slowly, differs per card, and keeps advancing after six seconds', () => {
+  const first = getRecognitionProgressProfile('RQ-first')
+  const second = getRecognitionProgressProfile('RQ-second')
+  const firstAtSixSeconds = getTimedRecognitionProgress(6_000, RECOGNITION_PROGRESS_DURATION_MS, first)
+  const secondAtSixSeconds = getTimedRecognitionProgress(6_000, RECOGNITION_PROGRESS_DURATION_MS, second)
+  const firstAtTwelveSeconds = getTimedRecognitionProgress(12_000, RECOGNITION_PROGRESS_DURATION_MS, first)
+
+  assert.equal(RECOGNITION_PROGRESS_DURATION_MS, 6_000)
+  assert.equal(getTimedRecognitionProgress(-1, RECOGNITION_PROGRESS_DURATION_MS, first), 8)
+  assert.equal(getTimedRecognitionProgress(0, RECOGNITION_PROGRESS_DURATION_MS, first), 8)
+  assert.ok(getTimedRecognitionProgress(750, RECOGNITION_PROGRESS_DURATION_MS, first) < 16)
+  assert.ok(getTimedRecognitionProgress(4_500, RECOGNITION_PROGRESS_DURATION_MS, first) > 55)
+  assert.equal(firstAtSixSeconds, first.sixSecondTarget)
+  assert.equal(secondAtSixSeconds, second.sixSecondTarget)
+  assert.notEqual(firstAtSixSeconds, secondAtSixSeconds)
+  assert.ok(firstAtTwelveSeconds > firstAtSixSeconds)
+  assert.ok(firstAtTwelveSeconds < first.tailCeiling)
+  assert.ok(firstAtTwelveSeconds < 100)
+})
+
+test('timed recognition progress scales profile checkpoints for a custom duration', () => {
+  const profile = getRecognitionProgressProfile('RQ-custom')
+  assert.equal(
+    getTimedRecognitionProgress(12_000, 12_000, profile),
+    profile.sixSecondTarget,
+  )
 })
 
 test('recognition progress preserves timer updates across status transitions', () => {

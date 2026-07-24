@@ -8,14 +8,74 @@ export const MAX_RECOGNITION_QUEUE_SIZE = 10
 export const MAX_CONCURRENT_RECOGNITIONS = 2
 export const RECOGNITION_PROGRESS_DURATION_MS = 6_000
 const RECOGNITION_PROGRESS_START = 8
-const RECOGNITION_PROGRESS_CEILING = 92
-const RECOGNITION_PROGRESS_CHECKPOINTS = [
-  { ratio: 0, progress: RECOGNITION_PROGRESS_START },
-  { ratio: 0.25, progress: 15 },
-  { ratio: 0.5, progress: 32 },
-  { ratio: 0.75, progress: 62 },
-  { ratio: 1, progress: RECOGNITION_PROGRESS_CEILING },
-] as const
+
+export interface RecognitionProgressProfile {
+  earlyTarget: number
+  middleTarget: number
+  lateTarget: number
+  sixSecondTarget: number
+  tailCeiling: number
+  tailRate: number
+}
+
+function stableHash(value: string): number {
+  let hash = 2_166_136_261
+  for (let index = 0; index < value.length; index += 1) {
+    hash ^= value.charCodeAt(index)
+    hash = Math.imul(hash, 16_777_619)
+  }
+  return hash >>> 0
+}
+
+function profileInteger(id: string, key: string, min: number, max: number): number {
+  const span = max - min + 1
+  return min + (stableHash(`${id}:${key}`) % span)
+}
+
+export function getRecognitionProgressProfile(id: string): RecognitionProgressProfile {
+  return {
+    earlyTarget: profileInteger(id, 'early', 12, 16),
+    middleTarget: profileInteger(id, 'middle', 29, 38),
+    lateTarget: profileInteger(id, 'late', 58, 67),
+    sixSecondTarget: profileInteger(id, 'six', 84, 91),
+    tailCeiling: profileInteger(id, 'ceiling', 95, 98),
+    tailRate: profileInteger(id, 'tail-rate', 100, 155) / 100,
+  }
+}
+
+function interpolate(start: number, end: number, ratio: number): number {
+  return start + (end - start) * ratio
+}
+
+export function getTimedRecognitionProgress(
+  elapsedMs: number,
+  durationMs = RECOGNITION_PROGRESS_DURATION_MS,
+  profile = getRecognitionProgressProfile('default'),
+): number {
+  const safeDuration = Math.max(1, durationMs)
+  const elapsed = Math.max(0, elapsedMs)
+  const ratio = elapsed / safeDuration
+
+  if (ratio <= 0.25) {
+    return Math.round(interpolate(RECOGNITION_PROGRESS_START, profile.earlyTarget, ratio / 0.25))
+  }
+  if (ratio <= 0.5) {
+    return Math.round(interpolate(profile.earlyTarget, profile.middleTarget, (ratio - 0.25) / 0.25))
+  }
+  if (ratio <= 0.75) {
+    return Math.round(interpolate(profile.middleTarget, profile.lateTarget, (ratio - 0.5) / 0.25))
+  }
+  if (ratio <= 1) {
+    return Math.round(interpolate(profile.lateTarget, profile.sixSecondTarget, (ratio - 0.75) / 0.25))
+  }
+
+  const tailElapsed = ratio - 1
+  const tailRatio = 1 - Math.exp(-profile.tailRate * tailElapsed)
+  return Math.min(
+    profile.tailCeiling,
+    Math.round(interpolate(profile.sixSecondTarget, profile.tailCeiling, tailRatio)),
+  )
+}
 
 export type RecognitionQueueStatus =
   | 'queued'
@@ -36,26 +96,6 @@ export function getRecognitionProgress(status: RecognitionQueueStatus): number {
   }
 }
 
-export function getTimedRecognitionProgress(
-  elapsedMs: number,
-  durationMs = RECOGNITION_PROGRESS_DURATION_MS,
-): number {
-  const safeDuration = Math.max(1, durationMs)
-  const ratio = Math.min(1, Math.max(0, elapsedMs) / safeDuration)
-
-  for (let index = 1; index < RECOGNITION_PROGRESS_CHECKPOINTS.length; index += 1) {
-    const previous = RECOGNITION_PROGRESS_CHECKPOINTS[index - 1]
-    const next = RECOGNITION_PROGRESS_CHECKPOINTS[index]
-    if (ratio > next.ratio) continue
-    const segmentRatio = (ratio - previous.ratio) / (next.ratio - previous.ratio)
-    return Math.round(
-      previous.progress + (next.progress - previous.progress) * segmentRatio,
-    )
-  }
-
-  return RECOGNITION_PROGRESS_CEILING
-}
-
 export interface RecognitionQueueResult {
   imageId: string
   rawContent: string
@@ -69,6 +109,7 @@ export interface RecognitionQueueItem {
   createdAt: number
   status: RecognitionQueueStatus
   progress: number
+  progressProfile: RecognitionProgressProfile
   stage: string
   sourceType: 'standalone' | 'purchase_order'
   taskId: number | null
@@ -121,6 +162,7 @@ export function createRecognitionQueueItem(
     createdAt: input.createdAt,
     status: 'queued',
     progress: getRecognitionProgress('queued'),
+    progressProfile: getRecognitionProgressProfile(input.id),
     stage: '等待识别',
     sourceType: input.sourceType,
     taskId: input.taskId,
