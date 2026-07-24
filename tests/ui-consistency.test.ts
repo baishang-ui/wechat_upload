@@ -134,18 +134,20 @@ test('recognition cards advance progress on a 300ms wall-clock timer while a req
 
   assert.match(page, /RECOGNITION_PROGRESS_TICK_MS\s*=\s*300/)
   assert.match(page, /getTimedRecognitionProgress/)
-  assert.match(page, /startRecognitionProgress\(id: string\)/)
-  assert.match(
-    page,
-    /recognitionProgressTimer = setInterval\(tick, RECOGNITION_PROGRESS_TICK_MS\)[\s\S]*?tick\(\)/,
-  )
+  assert.match(page, /const recognitionProgressTimers = new Map<string, ReturnType<typeof setInterval>>\(\)/)
+  assert.match(page, /const recognitionProgressStartedAt = new Map<string, number>\(\)/)
+  assert.match(page, /stopRecognitionProgress\(id: string\)/)
+  assert.match(page, /stopAllRecognitionProgress\(\)/)
+  assert.match(page, /this\.stopAllRecognitionProgress\(\)/)
+  assert.match(page, /MAX_CONCURRENT_RECOGNITIONS/)
+  assert.match(page, /claimQueuedRecognitionItems\(\s*this\.data\.recognitionQueue\s*,\s*MAX_CONCURRENT_RECOGNITIONS\s*,?\s*\)/)
+  assert.match(page, /claimed\.claimed\.forEach\(\(item\) => this\.startQueueRecognition\(item\.id\)\)/)
+  assert.match(page, /this\.stopRecognitionProgress\(id\)/)
   assert.match(page, /updateQueueItem\([\s\S]*?progress/)
-  assert.match(page, /this\.startRecognitionProgress\(next\.id\)/)
-  assert.match(page, /this\.stopRecognitionProgress\(\)/)
-  assert.match(page, /detached\(\)\s*\{[\s\S]*?stopRecognitionProgress/)
+  assert.doesNotMatch(page, /activeRecognitionQueueId/)
   assert.match(
     skipQueueRecognition,
-    /if \(id === this\.data\.activeRecognitionQueueId\) \{\s*this\.stopRecognitionProgress\(\)\s*\}/,
+    /this\.stopRecognitionProgress\(id\)/,
   )
 })
 

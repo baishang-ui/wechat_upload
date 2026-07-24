@@ -1,14 +1,14 @@
 import { StoredInspectionRecord } from '../../domain/inspection-history'
 import {
   appendRecognitionQueue,
+  claimQueuedRecognitionItems,
   completeQueueItem,
   createRecognitionQueueItem,
   failQueueItem,
-  getNextQueuedItem,
   getQueueStats,
   getTimedRecognitionProgress,
-  markQueueItemActive,
   markQueueItemRecognizing,
+  MAX_CONCURRENT_RECOGNITIONS,
   MAX_RECOGNITION_QUEUE_SIZE,
   RecognitionQueueItem,
   removeQueueItem,
@@ -90,9 +90,8 @@ const productLabels = PRODUCT_OPTIONS.map((option) => option.label)
 const measurementHeaders = Array.from({ length: MEASUREMENT_COUNT }, (_, index) => index + 1)
 const judgementOptions: Judgement[] = ['', 'OK', 'NG']
 const RECOGNITION_PROGRESS_TICK_MS = 300
-let recognitionProgressTimer: ReturnType<typeof setInterval> | null = null
-let recognitionProgressStartedAt = 0
-let recognitionProgressItemId = ''
+const recognitionProgressTimers = new Map<string, ReturnType<typeof setInterval>>()
+const recognitionProgressStartedAt = new Map<string, number>()
 
 Component({
   data: {
@@ -112,7 +111,6 @@ Component({
     rawContent: '',
     recognitionQueue: [] as RecognitionQueueItem[],
     recognitionQueueStats: getQueueStats([]),
-    activeRecognitionQueueId: '',
     reviewQueueItemId: '',
     reviewHints: createEmptyReviewHints() as RecognitionReviewHints,
     productLabels,
@@ -161,7 +159,7 @@ Component({
         })
     },
     detached() {
-      this.stopRecognitionProgress()
+      this.stopAllRecognitionProgress()
     },
   },
   methods: {
@@ -431,49 +429,46 @@ Component({
         ),
       })
     },
-    applyRecognitionQueue(queue: RecognitionQueueItem[]) {
+    applyRecognitionQueue(queue: RecognitionQueueItem[], callback?: () => void) {
       const visibleQueue = queue.filter((item) => item.status !== 'skipped')
       this.setData({
         recognitionQueue: visibleQueue,
         recognitionQueueStats: getQueueStats(visibleQueue),
-      })
+      }, callback)
     },
-    stopRecognitionProgress() {
-      if (recognitionProgressTimer !== null) {
-        clearInterval(recognitionProgressTimer)
-      }
-      recognitionProgressTimer = null
-      recognitionProgressStartedAt = 0
-      recognitionProgressItemId = ''
+    stopRecognitionProgress(id: string) {
+      const timer = recognitionProgressTimers.get(id)
+      if (timer !== undefined) clearInterval(timer)
+      recognitionProgressTimers.delete(id)
+      recognitionProgressStartedAt.delete(id)
+    },
+    stopAllRecognitionProgress() {
+      recognitionProgressTimers.forEach((timer) => clearInterval(timer))
+      recognitionProgressTimers.clear()
+      recognitionProgressStartedAt.clear()
     },
     startRecognitionProgress(id: string) {
-      this.stopRecognitionProgress()
-      recognitionProgressItemId = id
-      recognitionProgressStartedAt = Date.now()
+      this.stopRecognitionProgress(id)
+      recognitionProgressStartedAt.set(id, Date.now())
       const tick = () => {
-        if (recognitionProgressItemId !== id) return
         const current = this.data.recognitionQueue.find((item) => item.id === id)
+        const startedAt = recognitionProgressStartedAt.get(id)
         if (
           !current
+          || startedAt === undefined
           || (current.status !== 'preparing' && current.status !== 'recognizing')
         ) {
-          this.stopRecognitionProgress()
+          this.stopRecognitionProgress(id)
           return
         }
         const progress = Math.max(
           current.progress,
-          getTimedRecognitionProgress(Date.now() - recognitionProgressStartedAt),
+          getTimedRecognitionProgress(Date.now() - startedAt),
         )
         if (progress === current.progress) return
-        this.setData({
-          recognitionQueue: updateQueueItem(
-            this.data.recognitionQueue,
-            id,
-            { progress },
-          ),
-        })
+        this.applyRecognitionQueue(updateQueueItem(this.data.recognitionQueue, id, { progress }))
       }
-      recognitionProgressTimer = setInterval(tick, RECOGNITION_PROGRESS_TICK_MS)
+      recognitionProgressTimers.set(id, setInterval(tick, RECOGNITION_PROGRESS_TICK_MS))
       tick()
     },
     enqueueRecognitionFiles(imagePaths: string[]) {
@@ -499,24 +494,28 @@ Component({
       }, () => this.runRecognitionQueue())
     },
     runRecognitionQueue() {
-      if (this.data.activeRecognitionQueueId) return
-      const next = getNextQueuedItem(this.data.recognitionQueue)
-      if (!next) return
-      const activeQueue = markQueueItemActive(this.data.recognitionQueue, next.id)
-      this.setData({
-        activeRecognitionQueueId: next.id,
-        recognitionQueue: activeQueue,
-        recognitionQueueStats: getQueueStats(activeQueue),
-      }, () => this.startRecognitionProgress(next.id))
+      const claimed = claimQueuedRecognitionItems(
+        this.data.recognitionQueue,
+        MAX_CONCURRENT_RECOGNITIONS,
+      )
+      if (claimed.claimed.length === 0) return
+      this.applyRecognitionQueue(claimed.queue, () => {
+        claimed.claimed.forEach((item) => this.startQueueRecognition(item.id))
+      })
+    },
+    startQueueRecognition(id: string) {
+      const next = this.data.recognitionQueue.find((item) => item.id === id)
+      if (!next || next.status !== 'preparing') return
+      this.startRecognitionProgress(id)
       setTimeout(() => {
-        const current = this.data.recognitionQueue.find((item) => item.id === next.id)
+        const current = this.data.recognitionQueue.find((item) => item.id === id)
         if (!current || current.status !== 'preparing') return
-        const recognizingQueue = markQueueItemRecognizing(this.data.recognitionQueue, next.id)
+        const recognizingQueue = markQueueItemRecognizing(this.data.recognitionQueue, id)
         this.applyRecognitionQueue(recognizingQueue)
       }, 350)
       recognizeInspection(next.imagePath)
         .then((result) => {
-          const current = this.data.recognitionQueue.find((item) => item.id === next.id)
+          const current = this.data.recognitionQueue.find((item) => item.id === id)
           const taskPrefill = current?.taskPrefill
           const recognizedRecord = taskPrefill
             ? {
@@ -533,7 +532,7 @@ Component({
           const hints = buildRecognitionReviewHints(recognizedRecord, result.confidence, taskPrefill)
           const completed = completeQueueItem(
             this.data.recognitionQueue,
-            next.id,
+            id,
             normalizedResult,
             hints,
           )
@@ -542,14 +541,14 @@ Component({
         .catch((error: Error) => {
           const failed = failQueueItem(
             this.data.recognitionQueue,
-            next.id,
+            id,
             error.message || '识别失败',
           )
           this.applyRecognitionQueue(failed)
         })
         .finally(() => {
-          this.stopRecognitionProgress()
-          this.setData({ activeRecognitionQueueId: '' }, () => this.runRecognitionQueue())
+          this.stopRecognitionProgress(id)
+          this.runRecognitionQueue()
         })
     },
     openQueueReview(event: WechatMiniprogram.TouchEvent) {
@@ -601,8 +600,9 @@ Component({
     },
     skipQueueRecognition(event: WechatMiniprogram.TouchEvent) {
       const id = String(event.currentTarget.dataset.id || '')
-      if (id === this.data.activeRecognitionQueueId) {
-        this.stopRecognitionProgress()
+      const current = this.data.recognitionQueue.find((item) => item.id === id)
+      if (current?.status === 'preparing' || current?.status === 'recognizing') {
+        this.stopRecognitionProgress(id)
       }
       this.applyRecognitionQueue(requestQueueItemSkip(this.data.recognitionQueue, id))
     },
