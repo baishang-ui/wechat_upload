@@ -1,0 +1,161 @@
+<view wx:if="{{visible}}" class="workbench-modal-layer {{closing ? 'is-closing' : ''}}">
+  <view class="workbench-modal-mask" bindtap="requestClose" catchtouchmove="noop"></view>
+  <view class="workbench-modal-panel" catchtap="noop">
+    <view class="modal-grabber"></view>
+    <view class="workbench-modal-header">
+      <view class="workbench-modal-heading">
+        <view class="workbench-modal-eyebrow">{{task.task_no || '待检任务'}}</view>
+        <view class="workbench-modal-title">{{currentPage.title || '产品检验'}}</view>
+      </view>
+      <view class="workbench-close" bindtap="requestClose" aria-label="关闭" role="button" hover-class="workbench-close--pressed" hover-stay-time="120">×</view>
+    </view>
+
+    <scroll-view class="workbench-modal-body" scroll-y enhanced show-scrollbar="{{false}}">
+      <view wx:if="{{loading}}" class="modal-state-card">
+        <view class="modal-state-title">正在加载线上检验表</view>
+        <view class="modal-state-description">正在读取产品模板和已有草稿，请稍候。</view>
+      </view>
+
+      <view wx:elif="{{loadError}}" class="modal-state-card modal-state-card--error">
+        <view class="modal-state-title">无法打开产品检验表</view>
+        <view class="modal-state-description">{{loadError}}</view>
+        <button class="modal-state-button" bindtap="loadWorkbench">重新加载</button>
+      </view>
+
+      <block wx:elif="{{workbench && currentPage}}">
+        <block wx:if="{{currentPage.kind === 'overview'}}">
+          <view class="product-summary-card">
+            <view class="product-summary-head">
+              <view>
+                <view class="product-name">{{item.material_name || item.material_code || '未命名产品'}}</view>
+                <view class="product-model">{{item.spec_desc || '暂无规格信息'}}</view>
+              </view>
+              <view class="product-status">待检</view>
+            </view>
+            <view class="product-meta-grid">
+              <view class="product-meta-item"><text>合同号</text><text>{{task.contract_no || '—'}}</text></view>
+              <view class="product-meta-item"><text>物料编码</text><text>{{item.material_code || '—'}}</text></view>
+              <view class="product-meta-item"><text>客户</text><text>{{task.customer_name || '—'}}</text></view>
+              <view class="product-meta-item"><text>数量</text><text>{{item.quantity || 0}} {{item.unit || 'Pcs'}}</text></view>
+            </view>
+          </view>
+
+          <view class="workbench-source-card">
+            <view class="workbench-source-dot"></view>
+            <view class="workbench-source-content">
+              <view class="workbench-source-title">{{workbench.source === 'draft' ? '已恢复线上草稿' : '已按线上模板生成'}}</view>
+              <view class="workbench-source-meta">模板 {{workbench.templateId || '未标记'}} · 版本 {{workbench.templateVersion || '未标记'}}</view>
+            </view>
+            <view wx:if="{{savedMessage}}" class="saved-badge">{{savedMessage}}</view>
+          </view>
+
+          <view class="recognition-card">
+            <view class="section-title">质检单识别</view>
+            <view class="section-description">识别结果将回填尺寸和安全性能；其它项目仍可手动核验。</view>
+            <view class="recognition-actions">
+              <button class="recognition-button recognition-button--primary" loading="{{recognizing}}" disabled="{{recognizing}}" bindtap="takeQualitySheetPhoto">{{recognizing ? '正在识别…' : '拍摄质检单并识别'}}</button>
+              <button class="recognition-button" disabled="{{recognizing}}" bindtap="chooseQualitySheetPhoto">从相册选择</button>
+            </view>
+            <view wx:if="{{recognitionError}}" class="inline-error">{{recognitionError}}</view>
+            <view wx:if="{{reportPreviewPaths.length}}" class="report-preview-list">
+              <view wx:for="{{reportPreviewPaths}}" wx:key="*this" class="report-preview" data-index="{{index}}" bindtap="previewReportImage">
+                <image src="{{item}}" mode="aspectFill"></image>
+                <text>质检单 {{index + 1}}</text>
+              </view>
+            </view>
+          </view>
+
+          <view class="overview-tip-card">
+            <view class="overview-tip-title">按项目分步检验</view>
+            <view class="overview-tip-text">下一页开始填写，每页最多展示 3 项，点击项目卡片展开完整内容。</view>
+          </view>
+        </block>
+
+        <block wx:elif="{{currentPage.kind === 'inspection'}}">
+          <view class="page-section-heading">
+            <view class="page-section-copy">
+              <view class="section-title">{{currentPage.groupTitle}}</view>
+              <view class="section-description">点击项目展开填写，单次聚焦一个检验项目。</view>
+            </view>
+            <view class="row-count">{{currentPage.rows.length}} 项</view>
+          </view>
+
+          <view wx:for="{{currentPage.rows}}" wx:key="rowKey" wx:for-item="row" class="inspection-item-card {{expandedRowKey === row.rowKey ? 'is-expanded' : ''}}">
+            <view class="inspection-item-summary" data-row-key="{{row.rowKey}}" bindtap="toggleRowExpanded">
+              <view class="inspection-item-title-wrap">
+                <view class="inspection-item-title">{{row.project || '未命名项目'}}</view>
+                <view class="inspection-item-standard">{{row.standard || '暂无标准要求'}}</view>
+              </view>
+              <view class="inspection-item-toggle">{{expandedRowKey === row.rowKey ? '收起' : '填写'}}</view>
+            </view>
+
+            <view wx:if="{{expandedRowKey === row.rowKey}}" class="inspection-item-details">
+              <view class="detail-block">
+                <view class="detail-label">检验方法</view>
+                <view class="detail-content">{{row.method || '—'}}</view>
+              </view>
+              <view class="detail-block">
+                <view class="detail-label">标准要求</view>
+                <view class="detail-content">{{row.standard || '—'}}</view>
+              </view>
+              <view class="detail-label detail-label--spaced">实测值</view>
+              <view class="measurement-grid">
+                <view wx:for="{{row.measurements}}" wx:key="index" wx:for-item="measurement" wx:for-index="measurementIndex" class="measurement-field">
+                  <text>{{measurementIndex + 1}}</text>
+                  <input value="{{measurement}}" placeholder="—" data-row-key="{{row.rowKey}}" data-measurement-index="{{measurementIndex}}" bindinput="onMeasurementInput" />
+                </view>
+              </view>
+              <view class="field-grid">
+                <view class="form-field">
+                  <text>判定</text>
+                  <input value="{{row.decision}}" placeholder="OK / NG" data-row-key="{{row.rowKey}}" data-field="decision" bindinput="onRowFieldInput" />
+                </view>
+                <view class="form-field">
+                  <text>备注</text>
+                  <input value="{{row.note}}" placeholder="选填" data-row-key="{{row.rowKey}}" data-field="note" bindinput="onRowFieldInput" />
+                </view>
+              </view>
+              <view class="photo-section">
+                <view class="detail-label">现场照片 {{row.photoRequired ? '（必填）' : '（选填）'}}</view>
+                <view class="workbench-photo-grid">
+                  <view wx:for="{{row.images}}" wx:key="id" wx:for-item="photo" class="workbench-photo {{photo.status === 'failed' ? 'is-failed' : ''}}">
+                    <image src="{{photo.localPath || photo.remoteUrl}}" mode="aspectFill" data-row-key="{{row.rowKey}}" data-photo-id="{{photo.id}}" bindtap="previewPhoto"></image>
+                    <view wx:if="{{photo.status === 'uploading'}}" class="photo-status">上传中</view>
+                    <view wx:elif="{{photo.status === 'failed'}}" class="photo-status photo-status--failed">上传失败</view>
+                    <view class="photo-remove" data-row-key="{{row.rowKey}}" data-photo-id="{{photo.id}}" catchtap="removePhoto">×</view>
+                    <view wx:if="{{photo.status === 'failed'}}" class="photo-retry" data-row-key="{{row.rowKey}}" data-photo-id="{{photo.id}}" catchtap="retryPhoto">重试</view>
+                  </view>
+                  <button class="photo-add-button" data-row-key="{{row.rowKey}}" bindtap="addRowPhotos"><text>＋</text><text>添加照片</text></button>
+                </view>
+              </view>
+            </view>
+          </view>
+        </block>
+
+        <block wx:else>
+          <view class="page-section-heading">
+            <view class="page-section-copy"><view class="section-title">待核对的识别内容</view><view class="section-description">未匹配内容不会写入正式检验表，请人工确认。</view></view>
+            <button class="clear-button" bindtap="clearUnmatched">清空</button>
+          </view>
+          <view wx:for="{{currentPage.unmatched}}" wx:key="rowKey" wx:for-item="unmatchedRow" class="unmatched-item">
+            <view class="unmatched-item-head"><text>{{unmatchedRow.project || '未命名项目'}}</text><text>{{unmatchedRow.rowKey}}</text></view>
+            <view class="unmatched-measurements">
+              <text wx:for="{{unmatchedRow.measurements}}" wx:key="index" wx:for-item="measurement" wx:for-index="measurementIndex">{{measurement}}{{measurementIndex < unmatchedRow.measurements.length - 1 ? ' / ' : ''}}</text>
+            </view>
+            <view class="unmatched-reason">{{unmatchedRow.reason}}</view>
+          </view>
+        </block>
+        <view class="modal-body-spacer"></view>
+      </block>
+    </scroll-view>
+
+    <view class="workbench-modal-actions">
+      <view class="workbench-pagination-actions">
+        <view class="page-button {{activePage <= 0 || loading ? 'is-disabled' : ''}}" aria-disabled="{{activePage <= 0 || loading}}" role="button" bindtap="goPreviousPage">上一页</view>
+        <view class="page-status"><text>{{pageNumber}} / {{pageTotal}}</text><text wx:if="{{dirty}}">未保存</text></view>
+        <view class="page-button {{activePage >= pageTotal - 1 || loading ? 'is-disabled' : ''}}" aria-disabled="{{activePage >= pageTotal - 1 || loading}}" role="button" bindtap="goNextPage">下一页</view>
+      </view>
+      <view class="save-button {{saving || recognizing || loading ? 'is-disabled' : ''}}" aria-disabled="{{saving || recognizing || loading}}" role="button" bindtap="saveDraft">{{saving ? '保存中…' : '保存草稿'}}</view>
+    </view>
+  </view>
+</view>

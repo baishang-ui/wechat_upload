@@ -12,6 +12,7 @@ import {
   RawApiRecord,
 } from '../domain/inspection-record'
 import { RecognitionConfidencePayload } from '../domain/recognition-review'
+import { InspectionTemplateDto } from '../domain/inspection-workbench'
 import {
   serverRequest,
   ServerRequestOptions,
@@ -78,6 +79,32 @@ export interface QualityInspectionItemDto {
   quantity?: number | null
   packaging_method?: string | null
   inspection_draft?: QualityInspectionDraftPayload
+  inspection_template?: InspectionTemplateDto | null
+  [key: string]: unknown
+}
+
+export interface QualityInspectionProductPairDto {
+  label?: string | null
+  value?: string | null
+}
+
+export interface QualityInspectionMasterProductDto {
+  category?: string | null
+  subcategory?: string | null
+  name?: string | null
+  master_code?: string | null
+  spec_pairs?: QualityInspectionProductPairDto[]
+  attribute_pairs?: QualityInspectionProductPairDto[]
+  [key: string]: unknown
+}
+
+export interface QualityInspectionCustomerProductDto {
+  brand_type?: string | null
+  product_trademark?: string | null
+  trademark_method?: string | null
+  packaging_method?: string | null
+  extra_info_text?: string | null
+  extra_info_attachments?: unknown[]
   [key: string]: unknown
 }
 
@@ -146,6 +173,11 @@ export interface StandaloneInspectionResult {
   task_id: number
   item_id: number
   task: QualityInspectionTaskDto
+}
+
+export interface InspectionRowImageUploadResult {
+  id: string
+  url: string
 }
 
 export interface RecognitionProxyResult {
@@ -615,6 +647,25 @@ export function getInspectionTask(
   })
 }
 
+export interface QualityInspectionItemDetailDto {
+  task: QualityInspectionTaskDto
+  item: QualityInspectionItemDto
+  purchase_order_item?: Record<string, unknown> | null
+  master_product?: QualityInspectionMasterProductDto | null
+  customer_product?: QualityInspectionCustomerProductDto | null
+}
+
+export function getInspectionItemDetail(
+  taskId: number,
+  itemId: number,
+  request: QualityRequest = serverRequest,
+): Promise<QualityInspectionItemDetailDto> {
+  return request<QualityInspectionItemDetailDto>({
+    method: 'GET',
+    path: `/customer-orders/api/purchase-orders/quality-inspections/${taskId}/items/${itemId}`,
+  })
+}
+
 export function saveInspectionDraft(
   taskId: number,
   itemId: number,
@@ -648,6 +699,25 @@ export function createStandaloneInspection(
       unit: 'Pcs',
       packaging_method: '',
       notes: record.notes,
+    },
+  })
+}
+
+export function uploadInspectionRowImage(
+  taskId: number,
+  itemId: number,
+  rowKey: string,
+  filePath: string,
+  upload: QualityUpload = serverUpload,
+): Promise<InspectionRowImageUploadResult> {
+  return upload<InspectionRowImageUploadResult>({
+    path: '/api/miniprogram/quality-inspections/images',
+    filePath,
+    name: 'file',
+    formData: {
+      task_id: String(taskId),
+      item_id: String(itemId),
+      row_key: rowKey,
     },
   })
 }

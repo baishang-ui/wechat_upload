@@ -1,0 +1,279 @@
+<navigation-bar
+  title="产品检验"
+  back="{{true}}"
+  color="#17233d"
+  background="rgba(246, 249, 252, .92)"
+  loading="{{loading}}"
+  bindheightchange="onNavigationHeightChange"
+></navigation-bar>
+
+<view class="workbench-page" style="padding-top: calc({{navigationBarHeight}}px + 24rpx);">
+  <view wx:if="{{loading}}" class="state-card">
+    <view class="state-title">正在加载线上检验表格</view>
+    <view class="state-description">正在读取产品模板和已有草稿，请稍候。</view>
+  </view>
+
+  <view wx:elif="{{loadError}}" class="state-card state-card--error">
+    <view class="state-title">无法打开产品检验表</view>
+    <view class="state-description">{{loadError}}</view>
+    <button class="state-button" bindtap="loadWorkbench">重新加载</button>
+  </view>
+
+  <block wx:elif="{{workbench}}">
+    <view class="product-card">
+      <view class="product-card__header">
+        <view>
+          <view class="product-card__eyebrow">{{task.task_no || '待检任务'}}</view>
+          <view class="product-card__title">{{item.material_name || item.material_code || '未命名产品'}}</view>
+        </view>
+        <view class="product-card__status">待检</view>
+      </view>
+      <view class="product-meta-grid">
+        <view class="product-meta-item">
+          <text class="product-meta-label">合同号</text>
+          <text class="product-meta-value">{{task.contract_no || '—'}}</text>
+        </view>
+        <view class="product-meta-item">
+          <text class="product-meta-label">客户</text>
+          <text class="product-meta-value">{{task.customer_name || '—'}}</text>
+        </view>
+        <view class="product-meta-item">
+          <text class="product-meta-label">供应商</text>
+          <text class="product-meta-value">{{task.supplier_name || '—'}}</text>
+        </view>
+        <view class="product-meta-item">
+          <text class="product-meta-label">物料编码</text>
+          <text class="product-meta-value">{{item.material_code || '—'}}</text>
+        </view>
+        <view class="product-meta-item product-meta-item--wide">
+          <text class="product-meta-label">规格</text>
+          <text class="product-meta-value">{{item.spec_desc || '—'}}</text>
+        </view>
+        <view class="product-meta-item">
+          <text class="product-meta-label">数量</text>
+          <text class="product-meta-value">{{item.quantity || 0}} {{item.unit || 'Pcs'}}</text>
+        </view>
+      </view>
+    </view>
+
+    <view class="workbench-source">
+      <view class="workbench-source__dot"></view>
+      <view class="workbench-source__content">
+        <view class="workbench-source__title">
+          {{workbench.source === 'draft' ? '已恢复线上草稿' : '已按线上模板生成'}}
+        </view>
+        <view class="workbench-source__meta">
+          模板 {{workbench.templateId || '未标记'}} · 版本 {{workbench.templateVersion || '未标记'}}
+        </view>
+      </view>
+      <view wx:if="{{savedMessage}}" class="saved-badge">{{savedMessage}}</view>
+    </view>
+
+    <view class="recognition-card">
+      <view class="section-heading">
+        <view>
+          <view class="section-title">质检单识别</view>
+          <view class="section-description">只回填产品尺寸和安全性能，外观、包装、照片及人工备注不会被覆盖。</view>
+        </view>
+      </view>
+      <view class="recognition-actions">
+        <button
+          class="recognition-button recognition-button--primary"
+          loading="{{recognizing}}"
+          disabled="{{recognizing}}"
+          bindtap="takeQualitySheetPhoto"
+        >{{recognizing ? '正在识别…' : '拍摄质检单并识别'}}</button>
+        <button
+          class="recognition-button"
+          disabled="{{recognizing}}"
+          bindtap="chooseQualitySheetPhoto"
+        >从相册选择</button>
+      </view>
+      <view wx:if="{{recognitionError}}" class="inline-error">{{recognitionError}}</view>
+      <view wx:if="{{reportPreviewPaths.length}}" class="report-preview-list">
+        <view
+          wx:for="{{reportPreviewPaths}}"
+          wx:key="*this"
+          class="report-preview"
+          data-index="{{index}}"
+          bindtap="previewReportImage"
+        >
+          <image src="{{item}}" mode="aspectFill"></image>
+          <text>质检单 {{index + 1}}</text>
+        </view>
+      </view>
+    </view>
+
+    <view class="table-card">
+      <view class="section-heading section-heading--table">
+        <view>
+          <view class="section-title">线上检验表</view>
+          <view class="section-description">分组、项目、顺序、方法和标准均来自线上数据库；表格可左右滑动。</view>
+        </view>
+        <view class="row-count">{{workbench.rows.length}} 项</view>
+      </view>
+
+      <scroll-view class="inspection-table-scroll" scroll-x enable-flex>
+        <view class="inspection-table" style="width: {{renderTableWidth}}rpx;">
+          <view class="inspection-table__header">
+            <view
+              wx:for="{{renderColumns}}"
+              wx:key="key"
+              wx:for-item="column"
+              class="table-cell table-cell--{{column.kind}} {{column.kind === 'project' ? 'table-cell--sticky' : ''}}"
+              style="width: {{column.width}}rpx;"
+            >{{column.title}}</view>
+          </view>
+
+          <block wx:for="{{groups}}" wx:key="title" wx:for-item="group">
+            <view class="inspection-group-title" style="width: {{renderTableWidth}}rpx;">{{group.title}}</view>
+            <view
+              wx:for="{{group.rows}}"
+              wx:key="rowKey"
+              wx:for-item="row"
+              class="inspection-table__row"
+            >
+              <block wx:for="{{row.cells}}" wx:key="key" wx:for-item="cell">
+                <view
+                  class="table-cell table-cell--{{cell.kind}} {{cell.kind === 'project' ? 'table-cell--sticky table-project-cell' : ''}} {{cell.kind === 'method' || cell.kind === 'standard' || cell.kind === 'extra' ? 'table-text-cell' : ''}} {{cell.kind === 'measurement' || cell.kind === 'decision' || cell.kind === 'note' ? 'table-input-cell' : ''}} {{cell.kind === 'photos' ? 'table-photo-cell' : ''}}"
+                  style="width: {{cell.width}}rpx;"
+                >
+                  <block wx:if="{{cell.kind === 'project'}}">
+                    <view class="table-project-name">{{row.project}}</view>
+                    <view class="table-project-mode">
+                      {{row.inputMode === 'ocr_measurement' ? '质检单识别' : row.photoRequired ? '现场填写 · 需照片' : '现场填写'}}
+                    </view>
+                  </block>
+
+                  <block wx:elif="{{cell.kind === 'measurement'}}">
+                    <input
+                      class="table-input"
+                      value="{{cell.value}}"
+                      placeholder="—"
+                      data-row-key="{{row.rowKey}}"
+                      data-measurement-index="{{cell.measurementIndex}}"
+                      bindinput="onMeasurementInput"
+                    />
+                  </block>
+
+                  <block wx:elif="{{cell.kind === 'decision'}}">
+                    <input
+                      class="table-input table-input--decision"
+                      value="{{row.decision}}"
+                      placeholder="OK/NG"
+                      data-row-key="{{row.rowKey}}"
+                      data-field="decision"
+                      bindinput="onRowFieldInput"
+                    />
+                  </block>
+
+                  <block wx:elif="{{cell.kind === 'note'}}">
+                    <textarea
+                      class="table-textarea"
+                      value="{{row.note}}"
+                      auto-height
+                      maxlength="500"
+                      placeholder="填写备注"
+                      data-row-key="{{row.rowKey}}"
+                      data-field="note"
+                      bindinput="onRowFieldInput"
+                    ></textarea>
+                  </block>
+
+                  <block wx:elif="{{cell.kind === 'photos'}}">
+                    <view class="workbench-photo-grid">
+                      <view
+                        wx:for="{{row.images}}"
+                        wx:key="id"
+                        wx:for-item="photo"
+                        class="workbench-photo {{photo.status === 'failed' ? 'is-failed' : ''}}"
+                      >
+                        <image
+                          src="{{photo.localPath || photo.remoteUrl}}"
+                          mode="aspectFill"
+                          data-row-key="{{row.rowKey}}"
+                          data-photo-id="{{photo.id}}"
+                          bindtap="previewPhoto"
+                        ></image>
+                        <view wx:if="{{photo.status === 'uploading'}}" class="photo-status">上传中</view>
+                        <view wx:elif="{{photo.status === 'failed'}}" class="photo-status photo-status--failed">失败</view>
+                        <view
+                          class="photo-remove"
+                          data-row-key="{{row.rowKey}}"
+                          data-photo-id="{{photo.id}}"
+                          catchtap="removePhoto"
+                        >×</view>
+                        <view
+                          wx:if="{{photo.status === 'failed'}}"
+                          class="photo-retry"
+                          data-row-key="{{row.rowKey}}"
+                          data-photo-id="{{photo.id}}"
+                          catchtap="retryPhoto"
+                        >重试</view>
+                      </view>
+                      <button
+                        wx:if="{{row.photoRequired || row.images.length}}"
+                        class="photo-add-button"
+                        data-row-key="{{row.rowKey}}"
+                        bindtap="addRowPhotos"
+                      >
+                        <text class="photo-add-button__plus">＋</text>
+                        <text>添加照片</text>
+                      </button>
+                    </view>
+                    <view wx:if="{{row.photoRequired}}" class="photo-unlimited-tip">可重复添加，不限制总数量</view>
+                    <view wx:else class="photo-not-required">无需照片</view>
+                  </block>
+
+                  <block wx:else>{{cell.value || '—'}}</block>
+                </view>
+              </block>
+            </view>
+          </block>
+        </view>
+      </scroll-view>
+    </view>
+
+    <view class="unmatched-review">
+      <view class="section-heading">
+        <view>
+          <view class="section-title">待核对的识别内容</view>
+          <view class="section-description">未匹配内容不会追加到正式检验表，请对照质检单人工确认。</view>
+        </view>
+        <button wx:if="{{unmatched.length}}" class="text-button" bindtap="clearUnmatched">清空</button>
+      </view>
+      <view wx:if="{{!unmatched.length}}" class="unmatched-empty">当前没有未匹配的识别条目</view>
+      <view wx:else class="unmatched-list">
+        <view wx:for="{{unmatched}}" wx:key="rowKey" wx:for-item="unmatchedRow" class="unmatched-item">
+          <view class="unmatched-item__head">
+            <text class="unmatched-item__project">{{unmatchedRow.project || '未命名项目'}}</text>
+            <text class="unmatched-item__key">{{unmatchedRow.rowKey}}</text>
+          </view>
+          <view class="unmatched-item__measurements">
+            <text
+              wx:for="{{unmatchedRow.measurements}}"
+              wx:key="index"
+              wx:for-item="measurement"
+              wx:for-index="measurementIndex"
+            >{{measurement}}{{measurementIndex < unmatchedRow.measurements.length - 1 ? ' / ' : ''}}</text>
+          </view>
+          <view class="unmatched-item__reason">{{unmatchedRow.reason}}</view>
+        </view>
+      </view>
+    </view>
+
+    <view class="bottom-spacer"></view>
+    <view class="workbench-bottom-bar">
+      <view class="bottom-save-state">
+        <view class="bottom-save-title">{{savedMessage || '内容仅在保存后同步到线上'}}</view>
+        <view class="bottom-save-tip">未匹配 OCR 条目不会写入正式表格</view>
+      </view>
+      <button
+        class="save-button"
+        loading="{{saving}}"
+        disabled="{{saving || recognizing}}"
+        bindtap="saveDraft"
+      >{{saving ? '保存中…' : '保存草稿'}}</button>
+    </view>
+  </block>
+</view>

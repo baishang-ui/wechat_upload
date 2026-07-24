@@ -33,3 +33,20 @@ test('normalizeApiRecord maps the model response to the editable ten-sample tabl
   assert.equal(record.rows[0].measurements.length, 10)
   assert.deepEqual(record.sampleJudgements.slice(0, 3), ['OK', 'NG', ''])
 })
+
+
+test('normalizeApiRecord preserves server row keys and group titles for template matching', () => {
+  const record = normalizeApiRecord({
+    report_title: '钢丝刷检验记录单',
+    items: [{
+      row_key: 'size-outer',
+      group_title: '产品尺寸',
+      name: '外径',
+      standard: '100±1mm',
+      measurements: ['100.1'],
+    }],
+  })
+
+  assert.equal(record.rows[0].id, 'size-outer')
+  assert.equal(record.rows[0].groupTitle, '产品尺寸')
+})

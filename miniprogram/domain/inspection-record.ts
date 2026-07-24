@@ -15,6 +15,7 @@ export type InspectionRowField = 'item' | 'requirement' | 'specification'
 
 export interface InspectionRow {
   id: string
+  groupTitle?: string
   item: string
   requirement: string
   specification: string
@@ -57,6 +58,8 @@ export interface RawApiRecord {
 }
 
 interface NormalizedRawItem {
+  rowKey: string
+  groupTitle: string
   name: string
   standard: string
   specification: string
@@ -102,6 +105,7 @@ function normalizeJudgements(values: unknown[] = []): Judgement[] {
 
 function createRow(
   id: string,
+  groupTitle: string,
   item: string,
   requirement: string,
   specification: string,
@@ -109,6 +113,7 @@ function createRow(
 ): InspectionRow {
   return {
     id,
+    groupTitle,
     item,
     requirement,
     specification,
@@ -144,7 +149,9 @@ function normalizeItems(value: unknown): NormalizedRawItem[] {
   return value.map((item) => {
     const source = asObject(item)
     return {
-      name: asString(source.name),
+      rowKey: asString(source.row_key),
+      groupTitle: asString(source.group_title),
+      name: asString(source.name || source.project),
       standard: asString(source.standard),
       specification: asString(source.specification),
       measurements: normalizeTenValues(Array.isArray(source.measurements) ? source.measurements : []),
@@ -162,7 +169,8 @@ export function normalizeApiRecord(raw: RawApiRecord): InspectionRecord {
   const rows = items
     .filter((item) => item.name && !item.name.includes('判定'))
     .map((item, index) => createRow(
-      `api-row-${index + 1}`,
+      item.rowKey || `api-row-${index + 1}`,
+      item.groupTitle,
       item.name,
       item.standard,
       item.specification,

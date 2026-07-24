@@ -257,7 +257,7 @@
             >
               <view class="task-item-name">{{taskItem.material_name || taskItem.material_code || '未命名物料'}}</view>
               <view class="task-item-meta">{{taskItem.spec_desc || '无规格'}} · {{taskItem.quantity || 0}} {{taskItem.unit || 'Pcs'}}</view>
-              <view class="task-item-action">选择并拍照</view>
+              <view class="task-item-action">进入检验</view>
             </view>
           </view>
         </view>
@@ -454,6 +454,15 @@
     </view>
   </view>
 </view>
+
+<inspection-workbench-modal
+  wx:if="{{workbenchModalVisible}}"
+  visible="{{workbenchModalVisible}}"
+  task-id="{{workbenchModalTaskId}}"
+  item-id="{{workbenchModalItemId}}"
+  bindclose="closeWorkbenchModal"
+  bindsaved="onWorkbenchSaved"
+/>
 
 <view class="floating-tabs">
   <view class="tab-indicator {{activeTab === 'tasks' ? 'is-tasks' : activeTab === 'history' ? 'is-history' : ''}}">

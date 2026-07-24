@@ -106,6 +106,9 @@ Component({
     taskLoading: false,
     selectedTaskId: 0,
     selectedItemId: 0,
+    workbenchModalVisible: false,
+    workbenchModalTaskId: 0,
+    workbenchModalItemId: 0,
     screen: 'capture',
     imagePath: '',
     imageId: '',
@@ -324,22 +327,26 @@ Component({
     selectTaskItem(event: WechatMiniprogram.TouchEvent) {
       const taskId = Number(event.currentTarget.dataset.taskId)
       const itemId = Number(event.currentTarget.dataset.itemId)
-      const task = this.data.taskItems.find((candidate) => candidate.id === taskId)
-      const item = task?.items?.find((candidate) => candidate.id === itemId)
-      if (!task || !item) return
-      const record = taskItemToInspectionRecord(task, item)
-      const productIndex = PRODUCT_OPTIONS.findIndex(
-        (option) => option.value === record.productType,
-      )
+      if (!taskId || !itemId) return
+      this.openWorkbenchModal(taskId, itemId)
+    },
+    openWorkbenchModal(taskId: number, itemId: number) {
       this.setData({
-        activeTab: 'scan',
-        screen: 'capture',
-        selectedTaskId: taskId,
         selectedItemId: itemId,
-        record,
-        productIndex: Math.max(productIndex, 0),
+        workbenchModalVisible: true,
+        workbenchModalTaskId: taskId,
+        workbenchModalItemId: itemId,
       })
-      wx.showToast({ title: '任务已选择，请拍摄报告', icon: 'none' })
+    },
+    closeWorkbenchModal() {
+      this.setData({
+        workbenchModalVisible: false,
+        workbenchModalTaskId: 0,
+        workbenchModalItemId: 0,
+      })
+    },
+    onWorkbenchSaved() {
+      void this.loadTasks(true)
     },
     syncHistoryRecord(record: StoredInspectionRecord): Promise<StoredInspectionRecord> {
       return syncStoredInspection(record, {

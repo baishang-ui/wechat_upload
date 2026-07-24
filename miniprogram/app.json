@@ -3,6 +3,7 @@
     "pages/login/login",
     "pages/index/index",
     "pages/document-camera/document-camera",
+    "pages/inspection-workbench/inspection-workbench",
     "pages/logs/logs"
   ],
   "window": {

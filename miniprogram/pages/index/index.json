@@ -1,6 +1,7 @@
 {
   "usingComponents": {
-    "navigation-bar": "/components/navigation-bar/navigation-bar"
+    "navigation-bar": "/components/navigation-bar/navigation-bar",
+    "inspection-workbench-modal": "/components/inspection-workbench-modal/inspection-workbench-modal"
   },
   "disableScroll": true
 }

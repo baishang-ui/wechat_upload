@@ -8,8 +8,10 @@ import {
   createStandaloneInspection,
   draftToInspectionRecord,
   inspectionRecordToDraft,
+  getInspectionItemDetail,
   recognizeInspectionFile,
   saveInspectionDraft,
+  uploadInspectionRowImage,
   QualityInspectionDraftPayload,
 } from '../miniprogram/services/quality-inspection-service'
 
@@ -160,6 +162,27 @@ test('database-bound serializers reject invalid dates before a request', async (
     /检验日期格式应为 YYYY-MM-DD/,
   )
   assert.equal(calls.length, 0)
+})
+
+test('getInspectionItemDetail loads the online product context endpoint', async () => {
+  const calls: Array<Record<string, unknown>> = []
+  const request = async <T>(options: Record<string, unknown>): Promise<T> => {
+    calls.push(options)
+    return {
+      task: { id: 12 },
+      item: { id: 34 },
+      master_product: {},
+      customer_product: {},
+    } as T
+  }
+
+  const detail = await getInspectionItemDetail(12, 34, request)
+
+  assert.deepEqual(calls[0], {
+    method: 'GET',
+    path: '/customer-orders/api/purchase-orders/quality-inspections/12/items/34',
+  })
+  assert.equal(detail.item.id, 34)
 })
 
 test('draft save and recognition use shared backend paths', async () => {
@@ -405,6 +428,7 @@ test('synced inspection date updates the cached task card and item draft', () =>
   const {
     applyInspectionDateToTaskItems,
     inspectionRecordToDraft,
+  getInspectionItemDetail,
   } = require('../miniprogram/services/quality-inspection-service') as typeof import('../miniprogram/services/quality-inspection-service')
   const tasks = [
     {
@@ -478,4 +502,32 @@ test('inspection history refresh policy caches normal visits for thirty seconds'
   assert.equal(shouldQueueInspectionHistoryRefresh(true, true, true), false)
   assert.equal(shouldQueueInspectionHistoryRefresh(true, false, false), false)
   assert.equal(shouldQueueInspectionHistoryRefresh(false, true, false), false)
+})
+
+
+test('uploadInspectionRowImage sends the row context with the multipart file', async () => {
+  const calls: Array<Record<string, unknown>> = []
+  const result = await uploadInspectionRowImage(
+    10,
+    11,
+    'appearance',
+    '/tmp/appearance.jpg',
+    async <T>(options: Record<string, unknown>): Promise<T> => {
+      calls.push(options)
+      return {
+        id: 'image-1',
+        url: 'https://example.com/appearance.jpg',
+      } as T
+    },
+  )
+
+  assert.equal(calls[0].path, '/api/miniprogram/quality-inspections/images')
+  assert.equal(calls[0].filePath, '/tmp/appearance.jpg')
+  assert.equal(calls[0].name, 'file')
+  assert.deepEqual(calls[0].formData, {
+    task_id: '10',
+    item_id: '11',
+    row_key: 'appearance',
+  })
+  assert.equal(result.url, 'https://example.com/appearance.jpg')
 })
