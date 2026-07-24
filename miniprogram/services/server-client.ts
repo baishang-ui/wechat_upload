@@ -1,5 +1,5 @@
 import {
-  SERVER_BASE_URL,
+  BUSINESS_SERVER_BASE_URL,
   SERVER_REQUEST_TIMEOUT_MS,
   SERVER_UPLOAD_TIMEOUT_MS,
   SESSION_COOKIE_STORAGE_KEY,
@@ -189,7 +189,7 @@ export async function serverRequest<T>(
   if (cookie) header.Cookie = cookie
   try {
     const response = await client.request({
-      url: `${SERVER_BASE_URL}${options.path}`,
+      url: `${BUSINESS_SERVER_BASE_URL}${options.path}`,
       method: options.method,
       data: options.data,
       header,
@@ -211,7 +211,7 @@ export async function serverUpload<T>(
   if (cookie) header.Cookie = cookie
   try {
     const response = await client.uploadFile({
-      url: `${SERVER_BASE_URL}${options.path}`,
+      url: `${BUSINESS_SERVER_BASE_URL}${options.path}`,
       filePath: options.filePath,
       name: options.name,
       formData: options.formData,

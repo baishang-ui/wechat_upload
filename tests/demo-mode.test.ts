@@ -7,16 +7,22 @@ const assert: typeof strictAssert = strictAssert
 const root = resolve(__dirname, '..')
 const source = (path: string) => readFileSync(resolve(root, path), 'utf8')
 
-test('temporary public demo targets the online service and bypasses login without changing the workspace content', () => {
+test('server config separates business and direct model endpoints', () => {
   const serverConfig = source('miniprogram/config/server.ts')
   const indexPage = source('miniprogram/pages/index/index.ts')
   const indexWxml = source('miniprogram/pages/index/index.wxml')
 
   assert.match(
     serverConfig,
-    /export const SERVER_BASE_URL = 'https:\/\/www\.binictools\.cn:7876'/,
+    /export const BUSINESS_SERVER_BASE_URL = 'http:\/\/localhost:7875'/,
   )
-  assert.match(serverConfig, /export const DEMO_MODE = true/)
+  assert.match(
+    serverConfig,
+    /export const MODEL_API_URL = 'http:\/\/www\.binictools\.cn:8865\/api\/llm\/v1\/chat\/completions'/,
+  )
+  assert.match(serverConfig, /export const MODEL_NAME = 'qwen35'/)
+  assert.match(serverConfig, /export const MODEL_TOKEN_STORAGE_KEY = 'llmApiToken'/)
+  assert.match(serverConfig, /export const DEMO_MODE = (?:true|false)/)
   assert.match(
     indexPage,
     /if \(!DEMO_MODE\) \{\s*getCurrentUser\(\)/,

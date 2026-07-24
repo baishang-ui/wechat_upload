@@ -4,7 +4,7 @@ import strictAssert from 'node:assert/strict'
 const assert: typeof strictAssert = strictAssert
 
 import {
-  SERVER_BASE_URL,
+  BUSINESS_SERVER_BASE_URL,
   SESSION_COOKIE_STORAGE_KEY,
 } from '../miniprogram/config/server'
 import {
@@ -58,11 +58,11 @@ test('serverRequest saves response cookie and carries it on the next request', a
   )
   assert.equal(
     state.requests[0].url,
-    `${SERVER_BASE_URL}/api/miniprogram/auth/login`,
+    `${BUSINESS_SERVER_BASE_URL}/api/miniprogram/auth/login`,
   )
   assert.equal(
     state.requests[1].url,
-    `${SERVER_BASE_URL}/api/miniprogram/auth/me`,
+    `${BUSINESS_SERVER_BASE_URL}/api/miniprogram/auth/me`,
   )
 })
 

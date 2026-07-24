@@ -1,13 +1,18 @@
 import test from 'node:test'
-import { readFileSync } from 'node:fs'
-import { resolve } from 'node:path'
 import strictAssert from 'node:assert/strict'
 
 const assert: typeof strictAssert = strictAssert
 
 import { normalizeApiRecord } from '../miniprogram/domain/inspection-record'
 import {
+  MODEL_API_URL,
+  MODEL_NAME,
+  MODEL_TOKEN_STORAGE_KEY,
+  SERVER_UPLOAD_TIMEOUT_MS,
+} from '../miniprogram/config/server'
+import {
   MAX_IMAGE_BYTES,
+  ModelRecognitionAdapter,
   prepareImageForUpload,
   recognizeInspection,
   submitInspection,
@@ -30,65 +35,110 @@ test('recognizeInspection requires an image path before accessing WeChat APIs', 
 })
 
 
-test('recognizeInspection uploads to the shared backend without direct model credentials', async () => {
+test('recognizeInspection calls the configured model endpoint directly', async () => {
   const imageApi = createImageApi({ '/tmp/report.jpg': 100 })
   const calls: Array<Record<string, unknown>> = []
-  const upload = async <T>(options: Record<string, unknown>): Promise<T> => {
-    calls.push(options)
-    return {
-      record: {
-        report_title: '钢丝刷检验记录单',
-        customer: '客户A',
-        supplier: '供应商A',
-        model_spec: '100x20',
-        inspection_date: '2026-07-22',
-        items: [{ name: '材质', measurements: ['OK'] }],
-        sample_judgements: ['OK'],
-      },
-      raw_content: '{"report_title":"钢丝刷检验记录单"}',
-      confidence: {
-        fields: { customer: 0.95 },
-        items: [{ measurements: [0.55] }],
-        sample_judgements: [0.81],
-      },
-    } as T
+  const storageKeys: string[] = []
+  const modelApi: ModelRecognitionAdapter = {
+    getStorage(key) {
+      storageKeys.push(key)
+      return 'model-secret'
+    },
+    readFileAsBase64: async (filePath) => {
+      assert.equal(filePath, '/tmp/report.jpg')
+      return 'encoded-image'
+    },
+    request: async (options) => {
+      calls.push(options as unknown as Record<string, unknown>)
+      return {
+        statusCode: 200,
+        data: {
+          choices: [{
+            message: {
+              content: JSON.stringify({
+                report_title: '钢丝刷检验记录单',
+                customer: '客户A',
+                supplier: '供应商A',
+                model_spec: '100x20',
+                inspection_date: '2026-07-22',
+                items: [{ name: '材质', measurements: ['OK'] }],
+                sample_judgements: ['OK'],
+              }),
+            },
+          }],
+        },
+      }
+    },
   }
-  const result = await recognizeInspection('/tmp/report.jpg', imageApi, upload)
-  assert.equal(calls[0].path, '/api/miniprogram/quality-inspections/recognize')
-  assert.equal(result.record.customer, '客户A')
-  assert.equal(result.confidence.fields.customer, 0.95)
-  assert.equal(result.confidence.items[0].measurements[0], 0.55)
 
-  const source = readFileSync(
-    resolve('miniprogram/services/inspection-service.ts'),
-    'utf8',
+  const result = await recognizeInspection('/tmp/report.jpg', imageApi, modelApi)
+  const call = calls[0]
+  const payload = call.data as {
+    model: string
+    messages: Array<{ content: Array<{ type: string; image_url?: { url: string } }> }>
+  }
+  assert.deepEqual(storageKeys, [MODEL_TOKEN_STORAGE_KEY])
+  assert.equal(call.url, MODEL_API_URL)
+  assert.equal(call.method, 'POST')
+  assert.equal(call.timeout, SERVER_UPLOAD_TIMEOUT_MS)
+  assert.deepEqual(call.header, {
+    'Content-Type': 'application/json',
+    Authorization: 'Bearer model-secret',
+  })
+  assert.equal(payload.model, MODEL_NAME)
+  assert.equal(
+    payload.messages[0].content[1].image_url?.url,
+    'data:image/jpeg;base64,encoded-image',
   )
-  assert.equal(source.includes('8865'), false)
-  assert.equal(source.includes('TOKEN_STORAGE_KEY'), false)
-  assert.equal(source.includes('Authorization'), false)
-  assert.equal(source.includes('wx.getFileInfo('), false)
-  assert.equal(source.includes('wx.getFileSystemManager().getFileInfo('), true)
+  assert.equal(result.record.customer, '客户A')
+  assert.equal(result.confidence.fields.customer, null)
+  assert.equal(result.confidence.items[0].measurements.length, 10)
 })
 
-
-test('recognizeInspection accepts a legacy response without confidence', async () => {
-  const imageApi = createImageApi({ '/tmp/legacy.jpg': 100 })
-  const upload = async <T>(): Promise<T> => ({
-    record: {
-      report_title: '钢丝刷检验记录单',
-      customer: '客户A',
-      supplier: '供应商A',
-      model_spec: '100x20',
-      inspection_date: '2026-07-22',
-      items: [{ name: '材质', measurements: ['1.0'] }],
-      sample_judgements: ['OK'],
+test('recognizeInspection omits authorization when no model token is configured', async () => {
+  const imageApi = createImageApi({ '/tmp/report.png': 100 })
+  let capturedHeader: Record<string, string> = {}
+  const modelApi: ModelRecognitionAdapter = {
+    getStorage: () => '',
+    readFileAsBase64: async () => 'png-image',
+    request: async (options) => {
+      capturedHeader = options.header
+      return {
+        statusCode: 200,
+        data: {
+          choices: [{ message: { content: '{"report_title":"钢丝刷检验记录单"}' } }],
+        },
+      }
     },
-    raw_content: '{}',
-  } as T)
-  const result = await recognizeInspection('/tmp/legacy.jpg', imageApi, upload)
-  assert.equal(result.confidence.fields.customer, null)
-  assert.equal(result.confidence.items.length, 1)
-  assert.equal(result.confidence.items[0].measurements.length, 10)
+  }
+
+  await recognizeInspection('/tmp/report.png', imageApi, modelApi)
+  assert.deepEqual(capturedHeader, { 'Content-Type': 'application/json' })
+})
+
+test('recognizeInspection maps model HTTP and invalid JSON errors', async () => {
+  const imageApi = createImageApi({ '/tmp/report.jpg': 100 })
+  const failingApi: ModelRecognitionAdapter = {
+    getStorage: () => '',
+    readFileAsBase64: async () => 'image',
+    request: async () => ({ statusCode: 503, data: { detail: '模型维护中' } }),
+  }
+  await assert.rejects(
+    () => recognizeInspection('/tmp/report.jpg', imageApi, failingApi),
+    /模型维护中/,
+  )
+
+  const invalidApi: ModelRecognitionAdapter = {
+    ...failingApi,
+    request: async () => ({
+      statusCode: 200,
+      data: { choices: [{ message: { content: 'not-json' } }] },
+    }),
+  }
+  await assert.rejects(
+    () => recognizeInspection('/tmp/report.jpg', imageApi, invalidApi),
+    /模型返回内容不是有效 JSON/,
+  )
 })
 
 test('prepareImageForUpload keeps an image already below the request limit', async () => {

@@ -1,6 +1,6 @@
 # 智能质检报告微信小程序
 
-面向工业检验报告的微信小程序客户端。小程序通过统一业务后端完成账号认证、图片识别、采购待检任务读取、独立报告创建、质检草稿保存和历史记录同步；客户端负责图片队列、结果校对、本地容错及 JSON 导出。
+面向工业检验报告的微信小程序客户端。小程序通过业务后端完成账号认证、采购待检任务读取、独立报告创建、质检草稿保存和历史记录同步；当前识别功能临时直连视觉模型服务，客户端负责图片队列、结果校对、本地容错及 JSON 导出。
 
 ## 核心能力
 
@@ -8,7 +8,7 @@
 - 拍照或从相册批量添加检验报告，最多 10 个未完成任务。
 - 识别任务按加入顺序逐张处理，识别期间仍可继续添加图片。
 - 上传前自动压缩图片，并限制识别图片不超过 600 KB。
-- 通过业务后端的识别代理处理 JPEG、PNG 图片，客户端不保存模型密钥。
+- 当前临时直接调用可配置的视觉模型接口处理 JPEG、PNG 图片；模型令牌只从微信本地存储读取，不硬编码进仓库。
 - 将 OCR 结果归一化为可编辑的十样本检验表格。
 - 结合模型置信度与确定性格式检查，显示红色“重点核对”和黄色“建议核对”提示。
 - 支持钢丝刷、拉绒片、树脂砂轮、百叶轮、网格砂和金刚石锯片等报告类型。
@@ -56,15 +56,14 @@
 flowchart LR
   U["微信用户"] --> MP["微信小程序"]
   MP --> LS["本地存储与本地图片"]
-  MP --> API["统一业务后端"]
+  MP --> API["业务后端"]
   API --> AUTH["登录与 Session"]
-  API --> OCR["质检识别代理"]
-  OCR --> MODEL["视觉模型服务"]
   API --> QI["采购单与质检接口"]
   QI --> DB["业务数据库"]
+  MP -. "临时直连" .-> MODEL["视觉模型服务"]
 ```
 
-小程序只访问统一业务后端，不直接调用视觉模型网关，也不保存模型 API Key。模型地址、模型名称和模型凭据由后端管理。
+业务接口与大模型识别地址已分开配置。由于线上识别代理尚未提供，当前小程序临时直接调用视觉模型服务；识别代理上线后应恢复由 HTTPS 业务后端代理模型调用，避免长期在小程序侧保存模型访问配置。
 
 ## 技术栈
 
@@ -125,35 +124,30 @@ docs/superpowers/
 npm install
 ```
 
-## 后端配置
+## 服务配置
 
-后端地址位于：
+业务服务和大模型识别配置统一位于：
 
 ```text
 miniprogram/config/server.ts
 ```
 
-本地开发示例：
+当前配置：
 
 ```ts
-export const SERVER_BASE_URL = 'http://localhost:7875'
+export const BUSINESS_SERVER_BASE_URL = 'http://localhost:7875'
+export const MODEL_API_URL = 'http://www.binictools.cn:8865/api/llm/v1/chat/completions'
+export const MODEL_NAME = 'qwen35'
+export const MODEL_TOKEN_STORAGE_KEY = 'llmApiToken'
 ```
 
-生产环境示例：
+- `BUSINESS_SERVER_BASE_URL` 用于登录、待检任务、质检记录、草稿和普通图片上传。
+- `MODEL_API_URL` 与 `MODEL_NAME` 只用于当前阶段的直接模型识别。
+- 如果模型服务需要 Bearer Token，可将令牌写入微信本地存储的 `llmApiToken` 键；不要把真实令牌硬编码进仓库。
 
-```ts
-export const SERVER_BASE_URL = 'https://www.binictools.cn:7876'
-```
+同一文件还定义请求超时、上传/识别超时、Session Cookie 存储键和演示模式。
 
-同一文件还定义：
-
-```ts
-export const SERVER_REQUEST_TIMEOUT_MS = 30_000
-export const SERVER_UPLOAD_TIMEOUT_MS = 120_000
-export const SESSION_COOKIE_STORAGE_KEY = 'smartSalesSession:v1'
-```
-
-> `localhost` 只适用于微信开发者工具模拟器访问本机服务。真机中的 `localhost` 指向手机自身，真机联调应改为手机可访问的局域网地址或 HTTPS 域名。
+> `localhost` 只适用于微信开发者工具模拟器访问本机服务。真机中的 `localhost` 指向手机自身，真机联调应将业务地址改为手机可访问的局域网地址或 HTTPS 域名。当前模型地址也是 HTTP；仅关闭开发者工具域名校验不能保证真机预览可用，真机需要合法 HTTPS 模型地址或后续上线的 HTTPS 识别代理。
 
 ## 在微信开发者工具中运行
 
@@ -212,7 +206,6 @@ export const SESSION_COOKIE_STORAGE_KEY = 'smartSalesSession:v1'
 | `POST /api/miniprogram/auth/login` | 账号登录并建立 Session |
 | `GET /api/miniprogram/auth/me` | 验证 Session 并读取当前用户 |
 | `POST /api/miniprogram/auth/logout` | 退出登录 |
-| `POST /api/miniprogram/quality-inspections/recognize` | 上传单张报告图片并返回识别记录、原始内容和置信度 |
 | `GET /customer-orders/api/purchase-orders/quality-inspections` | 分页读取采购待检任务 |
 | `GET /customer-orders/api/purchase-orders/quality-inspections/{taskId}` | 读取任务及明细详情 |
 | `POST /customer-orders/api/quality-inspections/standalone` | 幂等创建独立质检任务和明细 |
@@ -362,7 +355,7 @@ Session 已失效或未登录。客户端会清除 `smartSalesSession:v1`，重�
 
 ### 请求超时或网络连接失败
 
-确认后端进程正在运行，`SERVER_BASE_URL` 可访问，防火墙允许对应端口，并检查普通请求 30 秒、上传请求 120 秒的超时设置。
+确认业务后端和模型服务正在运行，`BUSINESS_SERVER_BASE_URL` 与 `MODEL_API_URL` 均可访问，防火墙允许对应端口，并检查普通请求 30 秒、上传与识别请求 120 秒的超时设置。
 
 ### 模拟器正常，真机无法访问 `localhost`
 
@@ -378,10 +371,11 @@ Session 已失效或未登录。客户端会清除 `smartSalesSession:v1`，重�
 
 ## 正式发布检查
 
-- 将 `SERVER_BASE_URL` 设置为正式 HTTPS 地址。
-- 在微信公众平台配置 request 和 uploadFile 合法域名。
+- 将 `BUSINESS_SERVER_BASE_URL` 设置为正式 HTTPS 地址。
+- 将 `MODEL_API_URL` 改为合法 HTTPS 地址，或切换至后端识别代理后删除小程序侧模型配置。
+- 在微信公众平台按实际请求类型配置 request 和 uploadFile 合法域名。
 - 确认证书链、TLS 版本和域名备案符合微信要求。
-- 模型地址、模型 API Key、数据库凭据只保存在业务后端。
+- 模型令牌不得硬编码进仓库；识别代理上线后应将模型地址和凭据全部迁回业务后端。
 - 验证账号权限、Session 生命周期和退出登录行为。
 - 使用真机验证拍照、相册、图片压缩、上传、文件分享和安全区布局。
 - 分别验证采购任务报告、独立报告、失败重试和服务器历史合并。
