@@ -40,7 +40,7 @@ export interface RecognizeInspectionResult {
 function getDefaultImageApi(): ImageCompressionApi {
   return {
     getFileInfo: (options) => {
-      wx.getFileInfo({
+      wx.getFileSystemManager().getFileInfo({
         filePath: options.filePath,
         success: (result) => options.success({ size: result.size }),
         fail: () => options.fail(),

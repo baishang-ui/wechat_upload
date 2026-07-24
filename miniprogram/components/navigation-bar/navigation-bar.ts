@@ -63,21 +63,39 @@ Component({
   lifetimes: {
     attached() {
       const rect = wx.getMenuButtonBoundingClientRect()
-      wx.getSystemInfo({
-        success: (res) => {
-          const isAndroid = res.platform === 'android'
-          const safeAreaTop = res.safeArea?.top || res.statusBarHeight || 0
-          const adjustedSafeAreaTop = safeAreaTop + SAFE_AREA_TOP_EXTRA
-          const navigationBarHeight = NAVIGATION_CONTENT_HEIGHT + adjustedSafeAreaTop
-          this.setData({
-            ios: !isAndroid,
-            innerPaddingRight: `padding-right: ${res.windowWidth - rect.left}px`,
-            leftWidth: `width: ${res.windowWidth - rect.left}px`,
-            safeAreaTop: `height: calc(var(--height) + ${adjustedSafeAreaTop}px); padding-top: ${adjustedSafeAreaTop}px`
-          })
-          this.triggerEvent('heightchange', { height: navigationBarHeight })
-        }
-      })
+
+      try {
+        const windowInfo = wx.getWindowInfo()
+        const deviceInfo = wx.getDeviceInfo()
+        const isAndroid = deviceInfo.platform === 'android'
+        const safeAreaTop = windowInfo.safeArea?.top || windowInfo.statusBarHeight || 0
+        const adjustedSafeAreaTop = safeAreaTop + SAFE_AREA_TOP_EXTRA
+        const navigationBarHeight = NAVIGATION_CONTENT_HEIGHT + adjustedSafeAreaTop
+        const sideWidth = windowInfo.windowWidth - rect.left
+
+        this.setData({
+          ios: !isAndroid,
+          innerPaddingRight: `padding-right: ${sideWidth}px`,
+          leftWidth: `width: ${sideWidth}px`,
+          safeAreaTop: `height: calc(var(--height) + ${adjustedSafeAreaTop}px); padding-top: ${adjustedSafeAreaTop}px`
+        })
+        this.triggerEvent('heightchange', { height: navigationBarHeight })
+      } catch {
+        const inferredSafeAreaTop = Math.max(
+          0,
+          rect.top - (NAVIGATION_CONTENT_HEIGHT - rect.height) / 2
+        )
+        const adjustedSafeAreaTop = inferredSafeAreaTop + SAFE_AREA_TOP_EXTRA
+        const navigationBarHeight = NAVIGATION_CONTENT_HEIGHT + adjustedSafeAreaTop
+        const sideWidth = rect.width + 16
+
+        this.setData({
+          innerPaddingRight: `padding-right: ${sideWidth}px`,
+          leftWidth: `width: ${sideWidth}px`,
+          safeAreaTop: `height: calc(var(--height) + ${adjustedSafeAreaTop}px); padding-top: ${adjustedSafeAreaTop}px`
+        })
+        this.triggerEvent('heightchange', { height: navigationBarHeight })
+      }
     },
   },
   /**

@@ -235,6 +235,9 @@ test('glass navigation remains fixed with spacing derived from the unified heigh
   assert.match(skeletonWxml, /height: calc\(var\(--height\) \+ 55px\); padding-top: 55px;/)
   assert.match(skeletonWxss, /\.bar--weui-navigation-bar\s*\{\s*--height:\s*36px;[^}]*position:\s*fixed;/)
 
+  assert.match(navigationTs, /const windowInfo = wx\.getWindowInfo\(\)/)
+  assert.match(navigationTs, /const deviceInfo = wx\.getDeviceInfo\(\)/)
+  assert.doesNotMatch(navigationTs, /wx\.getSystemInfo(?:Sync)?\(/)
   assert.match(navigationTs, /triggerEvent\('heightchange', \{ height: navigationBarHeight \}\)/)
   assert.match(indexWxml, /<navigation-bar[^>]*bindheightchange="onNavigationHeightChange"/)
   assert.match(indexWxml, /class="page-shell"[^>]*padding-top: calc\(\{\{navigationBarHeight\}\}px \+ 32rpx\)/)

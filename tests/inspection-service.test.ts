@@ -66,6 +66,8 @@ test('recognizeInspection uploads to the shared backend without direct model cre
   assert.equal(source.includes('8865'), false)
   assert.equal(source.includes('TOKEN_STORAGE_KEY'), false)
   assert.equal(source.includes('Authorization'), false)
+  assert.equal(source.includes('wx.getFileInfo('), false)
+  assert.equal(source.includes('wx.getFileSystemManager().getFileInfo('), true)
 })
 
 

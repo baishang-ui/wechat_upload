@@ -6,3 +6,20 @@ interface IAppOption {
   }
   userInfoReadyCallback?: WechatMiniprogram.GetUserInfoSuccessCallback,
 }
+
+declare namespace WechatMiniprogram {
+  interface WindowInfo {
+    windowWidth: number
+    statusBarHeight: number
+    safeArea?: SafeArea
+  }
+
+  interface DeviceInfo {
+    platform: string
+  }
+
+  interface Wx {
+    getWindowInfo(): WindowInfo
+    getDeviceInfo(): DeviceInfo
+  }
+}
