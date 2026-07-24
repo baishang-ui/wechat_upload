@@ -53,8 +53,8 @@
             <view class="section-title">质检单识别</view>
             <view class="section-description">识别结果将回填尺寸和安全性能；其它项目仍可手动核验。</view>
             <view class="recognition-actions">
-              <button class="recognition-button recognition-button--primary" loading="{{recognizing}}" disabled="{{recognizing}}" bindtap="takeQualitySheetPhoto">{{recognizing ? '正在识别…' : '拍摄质检单并识别'}}</button>
-              <button class="recognition-button" disabled="{{recognizing}}" bindtap="chooseQualitySheetPhoto">从相册选择</button>
+              <view class="recognition-button recognition-button--primary {{recognizing ? 'is-disabled' : ''}}" aria-disabled="{{recognizing}}" role="button" bindtap="takeQualitySheetPhoto">{{recognizing ? '正在识别…' : '拍摄质检单并识别'}}</view>
+              <view class="recognition-button {{recognizing ? 'is-disabled' : ''}}" aria-disabled="{{recognizing}}" role="button" bindtap="chooseQualitySheetPhoto">从相册选择</view>
             </view>
             <view wx:if="{{recognitionError}}" class="inline-error">{{recognitionError}}</view>
             <view wx:if="{{reportPreviewPaths.length}}" class="report-preview-list">

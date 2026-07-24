@@ -232,7 +232,7 @@
 .workbench-source-title { color: $ui-text-primary; font-size: 24rpx; font-weight: 650; }
 .saved-badge { flex: none; color: #27714d; background: #e5f7eb; }
 
-.recognition-actions { margin-top: 20rpx; display: grid; grid-template-columns: minmax(0, 1.45fr) minmax(0, 1fr); gap: 14rpx; }
+.recognition-actions { margin-top: 20rpx; display: flex; align-items: stretch; gap: 14rpx; }
 .recognition-button,
 .page-button,
 .save-button {
@@ -253,7 +253,9 @@
   white-space: nowrap;
   border-radius: 18rpx;
 }
-.recognition-button { color: #36506f; border: 1rpx solid #d9e4f2; background: #f4f8fd; }
+.recognition-button { width: auto; min-width: 0; flex: 1; color: #36506f; border: 1rpx solid #d9e4f2; background: #f4f8fd; }
+.recognition-button--primary { flex: 1.45; }
+.recognition-button.is-disabled { opacity: .58; }
 .recognition-button--primary,
 .save-button { color: #fff; border: 0; background: linear-gradient(135deg, #367cf1, #5799fa); box-shadow: 0 8rpx 18rpx rgba(49, 113, 222, .2); }
 .inline-error { margin-top: 16rpx; color: $ui-danger; font-size: 23rpx; }
@@ -353,7 +355,8 @@
   .recognition-card,
   .overview-tip-card,
   .unmatched-item { padding: 22rpx; }
-  .recognition-actions { grid-template-columns: 1fr; gap: 12rpx; }
+  .recognition-actions { flex-direction: column; gap: 12rpx; }
+  .recognition-button { width: 100%; flex: none; }
   .measurement-grid,
   .field-grid { grid-template-columns: 1fr; }
   .workbench-photo-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
