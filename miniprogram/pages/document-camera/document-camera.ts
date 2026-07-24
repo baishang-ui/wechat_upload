@@ -1,75 +1,40 @@
 import {
+  AutoCaptureSnapshot,
+  createAutoCaptureSnapshot,
+  createDocumentTrackingSnapshot,
   detectDocumentFrameFromRgba,
+  DocumentCaptureMode,
   DocumentFrame,
   DocumentFrameState,
-  getDocumentFrameState,
-  normalizedFrameToImageCrop,
+  DocumentTrackingSnapshot,
+  updateAutoCapture,
+  updateDocumentTracking,
 } from '../../domain/document-framing'
-
-interface FrameBox {
-  left: number
-  top: number
-  width: number
-  height: number
-}
+import { getPhotoOrientationPlan } from '../../domain/photo-orientation'
 
 interface ConfirmedPhotoPayload {
   tempFilePath?: string
 }
 
-const DETECTION_INTERVAL_MS = 420
-const MAX_CROP_OUTPUT_DIMENSION = 1800
-const DEFAULT_FRAME_BOX: FrameBox = {
-  left: 10,
-  top: 17,
-  width: 80,
-  height: 66,
-}
-
-let cameraContext: WechatMiniprogram.CameraContext | null = null
-let cameraFrameListener: WechatMiniprogram.CameraFrameListener | null = null
-let latestDocumentFrame: DocumentFrame | null = null
-let detectionHistory: Array<DocumentFrame | null> = []
-let lastDetectionAt = 0
-let detectionRunning = false
-let captureRunning = false
-
-function resetDetection(): void {
-  latestDocumentFrame = null
-  detectionHistory = []
-  lastDetectionAt = 0
-  detectionRunning = false
-}
-
-function stopFrameListener(): void {
-  cameraFrameListener?.stop()
-  cameraFrameListener = null
-  detectionRunning = false
-}
-
-function frameBoxFromDocument(frame: DocumentFrame | null): FrameBox {
-  if (!frame) return DEFAULT_FRAME_BOX
-  const points = [frame.topLeft, frame.topRight, frame.bottomRight, frame.bottomLeft]
-  const xValues = points.map((point) => point.x)
-  const yValues = points.map((point) => point.y)
-  const left = Math.min(...xValues)
-  const top = Math.min(...yValues)
-  const right = Math.max(...xValues)
-  const bottom = Math.max(...yValues)
-  return {
-    left: Number((left * 100).toFixed(2)),
-    top: Number((top * 100).toFixed(2)),
-    width: Number(((right - left) * 100).toFixed(2)),
-    height: Number(((bottom - top) * 100).toFixed(2)),
+interface CaptureModeEvent {
+  currentTarget: {
+    dataset: {
+      mode?: DocumentCaptureMode
+    }
   }
 }
 
-function frameMessage(state: DocumentFrameState, available: boolean): string {
-  if (!available) return '当前设备不支持实时边缘检测，可直接拍摄'
-  if (state === 'ready') return '已识别文档边缘，可拍摄'
-  if (state === 'aligning') return '正在定位单据边缘，请保持稳定'
-  return '请将检验报告完整放入取景框'
-}
+const SEARCH_DETECTION_INTERVAL_MS = 320
+const TRACKING_DETECTION_INTERVAL_MS = 180
+const PHOTO_ORIENTATION_CANVAS_ID = 'photo-orientation-canvas'
+
+let cameraContext: WechatMiniprogram.CameraContext | null = null
+let cameraFrameListener: WechatMiniprogram.CameraFrameListener | null = null
+let trackingSnapshot: DocumentTrackingSnapshot = createDocumentTrackingSnapshot()
+let autoCaptureSnapshot: AutoCaptureSnapshot = createAutoCaptureSnapshot()
+let lastDetectionAt = 0
+let detectionRunning = false
+let captureRunning = false
 
 function getImageInfo(source: string): Promise<WechatMiniprogram.GetImageInfoSuccessCallbackResult> {
   return new Promise((resolve, reject) => {
@@ -81,26 +46,94 @@ function getImageInfo(source: string): Promise<WechatMiniprogram.GetImageInfoSuc
   })
 }
 
+function cancelAutoCapture(): void {
+  autoCaptureSnapshot = createAutoCaptureSnapshot()
+}
+
+function resetDetection(): void {
+  trackingSnapshot = createDocumentTrackingSnapshot()
+  cancelAutoCapture()
+  lastDetectionAt = 0
+  detectionRunning = false
+}
+
+function stopFrameListener(): void {
+  cameraFrameListener?.stop()
+  cameraFrameListener = null
+  detectionRunning = false
+}
+
+function frameStateFromTracking(snapshot: DocumentTrackingSnapshot): DocumentFrameState {
+  if (snapshot.phase === 'ready') return 'ready'
+  if (snapshot.phase === 'tracking') return 'aligning'
+  return 'searching'
+}
+
+function frameMessage(
+  snapshot: DocumentTrackingSnapshot,
+  available: boolean,
+  mode: DocumentCaptureMode,
+  capture: AutoCaptureSnapshot,
+): string {
+  if (!available) return '当前设备不支持自动检测，请使用手动拍摄'
+  if (snapshot.held) return '画面短暂受遮挡，请保持手机和报告稳定'
+  if (capture.status === 'countdown') return `${capture.countdown} 秒后自动拍摄，移动报告可取消`
+  if (snapshot.phase === 'ready') {
+    return mode === 'auto' ? '画面已稳定，正在准备自动拍摄' : '画面已稳定，可手动拍摄'
+  }
+  if (snapshot.phase === 'tracking') return '正在判断画面稳定性，请保持手机平稳'
+  return '请将检验报告完整放入固定取景框'
+}
+
 Component({
   data: {
     frameState: 'searching' as DocumentFrameState,
-    frameMessage: '请将检验报告完整放入取景框',
-    frameBox: DEFAULT_FRAME_BOX,
+    frameMessage: '请将检验报告完整放入固定取景框',
     cameraAvailable: true,
+    trackingAvailable: true,
     cameraError: '',
     previewPath: '',
     previewMessage: '',
-    cropCanvasWidth: 1,
-    cropCanvasHeight: 1,
     captureProcessing: false,
+    captureMode: 'auto' as DocumentCaptureMode,
+    pressedCaptureMode: '' as DocumentCaptureMode | '',
+    autoCaptureStatus: 'idle',
+    countdown: 0,
+    shutterProgress: 0,
+    trackingHeld: false,
+    cameraViewportWidth: 1,
+    cameraViewportHeight: 1,
+    cameraTopInset: 24,
+    cameraGuidanceTop: 102,
+    cameraErrorTop: 144,
+    orientationCanvasWidth: 1,
+    orientationCanvasHeight: 1,
   },
   lifetimes: {
     ready() {
+      const systemInfo = wx.getSystemInfoSync()
+      const menuButtonRect = wx.getMenuButtonBoundingClientRect()
+      const cameraViewportWidth = Math.max(1, systemInfo.windowWidth)
+      const cameraViewportHeight = Math.round(cameraViewportWidth * 4 / 3)
+      const cameraTopInset = Math.max(
+        20,
+        systemInfo.statusBarHeight || 0,
+        menuButtonRect.top || 0,
+      )
+      this.setData({
+        cameraViewportWidth,
+        cameraViewportHeight,
+        cameraTopInset,
+        cameraGuidanceTop: cameraTopInset + 78,
+        cameraErrorTop: cameraTopInset + 120,
+      })
       cameraContext = wx.createCameraContext()
     },
     detached() {
       stopFrameListener()
+      cancelAutoCapture()
       cameraContext = null
+      captureRunning = false
       resetDetection()
     },
   },
@@ -110,11 +143,17 @@ Component({
     },
     hide() {
       stopFrameListener()
+      cancelAutoCapture()
+      this.setData({ autoCaptureStatus: 'idle', countdown: 0 })
     },
   },
   methods: {
     onCameraReady() {
-      this.setData({ cameraAvailable: true, cameraError: '' })
+      this.setData({
+        cameraAvailable: true,
+        trackingAvailable: wx.canIUse('CameraContext.onCameraFrame'),
+        cameraError: '',
+      })
       this.startFrameDetection()
     },
     onCameraError(event: WechatMiniprogram.CustomEvent) {
@@ -123,10 +162,14 @@ Component({
       const detail = event.detail as { errMsg?: string }
       this.setData({
         cameraAvailable: false,
+        trackingAvailable: false,
         cameraError: detail?.errMsg || '无法打开相机，请确认已授权相机权限',
         frameState: 'searching',
-        frameMessage: frameMessage('searching', false),
-        frameBox: DEFAULT_FRAME_BOX,
+        frameMessage: frameMessage(trackingSnapshot, false, 'manual', autoCaptureSnapshot),
+        captureMode: 'manual',
+        autoCaptureStatus: 'idle',
+        countdown: 0,
+        shutterProgress: 0,
       })
     },
     startFrameDetection() {
@@ -137,8 +180,11 @@ Component({
         || !wx.canIUse('CameraContext.onCameraFrame')
       ) {
         if (!wx.canIUse('CameraContext.onCameraFrame')) {
+          cancelAutoCapture()
           this.setData({
-            frameMessage: frameMessage('searching', false),
+            captureMode: 'manual',
+            trackingAvailable: false,
+            frameMessage: frameMessage(trackingSnapshot, false, 'manual', autoCaptureSnapshot),
           })
         }
         return
@@ -146,7 +192,10 @@ Component({
 
       cameraFrameListener = cameraContext.onCameraFrame((cameraFrame) => {
         const now = Date.now()
-        if (detectionRunning || now - lastDetectionAt < DETECTION_INTERVAL_MS) return
+        const interval = trackingSnapshot.phase === 'searching'
+          ? SEARCH_DETECTION_INTERVAL_MS
+          : TRACKING_DETECTION_INTERVAL_MS
+        if (detectionRunning || now - lastDetectionAt < interval) return
         lastDetectionAt = now
         detectionRunning = true
         try {
@@ -155,22 +204,9 @@ Component({
             cameraFrame.width,
             cameraFrame.height,
           )
-          latestDocumentFrame = detected
-          detectionHistory = [...detectionHistory.slice(-2), detected]
-          const frameState = getDocumentFrameState(detectionHistory)
-          this.setData({
-            frameState,
-            frameMessage: frameMessage(frameState, true),
-            frameBox: frameBoxFromDocument(detected),
-          })
+          this.applyDetection(detected, now)
         } catch {
-          latestDocumentFrame = null
-          detectionHistory = [...detectionHistory.slice(-2), null]
-          this.setData({
-            frameState: 'searching',
-            frameMessage: frameMessage('searching', true),
-            frameBox: DEFAULT_FRAME_BOX,
-          })
+          this.applyDetection(null, now)
         } finally {
           detectionRunning = false
         }
@@ -178,21 +214,89 @@ Component({
       cameraFrameListener.start({
         fail: () => {
           stopFrameListener()
+          cancelAutoCapture()
           this.setData({
-            frameMessage: frameMessage('searching', false),
+            captureMode: 'manual',
+            trackingAvailable: false,
+            frameMessage: frameMessage(trackingSnapshot, false, 'manual', autoCaptureSnapshot),
           })
         },
       })
     },
+    applyDetection(detected: DocumentFrame | null, now: number) {
+      trackingSnapshot = updateDocumentTracking(trackingSnapshot, detected, now)
+      autoCaptureSnapshot = updateAutoCapture(autoCaptureSnapshot, {
+        mode: this.data.captureMode,
+        trackingPhase: trackingSnapshot.phase,
+        now,
+        blocked: captureRunning || !this.data.cameraAvailable || !this.data.trackingAvailable,
+      })
+      const elapsed = autoCaptureSnapshot.startedAt === null
+        ? 0
+        : Math.max(0, now - autoCaptureSnapshot.startedAt)
+      const shutterProgress = autoCaptureSnapshot.status === 'countdown'
+        ? Math.max(0, 100 - elapsed / 10)
+        : trackingSnapshot.stableProgress * 100
+      const shouldCapture = autoCaptureSnapshot.shouldCapture
+      this.setData({
+        frameState: frameStateFromTracking(trackingSnapshot),
+        frameMessage: frameMessage(
+          trackingSnapshot,
+          this.data.trackingAvailable,
+          this.data.captureMode,
+          autoCaptureSnapshot,
+        ),
+        autoCaptureStatus: autoCaptureSnapshot.status,
+        countdown: autoCaptureSnapshot.countdown,
+        shutterProgress: Number(shutterProgress.toFixed(1)),
+        trackingHeld: trackingSnapshot.held,
+      }, () => {
+        if (shouldCapture) this.capturePhoto()
+      })
+    },
+    onCaptureModePressStart(event: CaptureModeEvent) {
+      const mode = event.currentTarget.dataset.mode
+      this.setData({ pressedCaptureMode: mode === this.data.captureMode ? mode : '' })
+    },
+    onCaptureModePressEnd() {
+      this.setData({ pressedCaptureMode: '' })
+    },
+    switchCaptureMode(event: CaptureModeEvent) {
+      const mode = event.currentTarget.dataset.mode
+      if (mode !== 'auto' && mode !== 'manual') return
+      if (mode === 'auto' && !this.data.trackingAvailable) {
+        wx.showToast({ title: '当前设备不支持自动拍摄', icon: 'none' })
+        return
+      }
+      cancelAutoCapture()
+      this.setData({
+        captureMode: mode,
+        pressedCaptureMode: '',
+        autoCaptureStatus: 'idle',
+        countdown: 0,
+        shutterProgress: trackingSnapshot.stableProgress * 100,
+        frameMessage: frameMessage(
+          trackingSnapshot,
+          this.data.trackingAvailable,
+          mode,
+          autoCaptureSnapshot,
+        ),
+      })
+    },
     capturePhoto() {
-      if (captureRunning) return
+      if (captureRunning || this.data.captureProcessing) return
       if (!cameraContext) {
         wx.showToast({ title: '相机正在准备，请稍后重试', icon: 'none' })
         return
       }
       captureRunning = true
+      cancelAutoCapture()
       stopFrameListener()
-      this.setData({ captureProcessing: true })
+      this.setData({
+        captureProcessing: true,
+        autoCaptureStatus: 'idle',
+        countdown: 0,
+      })
       cameraContext.takePhoto({
         quality: 'high',
         success: ({ tempImagePath }) => {
@@ -208,20 +312,15 @@ Component({
     },
     async preparePreview(originalPath: string) {
       let previewPath = originalPath
-      let previewMessage = '请确认报告内容完整清晰'
-      const stableDocumentFrame = this.data.frameState === 'ready' ? latestDocumentFrame : null
-
-      if (stableDocumentFrame) {
-        try {
-          previewPath = await this.cropDocumentPhoto(originalPath, stableDocumentFrame)
-          previewMessage = '已按识别到的文档边缘自动裁切'
-        } catch {
-          previewMessage = '自动裁切未完成，已保留原始照片'
+      let previewMessage = '已保留相机高清原图，请确认报告内容完整清晰'
+      try {
+        previewPath = await this.normalizePhotoOrientation(originalPath)
+        if (previewPath !== originalPath) {
+          previewMessage = '照片方向已自动转正，并保持原始高清尺寸'
         }
-      } else if (latestDocumentFrame) {
-        previewMessage = '文档边缘尚未稳定，已保留原始照片'
+      } catch {
+        previewMessage = '方向校正未完成，已保留相机高清原图'
       }
-
       this.setData({
         previewPath,
         previewMessage,
@@ -229,45 +328,36 @@ Component({
       })
       captureRunning = false
     },
-    async cropDocumentPhoto(originalPath: string, frame: DocumentFrame): Promise<string> {
+    async normalizePhotoOrientation(originalPath: string): Promise<string> {
       const image = await getImageInfo(originalPath)
-      const crop = normalizedFrameToImageCrop(frame, image.width, image.height)
-      const scale = Math.min(1, MAX_CROP_OUTPUT_DIMENSION / Math.max(crop.width, crop.height))
-      const destinationWidth = Math.max(1, Math.round(crop.width * scale))
-      const destinationHeight = Math.max(1, Math.round(crop.height * scale))
+      const plan = getPhotoOrientationPlan(image.orientation, image.width, image.height)
+      if (!plan.requiresNormalization) return originalPath
 
       await new Promise<void>((resolve) => {
         this.setData({
-          cropCanvasWidth: destinationWidth,
-          cropCanvasHeight: destinationHeight,
+          orientationCanvasWidth: plan.outputWidth,
+          orientationCanvasHeight: plan.outputHeight,
         }, resolve)
       })
 
       return new Promise((resolve, reject) => {
-        const context = wx.createCanvasContext('document-crop-canvas', this)
-        context.clearRect(0, 0, destinationWidth, destinationHeight)
-        context.drawImage(
-          originalPath,
-          crop.x,
-          crop.y,
-          crop.width,
-          crop.height,
-          0,
-          0,
-          destinationWidth,
-          destinationHeight,
-        )
+        const context = wx.createCanvasContext(PHOTO_ORIENTATION_CANVAS_ID, this)
+        context.clearRect(0, 0, plan.outputWidth, plan.outputHeight)
+        context.save()
+        context.transform(...plan.matrix)
+        context.drawImage(originalPath, 0, 0, image.width, image.height)
+        context.restore()
         context.draw(false, () => {
           wx.canvasToTempFilePath({
-            canvasId: 'document-crop-canvas',
+            canvasId: PHOTO_ORIENTATION_CANVAS_ID,
             x: 0,
             y: 0,
-            width: destinationWidth,
-            height: destinationHeight,
-            destWidth: destinationWidth,
-            destHeight: destinationHeight,
+            width: plan.outputWidth,
+            height: plan.outputHeight,
+            destWidth: plan.outputWidth,
+            destHeight: plan.outputHeight,
             fileType: 'jpg',
-            quality: 0.92,
+            quality: 1,
             success: ({ tempFilePath }) => resolve(tempFilePath),
             fail: reject,
           }, this)
@@ -281,8 +371,11 @@ Component({
         previewPath: '',
         previewMessage: '',
         frameState: 'searching',
-        frameMessage: frameMessage('searching', this.data.cameraAvailable),
-        frameBox: DEFAULT_FRAME_BOX,
+        frameMessage: frameMessage(trackingSnapshot, this.data.trackingAvailable, this.data.captureMode, autoCaptureSnapshot),
+        autoCaptureStatus: 'idle',
+        countdown: 0,
+        shutterProgress: 0,
+        trackingHeld: false,
       }, () => this.startFrameDetection())
     },
     usePhoto() {
@@ -299,6 +392,7 @@ Component({
       wx.navigateBack()
     },
     closeCamera() {
+      cancelAutoCapture()
       wx.navigateBack()
     },
   },

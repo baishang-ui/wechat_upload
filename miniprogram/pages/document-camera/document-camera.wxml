@@ -1,59 +1,118 @@
 <view class="document-camera-page">
-  <camera
-    class="document-camera-preview"
-    device-position="back"
-    flash="off"
-    frame-size="small"
-    bindinitdone="onCameraReady"
-    binderror="onCameraError"
-    hidden="{{previewPath}}"
-  ></camera>
-
   <canvas
-    class="document-crop-canvas"
-    canvas-id="document-crop-canvas"
-    width="{{cropCanvasWidth}}"
-    height="{{cropCanvasHeight}}"
+    class="photo-orientation-canvas"
+    canvas-id="photo-orientation-canvas"
+    width="{{orientationCanvasWidth}}"
+    height="{{orientationCanvasHeight}}"
   ></canvas>
+  <view
+    class="camera-viewport"
+    style="width: {{cameraViewportWidth}}px; height: {{cameraViewportHeight}}px;"
+    hidden="{{previewPath}}"
+  >
+    <camera
+      class="document-camera-preview"
+      device-position="back"
+      flash="off"
+      frame-size="small"
+      bindinitdone="onCameraReady"
+      binderror="onCameraError"
+    ></camera>
+
+    <view class="document-fixed-guide document-fixed-guide--{{frameState}}">
+      <view class="document-fixed-guide-corner document-fixed-guide-corner--top-left"></view>
+      <view class="document-fixed-guide-corner document-fixed-guide-corner--top-right"></view>
+      <view class="document-fixed-guide-corner document-fixed-guide-corner--bottom-right"></view>
+      <view class="document-fixed-guide-corner document-fixed-guide-corner--bottom-left"></view>
+    </view>
+  </view>
 
   <block wx:if="{{!previewPath}}">
-    <view class="camera-mask camera-mask-top"></view>
-    <view class="camera-mask camera-mask-bottom"></view>
-    <view class="camera-mask camera-mask-left"></view>
-    <view class="camera-mask camera-mask-right"></view>
+    <view class="camera-top-safe-area" style="height: {{cameraTopInset}}px;"></view>
+    <cover-view class="camera-topbar" style="top: {{cameraTopInset}}px;">
+      <cover-view
+        class="camera-close"
+        hover-class="camera-close--pressed"
+        hover-start-time="0"
+        hover-stay-time="80"
+        bindtap="closeCamera"
+      >关闭</cover-view>
+      <cover-view class="camera-title">拍摄检验报告</cover-view>
+      <cover-view class="camera-topbar-placeholder"></cover-view>
+    </cover-view>
 
     <view
-      class="document-frame document-frame--{{frameState}}"
-      style="left: {{frameBox.left}}%; top: {{frameBox.top}}%; width: {{frameBox.width}}%; height: {{frameBox.height}}%;"
+      class="camera-guidance camera-guidance--{{frameState}} {{trackingHeld ? 'camera-guidance--held' : ''}}"
+      style="top: {{cameraGuidanceTop}}px;"
     >
-      <view class="document-frame-corner document-frame-corner--tl"></view>
-      <view class="document-frame-corner document-frame-corner--tr"></view>
-      <view class="document-frame-corner document-frame-corner--br"></view>
-      <view class="document-frame-corner document-frame-corner--bl"></view>
-    </view>
-
-    <view class="camera-topbar">
-      <button class="camera-close" bindtap="closeCamera">关闭</button>
-      <view class="camera-title">拍摄检验报告</view>
-      <view class="camera-topbar-placeholder"></view>
-    </view>
-
-    <view class="camera-guidance">
       <view class="camera-guidance-dot camera-guidance-dot--{{frameState}}"></view>
       <text>{{frameMessage}}</text>
     </view>
-    <view wx:if="{{cameraError}}" class="camera-error">{{cameraError}}</view>
+    <view wx:if="{{cameraError}}" class="camera-error" style="top: {{cameraErrorTop}}px;">{{cameraError}}</view>
 
     <view class="camera-controls">
-      <text class="camera-tip">保持手机平稳，完整拍入报告四角</text>
-      <button class="camera-shutter" bindtap="capturePhoto" loading="{{captureProcessing}}" aria-label="拍摄报告">
-        <view class="camera-shutter-inner"></view>
-      </button>
-      <text class="camera-manual-label">手动拍摄</text>
+      <view class="camera-mode-switch" role="radiogroup" aria-label="拍摄模式">
+        <view
+          class="camera-mode-indicator camera-mode-indicator--{{captureMode}} {{pressedCaptureMode === captureMode ? 'camera-mode-indicator--pressing' : ''}}"
+          aria-hidden="true"
+        >
+          <view class="camera-mode-indicator-fill"></view>
+        </view>
+        <view
+          class="camera-mode-option {{captureMode === 'auto' ? 'camera-mode-option--active' : ''}}"
+          data-mode="auto"
+          bindtap="switchCaptureMode"
+          bindtouchstart="onCaptureModePressStart"
+          bindtouchend="onCaptureModePressEnd"
+          bindtouchcancel="onCaptureModePressEnd"
+          role="radio"
+          aria-checked="{{captureMode === 'auto'}}"
+        >自动拍摄</view>
+        <view
+          class="camera-mode-option {{captureMode === 'manual' ? 'camera-mode-option--active' : ''}}"
+          data-mode="manual"
+          bindtap="switchCaptureMode"
+          bindtouchstart="onCaptureModePressStart"
+          bindtouchend="onCaptureModePressEnd"
+          bindtouchcancel="onCaptureModePressEnd"
+          role="radio"
+          aria-checked="{{captureMode === 'manual'}}"
+        >手动拍摄</view>
+      </view>
+
+      <text class="camera-tip">
+        {{captureMode === 'auto' ? '稳定后自动倒计时，移动报告即可取消' : '保持手机平稳，完整拍入报告四角'}}
+      </text>
+
+      <view
+        class="camera-shutter camera-shutter--{{frameState}} camera-shutter--{{autoCaptureStatus}} {{captureProcessing ? 'camera-shutter--disabled' : ''}}"
+        bindtap="capturePhoto"
+        hover-class="camera-shutter--pressed"
+        hover-start-time="0"
+        hover-stay-time="80"
+        role="button"
+        aria-label="拍摄报告"
+        aria-disabled="{{captureProcessing}}"
+      >
+        <view
+          class="shutter-progress"
+          style="background: conic-gradient(#3ee6a3 {{shutterProgress}}%, rgba(255,255,255,0.28) {{shutterProgress}}%);"
+        >
+          <view class="camera-shutter-surface">
+            <text wx:if="{{countdown}}" class="camera-shutter-countdown">{{countdown}}</text>
+            <view wx:elif="{{captureProcessing}}" class="camera-shutter-spinner"></view>
+            <view wx:else class="camera-shutter-inner"></view>
+          </view>
+        </view>
+      </view>
+
+      <text class="camera-capture-label">
+        {{captureProcessing ? '正在处理照片' : (countdown ? '自动拍摄倒计时' : (captureMode === 'auto' ? '也可点击快门立即拍摄' : '点击快门拍摄'))}}
+      </text>
     </view>
   </block>
 
-  <view wx:else class="document-preview">
+  <view wx:if="{{previewPath}}" class="document-preview">
     <image class="document-preview-image" src="{{previewPath}}" mode="aspectFit"></image>
     <view class="document-preview-gradient"></view>
     <view class="document-preview-copy">
