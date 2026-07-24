@@ -49,6 +49,7 @@ import {
 } from '../../services/inspection-service'
 import { exportInspectionJson } from '../../services/export-service'
 import { getCurrentUser } from '../../services/auth-service'
+import { DEMO_MODE } from '../../config/server'
 import { ServerClientError } from '../../services/server-client'
 import {
   applyInspectionDateToTaskItems,
@@ -149,14 +150,16 @@ Component({
   },
   lifetimes: {
     attached() {
-      getCurrentUser()
-        .catch((error: Error) => {
-          if (error instanceof ServerClientError && error.statusCode === 401) {
-            wx.reLaunch({ url: '/pages/login/login' })
-            return
-          }
-          wx.showToast({ title: error.message || '会话检查失败', icon: 'none' })
-        })
+      if (!DEMO_MODE) {
+        getCurrentUser()
+          .catch((error: Error) => {
+            if (error instanceof ServerClientError && error.statusCode === 401) {
+              wx.reLaunch({ url: '/pages/login/login' })
+              return
+            }
+            wx.showToast({ title: error.message || '会话检查失败', icon: 'none' })
+          })
+      }
     },
     detached() {
       this.stopAllRecognitionProgress()
@@ -353,7 +356,9 @@ Component({
         updateState: async (nextRecord) => (
           saveHistorySyncState(nextRecord) || nextRecord
         ),
-        onUnauthorized: () => wx.reLaunch({ url: '/pages/login/login' }),
+        onUnauthorized: () => {
+          if (!DEMO_MODE) wx.reLaunch({ url: '/pages/login/login' })
+        },
       }).then((synced) => {
         if (
           synced.syncStatus === 'synced'
