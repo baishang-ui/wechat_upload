@@ -1,0 +1,287 @@
+.document-camera-page {
+  position: fixed;
+  inset: 0;
+  overflow: hidden;
+  background: #080d16;
+  color: #fff;
+}
+
+.document-camera-preview,
+.document-preview,
+.document-preview-image {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.document-camera-preview {
+  background: #111827;
+}
+
+.document-crop-canvas {
+  position: fixed;
+  left: -9999px;
+  top: -9999px;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.camera-mask {
+  position: absolute;
+  z-index: 1;
+  background: rgba(2, 6, 23, 0.38);
+  pointer-events: none;
+}
+
+.camera-mask-top,
+.camera-mask-bottom {
+  left: 0;
+  width: 100%;
+  height: 16%;
+}
+
+.camera-mask-top { top: 0; }
+.camera-mask-bottom { bottom: 0; }
+
+.camera-mask-left,
+.camera-mask-right {
+  top: 16%;
+  height: 68%;
+  width: 9%;
+}
+
+.camera-mask-left { left: 0; }
+.camera-mask-right { right: 0; }
+
+.camera-topbar {
+  position: absolute;
+  z-index: 4;
+  top: calc(env(safe-area-inset-top) + 18rpx);
+  left: 28rpx;
+  right: 28rpx;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.camera-close,
+.camera-topbar-placeholder {
+  width: 124rpx;
+  min-width: 124rpx;
+  height: 64rpx;
+}
+
+.camera-close {
+  margin: 0;
+  padding: 0;
+  border: 1rpx solid rgba(255, 255, 255, 0.22);
+  border-radius: 32rpx;
+  background: rgba(15, 23, 42, 0.5);
+  color: rgba(255, 255, 255, 0.94);
+  font-size: 26rpx;
+  line-height: 62rpx;
+  backdrop-filter: blur(18px);
+}
+
+.camera-close::after,
+.camera-shutter::after,
+.preview-secondary-button::after,
+.preview-primary-button::after {
+  border: 0;
+}
+
+.camera-title {
+  font-size: 30rpx;
+  font-weight: 700;
+  letter-spacing: 1rpx;
+  text-shadow: 0 2rpx 14rpx rgba(0, 0, 0, 0.42);
+}
+
+.document-frame {
+  position: absolute;
+  z-index: 3;
+  box-sizing: border-box;
+  border: 2rpx solid rgba(255, 255, 255, 0.74);
+  border-radius: 12rpx;
+  transition: left 180ms ease-out, top 180ms ease-out, width 180ms ease-out, height 180ms ease-out, border-color 180ms ease-out, box-shadow 180ms ease-out;
+  pointer-events: none;
+}
+
+.document-frame--aligning {
+  border-color: #dbeafe;
+  box-shadow: 0 0 0 1rpx rgba(219, 234, 254, 0.22), 0 0 28rpx rgba(147, 197, 253, 0.42);
+}
+
+.document-frame--ready {
+  border-color: #3ee6a3;
+  box-shadow: 0 0 0 1rpx rgba(62, 230, 163, 0.24), 0 0 32rpx rgba(62, 230, 163, 0.54);
+}
+
+.document-frame-corner {
+  position: absolute;
+  width: 26rpx;
+  height: 26rpx;
+  border-color: currentColor;
+}
+
+.document-frame-corner--tl { left: -3rpx; top: -3rpx; border-left: 6rpx solid; border-top: 6rpx solid; border-radius: 8rpx 0 0 0; }
+.document-frame-corner--tr { right: -3rpx; top: -3rpx; border-right: 6rpx solid; border-top: 6rpx solid; border-radius: 0 8rpx 0 0; }
+.document-frame-corner--br { right: -3rpx; bottom: -3rpx; border-right: 6rpx solid; border-bottom: 6rpx solid; border-radius: 0 0 8rpx 0; }
+.document-frame-corner--bl { left: -3rpx; bottom: -3rpx; border-left: 6rpx solid; border-bottom: 6rpx solid; border-radius: 0 0 0 8rpx; }
+
+.camera-guidance,
+.camera-error {
+  position: absolute;
+  z-index: 4;
+  left: 50%;
+  transform: translateX(-50%);
+  box-sizing: border-box;
+  text-align: center;
+}
+
+.camera-guidance {
+  top: calc(env(safe-area-inset-top) + 106rpx);
+  display: flex;
+  align-items: center;
+  max-width: calc(100% - 72rpx);
+  padding: 18rpx 24rpx;
+  border: 1rpx solid rgba(255, 255, 255, 0.16);
+  border-radius: 999rpx;
+  background: rgba(15, 23, 42, 0.46);
+  color: rgba(255, 255, 255, 0.94);
+  font-size: 25rpx;
+  white-space: nowrap;
+  backdrop-filter: blur(18px);
+}
+
+.camera-guidance-dot {
+  width: 12rpx;
+  height: 12rpx;
+  margin-right: 12rpx;
+  border-radius: 50%;
+  background: #dbeafe;
+  box-shadow: 0 0 12rpx rgba(219, 234, 254, 0.62);
+}
+
+.camera-guidance-dot--ready {
+  background: #3ee6a3;
+  box-shadow: 0 0 14rpx rgba(62, 230, 163, 0.78);
+}
+
+.camera-error {
+  top: calc(env(safe-area-inset-top) + 178rpx);
+  width: calc(100% - 88rpx);
+  color: #fecaca;
+  font-size: 23rpx;
+  line-height: 1.5;
+}
+
+.camera-controls {
+  position: absolute;
+  z-index: 4;
+  bottom: calc(env(safe-area-inset-bottom) + 42rpx);
+  left: 0;
+  right: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.camera-tip,
+.camera-manual-label {
+  color: rgba(255, 255, 255, 0.8);
+  font-size: 24rpx;
+  text-shadow: 0 2rpx 12rpx rgba(0, 0, 0, 0.52);
+}
+
+.camera-shutter {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 132rpx;
+  height: 132rpx;
+  margin: 24rpx 0 14rpx;
+  padding: 0;
+  border: 6rpx solid rgba(255, 255, 255, 0.88);
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.2);
+  box-shadow: 0 8rpx 28rpx rgba(0, 0, 0, 0.28);
+}
+
+.camera-shutter[disabled] {
+  opacity: 0.72;
+}
+
+.camera-shutter-inner {
+  width: 102rpx;
+  height: 102rpx;
+  border-radius: 50%;
+  background: #fff;
+}
+
+.document-preview {
+  overflow: hidden;
+  background: #080d16;
+}
+
+.document-preview-gradient {
+  position: absolute;
+  inset: auto 0 0;
+  height: 48%;
+  background: linear-gradient(transparent, rgba(2, 6, 23, 0.95));
+  pointer-events: none;
+}
+
+.document-preview-copy {
+  position: absolute;
+  left: 40rpx;
+  right: 40rpx;
+  bottom: calc(env(safe-area-inset-bottom) + 228rpx);
+}
+
+.document-preview-title {
+  color: #fff;
+  font-size: 42rpx;
+  font-weight: 700;
+}
+
+.document-preview-message {
+  margin-top: 14rpx;
+  color: rgba(255, 255, 255, 0.76);
+  font-size: 26rpx;
+  line-height: 1.5;
+}
+
+.document-preview-actions {
+  position: absolute;
+  left: 40rpx;
+  right: 40rpx;
+  bottom: calc(env(safe-area-inset-bottom) + 40rpx);
+  display: flex;
+  gap: 20rpx;
+}
+
+.preview-secondary-button,
+.preview-primary-button {
+  flex: 1;
+  height: 92rpx;
+  margin: 0;
+  border-radius: 18rpx;
+  font-size: 30rpx;
+  font-weight: 700;
+  line-height: 92rpx;
+}
+
+.preview-secondary-button {
+  border: 1rpx solid rgba(255, 255, 255, 0.25);
+  background: rgba(255, 255, 255, 0.12);
+  color: #fff;
+  backdrop-filter: blur(16px);
+}
+
+.preview-primary-button {
+  background: #3ee6a3;
+  color: #06251a;
+  box-shadow: 0 10rpx 30rpx rgba(62, 230, 163, 0.32);
+}

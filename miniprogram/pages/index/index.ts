@@ -408,7 +408,22 @@ Component({
         .finally(() => this.setData({ exporting: false }))
     },
     takePhoto() {
-      this.chooseImage(['camera'])
+      const remaining = MAX_RECOGNITION_QUEUE_SIZE - this.data.recognitionQueueStats.total
+      if (remaining <= 0) {
+        wx.showToast({ title: '识别队列最多保留 10 张图片', icon: 'none' })
+        return
+      }
+      wx.navigateTo({
+        url: '/pages/document-camera/document-camera',
+        events: {
+          documentPhotoConfirmed: ({ tempFilePath }: { tempFilePath?: string }) => {
+            if (tempFilePath) this.enqueueRecognitionFiles([tempFilePath])
+          },
+        },
+        fail: () => {
+          wx.showToast({ title: '无法打开相机，请稍后重试', icon: 'none' })
+        },
+      })
     },
     chooseFromAlbum() {
       this.chooseImage(['album'])

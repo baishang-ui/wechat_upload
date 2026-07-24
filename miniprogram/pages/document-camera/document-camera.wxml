@@ -1,0 +1,68 @@
+<view class="document-camera-page">
+  <camera
+    class="document-camera-preview"
+    device-position="back"
+    flash="off"
+    frame-size="small"
+    bindinitdone="onCameraReady"
+    binderror="onCameraError"
+    hidden="{{previewPath}}"
+  ></camera>
+
+  <canvas
+    class="document-crop-canvas"
+    canvas-id="document-crop-canvas"
+    width="{{cropCanvasWidth}}"
+    height="{{cropCanvasHeight}}"
+  ></canvas>
+
+  <block wx:if="{{!previewPath}}">
+    <view class="camera-mask camera-mask-top"></view>
+    <view class="camera-mask camera-mask-bottom"></view>
+    <view class="camera-mask camera-mask-left"></view>
+    <view class="camera-mask camera-mask-right"></view>
+
+    <view
+      class="document-frame document-frame--{{frameState}}"
+      style="left: {{frameBox.left}}%; top: {{frameBox.top}}%; width: {{frameBox.width}}%; height: {{frameBox.height}}%;"
+    >
+      <view class="document-frame-corner document-frame-corner--tl"></view>
+      <view class="document-frame-corner document-frame-corner--tr"></view>
+      <view class="document-frame-corner document-frame-corner--br"></view>
+      <view class="document-frame-corner document-frame-corner--bl"></view>
+    </view>
+
+    <view class="camera-topbar">
+      <button class="camera-close" bindtap="closeCamera">关闭</button>
+      <view class="camera-title">拍摄检验报告</view>
+      <view class="camera-topbar-placeholder"></view>
+    </view>
+
+    <view class="camera-guidance">
+      <view class="camera-guidance-dot camera-guidance-dot--{{frameState}}"></view>
+      <text>{{frameMessage}}</text>
+    </view>
+    <view wx:if="{{cameraError}}" class="camera-error">{{cameraError}}</view>
+
+    <view class="camera-controls">
+      <text class="camera-tip">保持手机平稳，完整拍入报告四角</text>
+      <button class="camera-shutter" bindtap="capturePhoto" loading="{{captureProcessing}}" aria-label="拍摄报告">
+        <view class="camera-shutter-inner"></view>
+      </button>
+      <text class="camera-manual-label">手动拍摄</text>
+    </view>
+  </block>
+
+  <view wx:else class="document-preview">
+    <image class="document-preview-image" src="{{previewPath}}" mode="aspectFit"></image>
+    <view class="document-preview-gradient"></view>
+    <view class="document-preview-copy">
+      <view class="document-preview-title">确认拍摄结果</view>
+      <view class="document-preview-message">{{previewMessage}}</view>
+    </view>
+    <view class="document-preview-actions">
+      <button class="preview-secondary-button" bindtap="retakePhoto">重拍</button>
+      <button class="preview-primary-button" bindtap="usePhoto">使用照片</button>
+    </view>
+  </view>
+</view>
