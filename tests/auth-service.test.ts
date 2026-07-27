@@ -9,6 +9,7 @@ import {
   logout,
   AuthRequest,
 } from '../miniprogram/services/auth-service'
+import { DATA_SERVER_BASE_URL } from '../miniprogram/config/server'
 
 const user = {
   id: 7,
@@ -36,6 +37,36 @@ test('login posts JSON credentials and returns the current user', async () => {
 test('getCurrentUser reads the server session', async () => {
   const request: AuthRequest = async <T>() => ({ user } as T)
   assert.deepEqual(await getCurrentUser(request), user)
+})
+
+test('auth responses resolve server-relative avatar paths for miniprogram images', async () => {
+  const relativeAvatarUser = {
+    ...user,
+    avatar_url: '/static/avatars/avatar_42_female_young.png',
+  }
+  const request: AuthRequest = async <T>() => ({ user: relativeAvatarUser } as T)
+
+  assert.equal(
+    (await getCurrentUser(request)).avatar_url,
+    `${DATA_SERVER_BASE_URL}/static/avatars/avatar_42_female_young.png`,
+  )
+  assert.equal(
+    (await login('Nicole', 'secret', request)).avatar_url,
+    `${DATA_SERVER_BASE_URL}/static/avatars/avatar_42_female_young.png`,
+  )
+})
+
+test('auth responses preserve absolute avatar URLs', async () => {
+  const absoluteAvatarUser = {
+    ...user,
+    avatar_url: 'https://cdn.example.com/users/inspector.png',
+  }
+  const request: AuthRequest = async <T>() => ({ user: absoluteAvatarUser } as T)
+
+  assert.equal(
+    (await getCurrentUser(request)).avatar_url,
+    absoluteAvatarUser.avatar_url,
+  )
 })
 
 test('logout clears local session even when the network request fails', async () => {

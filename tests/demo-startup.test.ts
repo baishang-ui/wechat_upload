@@ -6,12 +6,12 @@ import { resolve } from 'node:path'
 const assert: typeof strictAssert = strictAssert
 const root = resolve(__dirname, '..')
 
-test('demo mode opens the workspace rather than the login page', () => {
+test('production mode validates the session from the workspace entry page', () => {
   const config = readFileSync(resolve(root, 'miniprogram/config/server.ts'), 'utf8')
   const appConfig = JSON.parse(readFileSync(resolve(root, 'miniprogram/app.json'), 'utf8')) as {
     pages: string[]
   }
 
-  assert.match(config, /export const DEMO_MODE = true/)
+  assert.match(config, /export const DEMO_MODE = false/)
   assert.equal(appConfig.pages[0], 'pages/index/index')
 })

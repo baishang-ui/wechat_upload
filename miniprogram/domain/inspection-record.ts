@@ -54,6 +54,7 @@ export interface RawApiRecord {
   notes?: unknown
   reviewer?: unknown
   inspector?: unknown
+  confidence?: unknown
   [key: string]: unknown
 }
 

@@ -1,5 +1,5 @@
 import {
-  BUSINESS_SERVER_BASE_URL,
+  DATA_SERVER_BASE_URL,
   SERVER_REQUEST_TIMEOUT_MS,
   SERVER_UPLOAD_TIMEOUT_MS,
   SESSION_COOKIE_STORAGE_KEY,
@@ -12,12 +12,16 @@ export interface ServerRequestOptions {
   timeoutMs?: number
 }
 
+export type ServerSessionMode = 'managed' | 'read-only' | 'none'
+
 export interface ServerUploadOptions {
+  url?: string
   path: string
   filePath: string
   name: string
   formData?: Record<string, string>
   timeoutMs?: number
+  sessionMode?: ServerSessionMode
 }
 
 export interface ApiEnvelope<T> {
@@ -150,16 +154,23 @@ const READABLE_ERROR_STATUSES = new Set([
 function unwrapResponse<T>(
   response: TransportResponse,
   adapter: ServerClientAdapter,
+  manageSession = true,
 ): T {
-  saveSessionCookie(response.cookies, adapter)
+  if (manageSession) saveSessionCookie(response.cookies, adapter)
   const envelope = parseEnvelope<T>(response.data)
   if (response.statusCode >= 200 && response.statusCode < 300 && envelope.success) {
-    return envelope.data as T
+    if (Object.prototype.hasOwnProperty.call(envelope, 'data')) {
+      return envelope.data as T
+    }
+    const { success: _success, ...legacyPayload } = envelope as ApiEnvelope<T>
+      & Record<string, unknown>
+    return legacyPayload as T
   }
-  if (response.statusCode === 401) clearSessionCookie(adapter)
-  if (READABLE_ERROR_STATUSES.has(response.statusCode)) {
+  if (manageSession && response.statusCode === 401) clearSessionCookie(adapter)
+  const backendReason = envelope.error || envelope.detail
+  if (backendReason || READABLE_ERROR_STATUSES.has(response.statusCode)) {
     throw new ServerClientError(
-      envelope.error || envelope.detail || '请求失败，请重试',
+      backendReason || '请求失败，请重试',
       response.statusCode,
     )
   }
@@ -189,7 +200,7 @@ export async function serverRequest<T>(
   if (cookie) header.Cookie = cookie
   try {
     const response = await client.request({
-      url: `${BUSINESS_SERVER_BASE_URL}${options.path}`,
+      url: `${DATA_SERVER_BASE_URL}${options.path}`,
       method: options.method,
       data: options.data,
       header,
@@ -206,19 +217,20 @@ export async function serverUpload<T>(
   adapter?: ServerClientAdapter,
 ): Promise<T> {
   const client = getAdapter(adapter)
-  const cookie = sessionCookie(client)
+  const sessionMode = options.sessionMode || 'managed'
+  const cookie = sessionMode === 'none' ? '' : sessionCookie(client)
   const header: Record<string, string> = {}
   if (cookie) header.Cookie = cookie
   try {
     const response = await client.uploadFile({
-      url: `${BUSINESS_SERVER_BASE_URL}${options.path}`,
+      url: options.url || `${DATA_SERVER_BASE_URL}${options.path}`,
       filePath: options.filePath,
       name: options.name,
       formData: options.formData,
       header,
       timeout: options.timeoutMs || SERVER_UPLOAD_TIMEOUT_MS,
     })
-    return unwrapResponse<T>(response, client)
+    return unwrapResponse<T>(response, client, sessionMode === 'managed')
   } catch (error) {
     return mapTransportError(error)
   }

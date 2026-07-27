@@ -4,7 +4,8 @@ import strictAssert from 'node:assert/strict'
 const assert: typeof strictAssert = strictAssert
 
 import {
-  BUSINESS_SERVER_BASE_URL,
+  DATA_SERVER_BASE_URL,
+  RECOGNITION_API_URL,
   SESSION_COOKIE_STORAGE_KEY,
 } from '../miniprogram/config/server'
 import {
@@ -17,6 +18,7 @@ import {
 function harness() {
   const storage = new Map<string, unknown>()
   const requests: Array<Record<string, unknown>> = []
+  const uploads: Array<Record<string, unknown>> = []
   const adapter: ServerClientAdapter = {
     getStorage: (key) => storage.get(key),
     setStorage: (key, value) => storage.set(key, value),
@@ -29,13 +31,16 @@ function harness() {
         cookies: ['session=signed-cookie; Path=/; HttpOnly'],
       }
     },
-    uploadFile: async () => ({
-      statusCode: 200,
-      data: JSON.stringify({ success: true, data: { uploaded: true } }),
-      cookies: [],
-    }),
+    uploadFile: async (options) => {
+      uploads.push(options as unknown as Record<string, unknown>)
+      return {
+        statusCode: 200,
+        data: JSON.stringify({ success: true, data: { uploaded: true } }),
+        cookies: [],
+      }
+    },
   }
-  return { adapter, storage, requests }
+  return { adapter, storage, requests, uploads }
 }
 
 test('serverRequest saves response cookie and carries it on the next request', async () => {
@@ -58,11 +63,11 @@ test('serverRequest saves response cookie and carries it on the next request', a
   )
   assert.equal(
     state.requests[0].url,
-    `${BUSINESS_SERVER_BASE_URL}/api/miniprogram/auth/login`,
+    `${DATA_SERVER_BASE_URL}/api/miniprogram/auth/login`,
   )
   assert.equal(
     state.requests[1].url,
-    `${BUSINESS_SERVER_BASE_URL}/api/miniprogram/auth/me`,
+    `${DATA_SERVER_BASE_URL}/api/miniprogram/auth/me`,
   )
 })
 
@@ -82,6 +87,82 @@ test('401 clears cookie and throws a user-readable error', async () => {
   clearSessionCookie(state.adapter)
 })
 
+test('500 response exposes the backend reason instead of a generic unavailable message', async () => {
+  const state = harness()
+  state.adapter.request = async () => ({
+    statusCode: 500,
+    data: { success: false, error: '质检记录内容过大，服务器无法保存' },
+    cookies: [],
+  })
+
+  await assert.rejects(
+    () => serverRequest({ method: 'POST', path: '/api/miniprogram/quality-inspections/draft' }, state.adapter),
+    /质检记录内容过大，服务器无法保存/,
+  )
+})
+
+test('read-only recognition upload cannot overwrite or clear the business session', async () => {
+  const state = harness()
+  state.storage.set(SESSION_COOKIE_STORAGE_KEY, 'session=business-session')
+  state.adapter.uploadFile = async (options) => {
+    state.uploads.push(options as unknown as Record<string, unknown>)
+    return {
+      statusCode: 401,
+      data: JSON.stringify({ success: false, error: '未登录' }),
+      cookies: ['session=recognition-session; Path=/; HttpOnly'],
+    }
+  }
+
+  await assert.rejects(
+    () => serverUpload(
+      {
+        url: RECOGNITION_API_URL,
+        path: '/api/miniprogram/quality-inspections/recognize',
+        filePath: '/tmp/report.jpg',
+        name: 'file',
+        sessionMode: 'read-only',
+      },
+      state.adapter,
+    ),
+    /未登录/,
+  )
+
+  assert.equal(
+    (state.uploads[0].header as Record<string, string>).Cookie,
+    'session=business-session',
+  )
+  assert.equal(
+    state.storage.get(SESSION_COOKIE_STORAGE_KEY),
+    'session=business-session',
+  )
+})
+
+test('serverUpload accepts successful legacy payloads without a nested data field', async () => {
+  const state = harness()
+  state.adapter.uploadFile = async (options) => {
+    state.uploads.push(options as unknown as Record<string, unknown>)
+    return {
+      statusCode: 200,
+      data: JSON.stringify({
+        success: true,
+        image_url: '/uploads/inspection.jpg',
+        image_path: '/srv/uploads/inspection.jpg',
+      }),
+      cookies: [],
+    }
+  }
+
+  const uploaded = await serverUpload<{ image_url: string; image_path: string }>(
+    { path: '/inquiries/api/upload-image', filePath: '/tmp/a.jpg', name: 'file' },
+    state.adapter,
+  )
+
+  assert.deepEqual(uploaded, {
+    image_url: '/uploads/inspection.jpg',
+    image_path: '/srv/uploads/inspection.jpg',
+  })
+})
+
 test('serverUpload parses JSON and maps backend errors', async () => {
   const state = harness()
   const uploaded = await serverUpload<{ uploaded: boolean }>(
@@ -89,6 +170,25 @@ test('serverUpload parses JSON and maps backend errors', async () => {
     state.adapter,
   )
   assert.deepEqual(uploaded, { uploaded: true })
+  assert.equal(
+    state.uploads[0].url,
+    `${DATA_SERVER_BASE_URL}/api/miniprogram/upload`,
+  )
+
+  await serverUpload<{ uploaded: boolean }>(
+    {
+      url: RECOGNITION_API_URL,
+      path: '/api/miniprogram/quality-inspections/recognize',
+      filePath: '/tmp/report.jpg',
+      name: 'file',
+    },
+    state.adapter,
+  )
+  assert.equal(
+    state.uploads[1].url,
+    RECOGNITION_API_URL,
+  )
+
   state.adapter.uploadFile = async () => ({
     statusCode: 413,
     data: JSON.stringify({ success: false, error: '图片过大' }),

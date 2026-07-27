@@ -7,21 +7,20 @@ const assert: typeof strictAssert = strictAssert
 const root = resolve(__dirname, '..')
 const source = (path: string) => readFileSync(resolve(root, path), 'utf8')
 
-test('server config separates business and direct model endpoints', () => {
+test('server config separates data and recognition service addresses', () => {
   const serverConfig = source('miniprogram/config/server.ts')
   const indexPage = source('miniprogram/pages/index/index.ts')
   const indexWxml = source('miniprogram/pages/index/index.wxml')
 
   assert.match(
     serverConfig,
-    /export const BUSINESS_SERVER_BASE_URL = 'http:\/\/localhost:7875'/,
+    /export const DATA_SERVER_BASE_URL = 'https:\/\/www\.binictools\.cn:7876'/,
   )
   assert.match(
     serverConfig,
-    /export const MODEL_API_URL = 'http:\/\/www\.binictools\.cn:8865\/api\/llm\/v1\/chat\/completions'/,
+    /export const RECOGNITION_API_URL = 'https:\/\/www\.binictools\.cn:7876\/api\/miniprogram\/quality-inspections\/recognize'/,
   )
-  assert.match(serverConfig, /export const MODEL_NAME = 'qwen35'/)
-  assert.match(serverConfig, /export const MODEL_TOKEN_STORAGE_KEY = 'llmApiToken'/)
+  assert.doesNotMatch(serverConfig, /MODEL_API_URL|MODEL_NAME|MODEL_TOKEN_STORAGE_KEY/)
   assert.match(serverConfig, /export const DEMO_MODE = (?:true|false)/)
   assert.match(
     indexPage,

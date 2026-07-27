@@ -12,6 +12,7 @@ import {
   RawApiRecord,
 } from '../domain/inspection-record'
 import { RecognitionConfidencePayload } from '../domain/recognition-review'
+import { DATA_SERVER_BASE_URL, RECOGNITION_API_URL } from '../config/server'
 import { InspectionTemplateDto } from '../domain/inspection-workbench'
 import {
   serverRequest,
@@ -19,8 +20,10 @@ import {
   serverUpload,
   ServerUploadOptions,
 } from './server-client'
-
-const MAX_INSPECTION_IMAGE_BYTES = 600 * 1024
+import {
+  ImageUploadPreparer,
+  prepareImageForUpload,
+} from './image-upload-service'
 
 export const HISTORY_REFRESH_TTL_MS = 30_000
 
@@ -58,7 +61,7 @@ export interface QualityInspectionDraftRecord {
   images: string[]
 }
 
-export type QualityInspectionRecordMergeMode = 'replace' | 'matched_only'
+export type QualityInspectionRecordMergeMode = 'replace' | 'matched_only' | 'workbench'
 
 export interface QualityInspectionDraftPayload {
   inspection_records: QualityInspectionDraftRecord[]
@@ -95,7 +98,41 @@ export interface QualityInspectionMasterProductDto {
   master_code?: string | null
   spec_pairs?: QualityInspectionProductPairDto[]
   attribute_pairs?: QualityInspectionProductPairDto[]
+  grade_pairs?: QualityInspectionProductPairDto[]
   [key: string]: unknown
+}
+
+export interface ProductQualityTemplateRowDto {
+  id?: string | null
+  section?: string | null
+  item?: string | null
+  method?: string | null
+  requirement?: string | null
+  standard?: string | null
+  cutting_material?: string | null
+  cut_count?: number | null
+}
+
+export interface ProductQualityTemplateDto {
+  scope?: string | null
+  scope_label?: string | null
+  category?: string | null
+  subcategory?: string | null
+  rows?: ProductQualityTemplateRowDto[]
+  updated_at?: string | null
+}
+
+export interface ProductQualityTemplateListData {
+  items: ProductQualityTemplateDto[]
+}
+
+export function listProductQualityTemplates(
+  request: QualityRequest = serverRequest,
+): Promise<ProductQualityTemplateListData> {
+  return request<ProductQualityTemplateListData>({
+    method: 'GET',
+    path: '/products/api/quality-templates',
+  })
 }
 
 export interface QualityInspectionCustomerProductDto {
@@ -115,6 +152,7 @@ export interface QualityInspectionTaskDto {
   client_record_id?: string | null
   purchase_order_id?: number | null
   contract_no?: string | null
+  source_review_no?: string | null
   customer_name?: string | null
   supplier_name?: string | null
   signed_date?: string | null
@@ -169,6 +207,142 @@ export interface TaskListData {
   stats: Record<string, number>
 }
 
+export type RecognizedInspectionMatchStatus =
+  | 'matched'
+  | 'missing_order_number'
+  | 'order_not_found'
+  | 'order_ambiguous'
+  | 'item_not_found'
+  | 'item_ambiguous'
+
+export interface RecognizedInspectionMatchResult {
+  status: RecognizedInspectionMatchStatus
+  task?: QualityInspectionTaskDto
+  item?: QualityInspectionItemDto
+}
+
+export interface AutoWriteRecognizedInspectionDeps {
+  listTasks(query: TaskQuery): Promise<TaskListData>
+  imageToDataUrl(filePath: string): Promise<string>
+  saveDraft(
+    taskId: number,
+    itemId: number,
+    payload: QualityInspectionDraftPayload,
+  ): Promise<unknown>
+}
+
+function normalizeOrderIdentity(value: unknown): string {
+  return asString(value)
+    .toUpperCase()
+    .replace(/(?:采购订单号|订单号|合同号|ORDER\s*(?:NUMBER|NO)|CONTRACT\s*(?:NUMBER|NO))[:：]?/g, '')
+    .replace(/[^A-Z0-9]/g, '')
+}
+
+function normalizeProductIdentity(value: unknown): string {
+  return asString(value)
+    .toLowerCase()
+    .replace(/[×＊*]/g, 'x')
+    .replace(/毫米/g, 'mm')
+    .replace(/[^a-z0-9\u4e00-\u9fff]/g, '')
+}
+
+function recognizedProductMatchScore(
+  record: InspectionRecord,
+  item: QualityInspectionItemDto,
+): number {
+  const recognized = normalizeProductIdentity(record.model)
+  const productLabel = PRODUCT_OPTIONS.find((option) => option.value === record.productType)?.label || ''
+  const recognizedLabel = normalizeProductIdentity(productLabel)
+  const fields = [item.material_code, item.material_name, item.spec_desc]
+    .map(normalizeProductIdentity)
+    .filter(Boolean)
+
+  let score = 0
+  for (const field of fields) {
+    if (recognized && (recognized.includes(field) || field.includes(recognized))) {
+      score += 100 + Math.min(field.length, recognized.length)
+    }
+    if (recognizedLabel && (field.includes(recognizedLabel) || recognizedLabel.includes(field))) {
+      score += 30
+    }
+  }
+  return score
+}
+
+export function matchRecognizedInspectionToPendingItem(
+  record: InspectionRecord,
+  tasks: QualityInspectionTaskDto[],
+): RecognizedInspectionMatchResult {
+  const orderIdentity = normalizeOrderIdentity(record.orderNumber)
+  if (!orderIdentity) return { status: 'missing_order_number' }
+
+  const matchedTasks = tasks.filter((task) => {
+    if (task.status && task.status !== 'pending') return false
+    if (task.source_type && task.source_type !== 'purchase_order') return false
+    return [task.contract_no, task.task_no, task.source_review_no]
+      .some((value) => normalizeOrderIdentity(value) === orderIdentity)
+  })
+  if (matchedTasks.length === 0) return { status: 'order_not_found' }
+  if (matchedTasks.length > 1) return { status: 'order_ambiguous' }
+
+  const task = matchedTasks[0]
+  const items = task.items || []
+  if (items.length === 0) return { status: 'item_not_found', task }
+  if (items.length === 1) return { status: 'matched', task, item: items[0] }
+
+  const scored = items.map((item) => ({
+    item,
+    score: recognizedProductMatchScore(record, item),
+  })).sort((left, right) => right.score - left.score)
+  if (scored[0].score <= 0 || scored[0].score === scored[1].score) {
+    return { status: 'item_ambiguous', task }
+  }
+  return { status: 'matched', task, item: scored[0].item }
+}
+
+function safeServerImageReferences(images: unknown): string[] {
+  if (!Array.isArray(images)) return []
+  return images
+    .filter((image): image is string => (
+      typeof image === 'string'
+      && /^https?:\/\//i.test(image)
+      && image.length <= 4096
+    ))
+    .slice(0, 1)
+}
+
+export async function autoWriteRecognizedInspectionToPendingItem(
+  record: InspectionRecord,
+  _imagePath: string,
+  deps: AutoWriteRecognizedInspectionDeps = {
+    listTasks: listInspectionTasks,
+    imageToDataUrl: inspectionImageToDataUrl,
+    saveDraft: saveInspectionDraft,
+  },
+): Promise<RecognizedInspectionMatchResult> {
+  const orderNumber = asString(record.orderNumber)
+  if (!normalizeOrderIdentity(orderNumber)) return { status: 'missing_order_number' }
+  const data = await deps.listTasks({
+    page: 1,
+    pageSize: 200,
+    search: orderNumber,
+    status: 'pending',
+    sourceType: 'purchase_order',
+  })
+  const matched = matchRecognizedInspectionToPendingItem(record, data.items)
+  if (matched.status !== 'matched' || !matched.task || !matched.item) return matched
+
+  const existingImages = safeServerImageReferences(
+    matched.item.inspection_draft?.ai_workbench_images,
+  )
+  await deps.saveDraft(
+    matched.task.id,
+    matched.item.id,
+    inspectionRecordToDraft(record, existingImages, 'matched_only'),
+  )
+  return matched
+}
+
 export interface StandaloneInspectionResult {
   task_id: number
   item_id: number
@@ -178,6 +352,11 @@ export interface StandaloneInspectionResult {
 export interface InspectionRowImageUploadResult {
   id: string
   url: string
+}
+
+interface GenericImageUploadResult {
+  image_url?: string
+  image_path?: string
 }
 
 export interface RecognitionProxyResult {
@@ -360,6 +539,7 @@ export function mergeInspectionHistory(
 
 
 export interface SyncStoredInspectionDeps {
+  listTasks?(query: TaskQuery): Promise<TaskListData>
   createStandalone(
     clientRecordId: string,
     record: InspectionRecord,
@@ -379,7 +559,6 @@ export interface SyncStoredInspectionDeps {
 
 
 export interface InspectionImageAdapter {
-  getSize(filePath: string): Promise<number>
   read(filePath: string): Promise<ArrayBuffer>
 }
 
@@ -551,6 +730,24 @@ export function taskItemToInspectionRecord(
 }
 
 
+function unmatchedInspectionSyncReason(
+  status: Exclude<RecognizedInspectionMatchStatus, 'matched'>,
+  orderNumber: string,
+): string {
+  switch (status) {
+    case 'missing_order_number':
+      return '未识别到订单号，质检记录未同步'
+    case 'order_not_found':
+      return `未查到订单 ${orderNumber || '对应订单'}，质检记录未同步`
+    case 'order_ambiguous':
+      return `查到多个订单 ${orderNumber || ''}，无法自动同步质检记录`.replace(/\s+，/, '，')
+    case 'item_not_found':
+      return '订单中没有待检产品，质检记录未同步'
+    case 'item_ambiguous':
+      return '订单内产品无法唯一匹配，质检记录未同步'
+  }
+}
+
 export async function syncStoredInspection(
   record: StoredInspectionRecord,
   deps: SyncStoredInspectionDeps,
@@ -565,26 +762,51 @@ export async function syncStoredInspection(
     let taskId = current.taskId
     let itemId = current.itemId
     if (current.sourceType === 'standalone' && (!taskId || !itemId)) {
-      const created = await deps.createStandalone(
-        current.clientRecordId,
-        current.record,
-      )
-      taskId = created.task_id
-      itemId = created.item_id
-      current = updateSyncState(current, {
-        syncStatus: 'syncing',
-        syncError: '',
-        taskId,
-        itemId,
-      }, Date.now())
+      const orderNumber = asString(current.record.orderNumber)
+      let matched: RecognizedInspectionMatchResult
+      if (!normalizeOrderIdentity(orderNumber)) {
+        matched = { status: 'missing_order_number' }
+      } else {
+        const data = await (deps.listTasks || listInspectionTasks)({
+          page: 1,
+          pageSize: 200,
+          search: orderNumber,
+          status: 'pending',
+          sourceType: 'purchase_order',
+        })
+        matched = matchRecognizedInspectionToPendingItem(current.record, data.items)
+      }
+      if (matched.status !== 'matched') {
+        const local = updateSyncState(current, {
+          syncStatus: 'local',
+          syncError: unmatchedInspectionSyncReason(matched.status, orderNumber),
+          taskId: null,
+          itemId: null,
+        }, Date.now())
+        return await deps.updateState(local)
+      }
+      if (!matched.task || !matched.item) {
+        throw new Error('订单匹配结果缺少待检产品')
+      }
+      taskId = matched.task.id
+      itemId = matched.item.id
+      current = {
+        ...updateSyncState(current, {
+          syncStatus: 'syncing',
+          syncError: '',
+          taskId,
+          itemId,
+        }, Date.now()),
+        sourceType: 'purchase_order',
+      }
       current = await deps.updateState(current)
     }
     if (!taskId || !itemId) {
       throw new Error('缺少服务端质检任务信息')
     }
-    const imageDataUrls = current.imagePath
-      ? [await deps.imageToDataUrl(current.imagePath)]
-      : await deps.loadExistingImages?.(taskId, itemId) ?? []
+    const imageDataUrls = safeServerImageReferences(
+      await deps.loadExistingImages?.(taskId, itemId) ?? [],
+    )
     await deps.saveDraft(
       taskId,
       itemId,
@@ -703,16 +925,28 @@ export function createStandaloneInspection(
   })
 }
 
-export function uploadInspectionRowImage(
+function normalizeUploadedImageUrl(value: string): string {
+  const imageUrl = String(value || '').trim()
+  if (!imageUrl || /^(?:https?:|data:|wxfile:)/i.test(imageUrl)) return imageUrl
+  if (imageUrl.startsWith('//')) {
+    const protocol = DATA_SERVER_BASE_URL.startsWith('http://') ? 'http:' : 'https:'
+    return `${protocol}${imageUrl}`
+  }
+  return `${DATA_SERVER_BASE_URL.replace(/\/$/, '')}/${imageUrl.replace(/^\/+/, '')}`
+}
+
+export async function uploadInspectionRowImage(
   taskId: number,
   itemId: number,
   rowKey: string,
   filePath: string,
   upload: QualityUpload = serverUpload,
+  prepare: ImageUploadPreparer = prepareImageForUpload,
 ): Promise<InspectionRowImageUploadResult> {
-  return upload<InspectionRowImageUploadResult>({
-    path: '/api/miniprogram/quality-inspections/images',
-    filePath,
+  const preparedPath = await prepare(filePath)
+  const uploaded = await upload<GenericImageUploadResult>({
+    path: '/inquiries/api/upload-image',
+    filePath: preparedPath,
     name: 'file',
     formData: {
       task_id: String(taskId),
@@ -720,6 +954,12 @@ export function uploadInspectionRowImage(
       row_key: rowKey,
     },
   })
+  const url = normalizeUploadedImageUrl(uploaded.image_url || '')
+  if (!url) throw new Error('服务器未返回照片地址，请重试')
+  return {
+    id: String(uploaded.image_path || url),
+    url,
+  }
 }
 
 export function recognizeInspectionFile(
@@ -727,22 +967,17 @@ export function recognizeInspectionFile(
   upload: QualityUpload = serverUpload,
 ): Promise<RecognitionProxyResult> {
   return upload<RecognitionProxyResult>({
+    url: RECOGNITION_API_URL,
     path: '/api/miniprogram/quality-inspections/recognize',
     filePath,
     name: 'file',
+    sessionMode: 'read-only',
   })
 }
 
 function defaultImageAdapter(): InspectionImageAdapter {
   const fileSystem = wx.getFileSystemManager()
   return {
-    getSize: (filePath) => new Promise((resolve, reject) => {
-      wx.getFileInfo({
-        filePath,
-        success: (result) => resolve(result.size),
-        fail: () => reject(new Error('无法读取图片大小')),
-      })
-    }),
     read: (filePath) => new Promise((resolve, reject) => {
       fileSystem.readFile({
         filePath,
@@ -757,8 +992,6 @@ export async function inspectionImageToDataUrl(
   filePath: string,
   adapter: InspectionImageAdapter = defaultImageAdapter(),
 ): Promise<string> {
-  const size = await adapter.getSize(filePath)
-  if (size > MAX_INSPECTION_IMAGE_BYTES) throw new Error('图片不能超过 600 KB')
   const bytes = new Uint8Array(await adapter.read(filePath))
   const mime = filePath.toLowerCase().endsWith('.png') ? 'image/png' : 'image/jpeg'
   return `data:${mime};base64,${wx.arrayBufferToBase64(bytes.buffer)}`

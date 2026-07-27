@@ -3,6 +3,7 @@ import {
   serverRequest,
   ServerRequestOptions,
 } from './server-client'
+import { DATA_SERVER_BASE_URL } from '../config/server'
 
 export interface AuthUser {
   id: number
@@ -16,6 +17,23 @@ export interface AuthUser {
 export type AuthRequest = <T>(options: ServerRequestOptions) => Promise<T>
 export type ClearSession = () => void
 
+function normalizeAvatarUrl(value: string): string {
+  const avatarUrl = String(value || '').trim()
+  if (!avatarUrl || /^(?:https?:|data:|wxfile:)/i.test(avatarUrl)) return avatarUrl
+  if (avatarUrl.startsWith('//')) {
+    const protocol = DATA_SERVER_BASE_URL.startsWith('http://') ? 'http:' : 'https:'
+    return `${protocol}${avatarUrl}`
+  }
+  return `${DATA_SERVER_BASE_URL.replace(/\/$/, '')}/${avatarUrl.replace(/^\/+/, '')}`
+}
+
+function normalizeAuthUser(user: AuthUser): AuthUser {
+  return {
+    ...user,
+    avatar_url: normalizeAvatarUrl(user.avatar_url),
+  }
+}
+
 export async function login(
   username: string,
   password: string,
@@ -26,7 +44,7 @@ export async function login(
     path: '/api/miniprogram/auth/login',
     data: { username: username.trim(), password },
   })
-  return data.user
+  return normalizeAuthUser(data.user)
 }
 
 export async function getCurrentUser(
@@ -36,7 +54,7 @@ export async function getCurrentUser(
     method: 'GET',
     path: '/api/miniprogram/auth/me',
   })
-  return data.user
+  return normalizeAuthUser(data.user)
 }
 
 export async function logout(

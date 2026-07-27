@@ -5,15 +5,10 @@ const assert: typeof strictAssert = strictAssert
 
 import { normalizeApiRecord } from '../miniprogram/domain/inspection-record'
 import {
-  MODEL_API_URL,
-  MODEL_NAME,
-  MODEL_TOKEN_STORAGE_KEY,
-  SERVER_UPLOAD_TIMEOUT_MS,
-} from '../miniprogram/config/server'
-import {
-  MAX_IMAGE_BYTES,
-  ModelRecognitionAdapter,
+  ImageCompressionApi,
+  MAX_ONLINE_IMAGE_BYTES,
   prepareImageForUpload,
+  RecognitionProxyUpload,
   recognizeInspection,
   submitInspection,
 } from '../miniprogram/services/inspection-service'
@@ -30,147 +25,143 @@ function createCompleteRecord() {
   })
 }
 
+function createImageApi(sizes: Record<string, number>) {
+  const qualities: number[] = []
+  const api: ImageCompressionApi = {
+    getFileInfo: ({ filePath, success, fail }) => {
+      const size = sizes[filePath]
+      if (size === undefined) {
+        fail()
+        return
+      }
+      success({ size })
+    },
+    compressImage: ({ quality, success }) => {
+      qualities.push(quality)
+      success({ tempFilePath: `/tmp/compressed-${quality}.jpg` })
+    },
+  }
+  return { ...api, qualities }
+}
+
 test('recognizeInspection requires an image path before accessing WeChat APIs', async () => {
   await assert.rejects(() => recognizeInspection(''), /请选择检验报告图片/)
 })
 
-
-test('recognizeInspection calls the configured model endpoint directly', async () => {
-  const imageApi = createImageApi({ '/tmp/report.jpg': 100 })
-  const calls: Array<Record<string, unknown>> = []
-  const storageKeys: string[] = []
-  const modelApi: ModelRecognitionAdapter = {
-    getStorage(key) {
-      storageKeys.push(key)
-      return 'model-secret'
-    },
-    readFileAsBase64: async (filePath) => {
-      assert.equal(filePath, '/tmp/report.jpg')
-      return 'encoded-image'
-    },
-    request: async (options) => {
-      calls.push(options as unknown as Record<string, unknown>)
-      return {
-        statusCode: 200,
-        data: {
-          choices: [{
-            message: {
-              content: JSON.stringify({
-                report_title: '钢丝刷检验记录单',
-                customer: '客户A',
-                supplier: '供应商A',
-                model_spec: '100x20',
-                inspection_date: '2026-07-22',
-                items: [{ name: '材质', measurements: ['OK'] }],
-                sample_judgements: ['OK'],
-              }),
-            },
-          }],
-        },
-      }
-    },
+test('recognizeInspection uploads the path prepared for the 5 MB online limit', async () => {
+  const uploadedPaths: string[] = []
+  const upload: RecognitionProxyUpload = async (filePath) => {
+    uploadedPaths.push(filePath)
+    return {
+      record: {
+        report_title: '钢丝刷检验记录单',
+        customer: '客户A',
+        supplier: '供应商A',
+        model_spec: '100x20',
+        inspection_date: '2026-07-22',
+        items: [{ name: '材质', measurements: ['OK', 'OK', 'NG'] }],
+        sample_judgements: ['OK', 'OK', 'NG'],
+      },
+      raw_content: '{"report_title":"钢丝刷检验记录单"}',
+      confidence: {
+        fields: { customer: 0.92, supplier: 0.72, model_spec: 0.2 },
+        items: [{ name: 0.95, measurements: [0.95, 0.7, 0.2] }],
+        sample_judgements: [0.9, 0.65, 0.1],
+      },
+    }
   }
 
-  const result = await recognizeInspection('/tmp/report.jpg', imageApi, modelApi)
-  const call = calls[0]
-  const payload = call.data as {
-    model: string
-    messages: Array<{ content: Array<{ type: string; image_url?: { url: string } }> }>
-  }
-  assert.deepEqual(storageKeys, [MODEL_TOKEN_STORAGE_KEY])
-  assert.equal(call.url, MODEL_API_URL)
-  assert.equal(call.method, 'POST')
-  assert.equal(call.timeout, SERVER_UPLOAD_TIMEOUT_MS)
-  assert.deepEqual(call.header, {
-    'Content-Type': 'application/json',
-    Authorization: 'Bearer model-secret',
-  })
-  assert.equal(payload.model, MODEL_NAME)
-  assert.equal(
-    payload.messages[0].content[1].image_url?.url,
-    'data:image/jpeg;base64,encoded-image',
+  const result = await recognizeInspection(
+    '/tmp/report.jpg',
+    upload,
+    async () => '/tmp/compressed-report.jpg',
   )
+
+  assert.deepEqual(uploadedPaths, ['/tmp/compressed-report.jpg'])
+  assert.equal(result.rawContent, '{"report_title":"钢丝刷检验记录单"}')
   assert.equal(result.record.customer, '客户A')
-  assert.equal(result.confidence.fields.customer, null)
+  assert.equal(result.confidence.fields.customer, 0.92)
+  assert.equal(result.confidence.fields.supplier, 0.72)
+  assert.equal(result.confidence.fields.model_spec, 0.2)
+  assert.equal(result.confidence.items[0].name, 0.95)
+  assert.deepEqual(result.confidence.items[0].measurements.slice(0, 3), [0.95, 0.7, 0.2])
+  assert.deepEqual(result.confidence.sample_judgements.slice(0, 3), [0.9, 0.65, 0.1])
   assert.equal(result.confidence.items[0].measurements.length, 10)
 })
 
-test('recognizeInspection omits authorization when no model token is configured', async () => {
-  const imageApi = createImageApi({ '/tmp/report.png': 100 })
-  let capturedHeader: Record<string, string> = {}
-  const modelApi: ModelRecognitionAdapter = {
-    getStorage: () => '',
-    readFileAsBase64: async () => 'png-image',
-    request: async (options) => {
-      capturedHeader = options.header
-      return {
-        statusCode: 200,
-        data: {
-          choices: [{ message: { content: '{"report_title":"钢丝刷检验记录单"}' } }],
-        },
-      }
+test('recognizeInspection accepts confidence embedded in the backend record', async () => {
+  const upload: RecognitionProxyUpload = async () => ({
+    record: {
+      report_title: '钢丝刷检验记录单',
+      confidence: { fields: { report_title: 0.86 } },
     },
-  }
+    raw_content: '',
+  })
 
-  await recognizeInspection('/tmp/report.png', imageApi, modelApi)
-  assert.deepEqual(capturedHeader, { 'Content-Type': 'application/json' })
+  const result = await recognizeInspection('/tmp/report.png', upload, async (path) => path)
+
+  assert.equal(result.record.productType, 'steel_brush')
+  assert.equal(result.confidence.fields.report_title, 0.86)
+  assert.match(result.rawContent, /钢丝刷检验记录单/)
 })
 
-test('recognizeInspection maps model HTTP and invalid JSON errors', async () => {
-  const imageApi = createImageApi({ '/tmp/report.jpg': 100 })
-  const failingApi: ModelRecognitionAdapter = {
-    getStorage: () => '',
-    readFileAsBase64: async () => 'image',
-    request: async () => ({ statusCode: 503, data: { detail: '模型维护中' } }),
+test('recognizeInspection propagates backend proxy errors and rejects invalid proxy data', async () => {
+  const failingUpload: RecognitionProxyUpload = async () => {
+    throw new Error('模型维护中')
   }
   await assert.rejects(
-    () => recognizeInspection('/tmp/report.jpg', imageApi, failingApi),
+    () => recognizeInspection('/tmp/report.jpg', failingUpload, async (path) => path),
     /模型维护中/,
   )
 
-  const invalidApi: ModelRecognitionAdapter = {
-    ...failingApi,
-    request: async () => ({
-      statusCode: 200,
-      data: { choices: [{ message: { content: 'not-json' } }] },
-    }),
-  }
+  const invalidUpload: RecognitionProxyUpload = async () => ({
+    record: null as never,
+    raw_content: 'not-json',
+  })
   await assert.rejects(
-    () => recognizeInspection('/tmp/report.jpg', imageApi, invalidApi),
-    /模型返回内容不是有效 JSON/,
+    () => recognizeInspection('/tmp/report.jpg', invalidUpload, async (path) => path),
+    /识别服务返回内容不是有效 JSON/,
   )
 })
 
-test('prepareImageForUpload keeps an image already below the request limit', async () => {
-  const imageApi = createImageApi({ '/tmp/report.jpg': MAX_IMAGE_BYTES - 1 })
+test('prepareImageForUpload keeps images at or below 5 MB unchanged', async () => {
+  const imageApi = createImageApi({
+    '/tmp/report.jpg': MAX_ONLINE_IMAGE_BYTES,
+  })
 
-  assert.equal(await prepareImageForUpload('/tmp/report.jpg', imageApi), '/tmp/report.jpg')
+  assert.equal(
+    await prepareImageForUpload('/tmp/report.jpg', imageApi),
+    '/tmp/report.jpg',
+  )
   assert.deepEqual(imageApi.qualities, [])
 })
 
-test('prepareImageForUpload compresses repeatedly until the image is below 600 KB', async () => {
+test('prepareImageForUpload compresses images larger than 5 MB until they are below the limit', async () => {
   const imageApi = createImageApi({
-    '/tmp/report.jpg': 1200 * 1024,
-    '/tmp/compressed-70.jpg': 780 * 1024,
-    '/tmp/compressed-50.jpg': 520 * 1024,
+    '/tmp/report.jpg': MAX_ONLINE_IMAGE_BYTES + 1,
+    '/tmp/compressed-80.jpg': MAX_ONLINE_IMAGE_BYTES + 20_000,
+    '/tmp/compressed-65.jpg': MAX_ONLINE_IMAGE_BYTES - 1,
   })
 
-  assert.equal(await prepareImageForUpload('/tmp/report.jpg', imageApi), '/tmp/compressed-50.jpg')
-  assert.deepEqual(imageApi.qualities, [70, 50])
+  assert.equal(
+    await prepareImageForUpload('/tmp/report.jpg', imageApi),
+    '/tmp/compressed-65.jpg',
+  )
+  assert.deepEqual(imageApi.qualities, [80, 65])
 })
 
-test('prepareImageForUpload rejects an image that remains too large', async () => {
-  const imageApi = createImageApi({
-    '/tmp/report.jpg': 1600 * 1024,
-    '/tmp/compressed-70.jpg': 1400 * 1024,
-    '/tmp/compressed-50.jpg': 1200 * 1024,
-    '/tmp/compressed-35.jpg': 1000 * 1024,
-    '/tmp/compressed-20.jpg': 800 * 1024,
-  })
+test('prepareImageForUpload rejects an image that cannot be compressed below 5 MB', async () => {
+  const sizes: Record<string, number> = {
+    '/tmp/report.jpg': MAX_ONLINE_IMAGE_BYTES + 1,
+  }
+  for (const quality of [80, 65, 50, 35, 20, 10]) {
+    sizes[`/tmp/compressed-${quality}.jpg`] = MAX_ONLINE_IMAGE_BYTES + 1
+  }
+  const imageApi = createImageApi(sizes)
 
   await assert.rejects(
     () => prepareImageForUpload('/tmp/report.jpg', imageApi),
-    /压缩后仍超过 600 KB/,
+    /压缩后仍超过 5 MB/,
   )
 })
 
@@ -185,20 +176,3 @@ test('submitInspection confirms a complete editable record', async () => {
   const result = await submitInspection('api-image-1', createCompleteRecord())
   assert.match(result.recordId, /^IR-/)
 })
-
-function createImageApi(sizes: Record<string, number>) {
-  const qualities: number[] = []
-  return {
-    qualities,
-    getFileInfo(options: { filePath: string, success: (result: { size: number }) => void }) {
-      options.success({ size: sizes[options.filePath] })
-    },
-    compressImage(options: {
-      quality: number
-      success: (result: { tempFilePath: string }) => void
-    }) {
-      qualities.push(options.quality)
-      options.success({ tempFilePath: `/tmp/compressed-${options.quality}.jpg` })
-    },
-  }
-}

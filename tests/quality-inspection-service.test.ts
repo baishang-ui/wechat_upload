@@ -4,11 +4,16 @@ import strictAssert from 'node:assert/strict'
 const assert: typeof strictAssert = strictAssert
 
 import { normalizeApiRecord } from '../miniprogram/domain/inspection-record'
+import { RECOGNITION_API_URL } from '../miniprogram/config/server'
 import {
+  autoWriteRecognizedInspectionToPendingItem,
   createStandaloneInspection,
   draftToInspectionRecord,
+  inspectionImageToDataUrl,
   inspectionRecordToDraft,
   getInspectionItemDetail,
+  listProductQualityTemplates,
+  matchRecognizedInspectionToPendingItem,
   recognizeInspectionFile,
   saveInspectionDraft,
   uploadInspectionRowImage,
@@ -37,6 +42,155 @@ function createCompleteRecord() {
     inspector: '检验员',
   })
 }
+
+test('listProductQualityTemplates reads inspection rows from the product database endpoint', async () => {
+  const calls: Array<Record<string, unknown>> = []
+  const request = async <T>(options: Record<string, unknown>): Promise<T> => {
+    calls.push(options)
+    return { items: [] } as T
+  }
+
+  const result = await listProductQualityTemplates(request)
+
+  assert.deepEqual(calls[0], {
+    method: 'GET',
+    path: '/products/api/quality-templates',
+  })
+  assert.deepEqual(result, { items: [] })
+})
+
+
+test('recognized order number and model match one pending database product', () => {
+  const record = createCompleteRecord()
+  record.orderNumber = 'PO - 2026 - 001'
+  record.model = '钢丝刷 100 × 20 mm'
+  const result = matchRecognizedInspectionToPendingItem(record, [{
+    id: 18,
+    contract_no: 'PO-2026-001',
+    status: 'pending',
+    items: [
+      { id: 81, material_name: '树脂砂轮', spec_desc: '100x6x16mm' },
+      { id: 82, material_name: '钢丝刷', spec_desc: '100x20mm' },
+    ],
+  }])
+
+  assert.equal(result.status, 'matched')
+  assert.equal(result.task?.id, 18)
+  assert.equal(result.item?.id, 82)
+})
+
+test('recognized order with multiple indistinguishable products stays ambiguous', () => {
+  const record = createCompleteRecord()
+  record.orderNumber = 'PO-2'
+  record.model = ''
+  const result = matchRecognizedInspectionToPendingItem(record, [{
+    id: 19,
+    contract_no: 'PO-2',
+    status: 'pending',
+    items: [
+      { id: 91, material_name: '产品A' },
+      { id: 92, material_name: '产品B' },
+    ],
+  }])
+
+  assert.equal(result.status, 'item_ambiguous')
+  assert.equal(result.task?.id, 19)
+  assert.equal(result.item, undefined)
+})
+
+test('recognized report is automatically written to the matched pending product draft', async () => {
+  const record = createCompleteRecord()
+  record.orderNumber = 'PO-3'
+  record.model = '100x20mm'
+  const listCalls: Array<Record<string, unknown>> = []
+  const saveCalls: Array<{ taskId: number; itemId: number; payload: QualityInspectionDraftPayload }> = []
+  let imageRead = false
+
+  const result = await autoWriteRecognizedInspectionToPendingItem(record, '/tmp/report.jpg', {
+    listTasks: async (query) => {
+      listCalls.push(query)
+      return {
+        items: [{
+          id: 20,
+          contract_no: 'PO-3',
+          status: 'pending',
+          items: [{
+          id: 101,
+          material_name: '钢丝刷',
+          spec_desc: '100x20mm',
+          inspection_draft: {
+            inspection_records: [],
+            ai_workbench_result: {},
+            ai_workbench_images: ['https://files.example.com/report.jpg'],
+            record_merge_mode: 'matched_only',
+          },
+        }],
+        }],
+        total: 1,
+        page: 1,
+        page_size: 200,
+        stats: {},
+      }
+    },
+    imageToDataUrl: async () => {
+      imageRead = true
+      return 'data:image/jpeg;base64,YQ=='
+    },
+    saveDraft: async (taskId, itemId, payload) => {
+      saveCalls.push({ taskId, itemId, payload })
+      return {}
+    },
+  })
+
+  assert.deepEqual(listCalls[0], {
+    page: 1,
+    pageSize: 200,
+    search: 'PO-3',
+    status: 'pending',
+    sourceType: 'purchase_order',
+  })
+  assert.equal(result.status, 'matched')
+  assert.equal(saveCalls[0].taskId, 20)
+  assert.equal(saveCalls[0].itemId, 101)
+  assert.equal(saveCalls[0].payload.record_merge_mode, 'matched_only')
+  assert.equal(imageRead, false)
+  assert.deepEqual(saveCalls[0].payload.ai_workbench_images, ['https://files.example.com/report.jpg'])
+  assert.equal(saveCalls[0].payload.ai_workbench_result.order_number, 'PO-3')
+})
+
+test('automatic pending-item write keeps the inspection data when the report thumbnail cannot be embedded', async () => {
+  const record = createCompleteRecord()
+  record.orderNumber = 'PO-4'
+  record.model = '100x20mm'
+  const saved: QualityInspectionDraftPayload[] = []
+
+  const result = await autoWriteRecognizedInspectionToPendingItem(record, '/tmp/large-report.jpg', {
+    listTasks: async () => ({
+      items: [{
+        id: 21,
+        contract_no: 'PO-4',
+        status: 'pending',
+        items: [{ id: 102, material_name: '钢丝刷', spec_desc: '100x20mm' }],
+      }],
+      total: 1,
+      page: 1,
+      page_size: 200,
+      stats: {},
+    }),
+    imageToDataUrl: async () => {
+      throw new Error('报告图片读取失败')
+    },
+    saveDraft: async (_taskId, _itemId, payload) => {
+      saved.push(payload)
+      return {}
+    },
+  })
+
+  assert.equal(result.status, 'matched')
+  assert.equal(saved.length, 1)
+  assert.deepEqual(saved[0].ai_workbench_images, [])
+  assert.equal(saved[0].ai_workbench_result.order_number, 'PO-4')
+})
 
 test('inspectionRecordToDraft preserves ten-column rows and miniprogram metadata', () => {
   const record = {
@@ -206,6 +360,8 @@ test('draft save and recognition use shared backend paths', async () => {
     uploadCalls[0].path,
     '/api/miniprogram/quality-inspections/recognize',
   )
+  assert.equal(uploadCalls[0].url, RECOGNITION_API_URL)
+  assert.equal(uploadCalls[0].sessionMode, 'read-only')
 })
 
 test('encodeTaskQuery always requests purchase-order tasks for the pending tab', () => {
@@ -261,34 +417,82 @@ function createSyncRecord(sourceType: 'standalone' | 'purchase_order' = 'standal
   }
 }
 
-test('standalone sync creates once, saves draft, then marks local record synced', async () => {
+test('standalone sync matches the corresponding pending order instead of creating a server task', async () => {
   const { syncStoredInspection } = require('../miniprogram/services/quality-inspection-service') as typeof import('../miniprogram/services/quality-inspection-service')
   const calls: string[] = []
   let savedPayload: QualityInspectionDraftPayload | null = null
   const result = await syncStoredInspection(createSyncRecord(), {
+    listTasks: async (query) => {
+      calls.push(`list:${query.search}`)
+      return {
+        items: [{
+          id: 20,
+          contract_no: 'PO-1',
+          status: 'pending',
+          source_type: 'purchase_order',
+          items: [{ id: 21, material_name: '钢丝刷', spec_desc: '100x20' }],
+        }],
+        total: 1,
+        page: 1,
+        page_size: 200,
+        stats: {},
+      }
+    },
     createStandalone: async () => {
       calls.push('create')
-      return { task_id: 20, item_id: 21, task: { id: 20 } }
+      return { task_id: 99, item_id: 100, task: { id: 99 } }
     },
-    saveDraft: async (_taskId, _itemId, payload) => {
-      calls.push('draft')
+    saveDraft: async (taskId, itemId, payload) => {
+      calls.push(`draft:${taskId}:${itemId}`)
       savedPayload = payload
     },
     updateState: async (record) => record,
     imageToDataUrl: async () => 'data:image/jpeg;base64,YQ==',
   })
-  assert.deepEqual(calls, ['create', 'draft'])
+  assert.deepEqual(calls, ['list:PO-1', 'draft:20:21'])
   assert.equal(result.syncStatus, 'synced')
+  assert.equal(result.sourceType, 'purchase_order')
   assert.equal(result.taskId, 20)
   assert.equal(result.itemId, 21)
-  assert.equal(savedPayload?.record_merge_mode, 'replace')
+  assert.equal(savedPayload?.record_merge_mode, 'matched_only')
 })
 
-test('failed sync retains ids, image and record for retry', async () => {
+test('unmatched standalone inspection remains local and never creates a server task', async () => {
+  const { syncStoredInspection } = require('../miniprogram/services/quality-inspection-service') as typeof import('../miniprogram/services/quality-inspection-service')
+  const local = createSyncRecord()
+  const calls: string[] = []
+  const result = await syncStoredInspection(local, {
+    listTasks: async () => {
+      calls.push('list')
+      return { items: [], total: 0, page: 1, page_size: 200, stats: {} }
+    },
+    createStandalone: async () => {
+      calls.push('create')
+      return { task_id: 99, item_id: 100, task: { id: 99 } }
+    },
+    saveDraft: async () => {
+      calls.push('draft')
+    },
+    updateState: async (record) => record,
+    imageToDataUrl: async () => 'data:image/jpeg;base64,YQ==',
+  })
+  assert.deepEqual(calls, ['list'])
+  assert.equal(result.syncStatus, 'local')
+  assert.equal(result.syncError, '未查到订单 PO-1，质检记录未同步')
+  assert.equal(result.sourceType, 'standalone')
+  assert.equal(result.taskId, null)
+  assert.equal(result.itemId, null)
+  assert.equal(result.clientRecordId, local.clientRecordId)
+  assert.equal(result.imagePath, local.imagePath)
+  assert.deepEqual(result.record, local.record)
+})
+
+test('failed matching keeps the standalone inspection locally with retry context', async () => {
   const { syncStoredInspection } = require('../miniprogram/services/quality-inspection-service') as typeof import('../miniprogram/services/quality-inspection-service')
   const local = createSyncRecord()
   const result = await syncStoredInspection(local, {
-    createStandalone: async () => { throw new Error('网络连接失败') },
+    listTasks: async () => { throw new Error('网络连接失败') },
+    createStandalone: async () => { throw new Error('不应创建任务') },
     saveDraft: async () => undefined,
     updateState: async (record) => record,
     imageToDataUrl: async () => 'data:image/jpeg;base64,YQ==',
@@ -298,6 +502,31 @@ test('failed sync retains ids, image and record for retry', async () => {
   assert.equal(result.imagePath, local.imagePath)
   assert.deepEqual(result.record, local.record)
   assert.equal(result.syncError, '网络连接失败')
+})
+
+test('purchase-order sync keeps the local report image out of the server draft payload', async () => {
+  const { syncStoredInspection } = require('../miniprogram/services/quality-inspection-service') as typeof import('../miniprogram/services/quality-inspection-service')
+  const local = createSyncRecord('purchase_order')
+  let imageRead = false
+  let savedPayload: QualityInspectionDraftPayload | null = null
+
+  const result = await syncStoredInspection(local, {
+    createStandalone: async () => { throw new Error('不应创建任务') },
+    saveDraft: async (_taskId, _itemId, payload) => {
+      savedPayload = payload
+    },
+    updateState: async (record) => record,
+    imageToDataUrl: async () => {
+      imageRead = true
+      return 'data:image/jpeg;base64,bG9jYWw='
+    },
+    loadExistingImages: async () => [],
+  })
+
+  assert.equal(result.syncStatus, 'synced')
+  assert.equal(result.imagePath, local.imagePath)
+  assert.equal(imageRead, false)
+  assert.deepEqual(savedPayload?.ai_workbench_images, [])
 })
 
 test('purchase-order sync skips task creation and overwrites selected item draft', async () => {
@@ -417,18 +646,18 @@ test('sync without a local image preserves existing server draft images', async 
       imageRead = true
       return 'data:image/jpeg;base64,bG9jYWw='
     },
-    loadExistingImages: async () => ['data:image/jpeg;base64,c2VydmVy'],
+    loadExistingImages: async () => ['https://files.example.com/server-report.jpg'],
   })
   assert.equal(result.syncStatus, 'synced')
   assert.equal(imageRead, false)
-  assert.deepEqual(uploadedImages, ['data:image/jpeg;base64,c2VydmVy'])
+  assert.deepEqual(uploadedImages, ['https://files.example.com/server-report.jpg'])
 })
 
 test('synced inspection date updates the cached task card and item draft', () => {
   const {
     applyInspectionDateToTaskItems,
-    inspectionRecordToDraft,
-  getInspectionItemDetail,
+    inspectionImageToDataUrl,
+  inspectionRecordToDraft,
   } = require('../miniprogram/services/quality-inspection-service') as typeof import('../miniprogram/services/quality-inspection-service')
   const tasks = [
     {
@@ -515,19 +744,41 @@ test('uploadInspectionRowImage sends the row context with the multipart file', a
     async <T>(options: Record<string, unknown>): Promise<T> => {
       calls.push(options)
       return {
-        id: 'image-1',
-        url: 'https://example.com/appearance.jpg',
+        image_url: '/uploads/appearance.jpg',
+        image_path: '/srv/uploads/appearance.jpg',
       } as T
+    },
+    async (filePath) => {
+      assert.equal(filePath, '/tmp/appearance.jpg')
+      return '/tmp/appearance-compressed.jpg'
     },
   )
 
-  assert.equal(calls[0].path, '/api/miniprogram/quality-inspections/images')
-  assert.equal(calls[0].filePath, '/tmp/appearance.jpg')
+  assert.equal(calls[0].path, '/inquiries/api/upload-image')
+  assert.equal(calls[0].filePath, '/tmp/appearance-compressed.jpg')
   assert.equal(calls[0].name, 'file')
   assert.deepEqual(calls[0].formData, {
     task_id: '10',
     item_id: '11',
     row_key: 'appearance',
   })
-  assert.equal(result.url, 'https://example.com/appearance.jpg')
+  assert.equal(result.id, '/srv/uploads/appearance.jpg')
+  assert.equal(result.url, 'https://www.binictools.cn:7876/uploads/appearance.jpg')
+})
+
+
+test('inspectionImageToDataUrl embeds large images without checking a client-side size limit', async () => {
+  const previousWx = (globalThis as { wx?: unknown }).wx
+  ;(globalThis as { wx?: unknown }).wx = {
+    arrayBufferToBase64: () => 'YQ==',
+  }
+  try {
+    const result = await inspectionImageToDataUrl('/tmp/large-report.jpg', {
+      read: async () => new Uint8Array([97]).buffer,
+    })
+
+    assert.equal(result, 'data:image/jpeg;base64,YQ==')
+  } finally {
+    ;(globalThis as { wx?: unknown }).wx = previousWx
+  }
 })
