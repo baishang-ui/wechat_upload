@@ -97,6 +97,82 @@ function fallbackPhotoRequired(row: InspectionTemplateRowDto): boolean {
   return group.includes('外观') || group.includes('包装')
 }
 
+
+function normalizedProject(value: string): string {
+  const normalized = value
+    .trim()
+    .toLowerCase()
+    .replace(/[（(].*?[）)]/g, '')
+    .replace(/毫米|mm|㎜/gi, '')
+    .replace(/叶片/g, '页片')
+    .replace(/[\s，。；：、,.;:【】\[\]_/\-]+/g, '')
+    .replace(/^产品/, '')
+  if (/^(外径|直径)$/.test(normalized)) return '外径'
+  if (/^(中孔|中孔径|孔径)$/.test(normalized)) return '孔径'
+  if (/^(柄径|柄直径)$/.test(normalized)) return '柄直径'
+  if (/^(页片长度|刷丝长度)$/.test(normalized)) return normalized === '刷丝长度' ? '出锋长度' : '页片长度'
+  if (/^页片宽度$/.test(normalized)) return '页片宽度'
+  if (/^(页片数量|页片数)$/.test(normalized)) return '页片数量'
+  if (/^(回转|回转测试|检测转速|空载转速|转速)$/.test(normalized)) return '回转测试'
+  if (/^(磨料)?材质$/.test(normalized)) return '材质'
+  if (/^粒度号?$/.test(normalized)) return '粒度'
+  if (/^(砂面)?颜色$/.test(normalized)) return '颜色'
+  if (/^(圆盘)?孔数$/.test(normalized)) return '孔数'
+  return normalized
+}
+
+function semanticGroup(value: string): string {
+  const group = normalizedGroup(value)
+  if (group.includes('尺寸')) return 'dimension'
+  if (group.includes('安全')) return 'safety'
+  if (group.includes('性能') || group.includes('测试报告')) return 'performance'
+  if (group.includes('外观')) return 'appearance'
+  if (group.includes('包装') || group.includes('商标') || group.includes('标签')) return 'packaging'
+  return group
+}
+
+function aliasValues(project: string, standards: Record<string, string>): string[] {
+  const configured = standards['识别别名'] || standards.recognition_aliases || ''
+  return [project, ...configured.split(/[|｜、,，;；]/)]
+    .map(normalizedProject)
+    .filter(Boolean)
+}
+
+function templateRowMatchesProject(row: InspectionTemplateRowDto, project: string): boolean {
+  const normalized = normalizedProject(project)
+  return Boolean(normalized) && aliasValues(row.project, row.measurement_standards).includes(normalized)
+}
+
+function workbenchRowMatchesProject(row: InspectionWorkbenchRow, project: string): boolean {
+  const normalized = normalizedProject(project)
+  return Boolean(normalized) && aliasValues(row.project, row.measurementStandards).includes(normalized)
+}
+
+function matchDraftRecords(
+  sourceRows: InspectionTemplateRowDto[],
+  draftRecords: InspectionDraftRecordLike[],
+): Map<string, InspectionDraftRecordLike> {
+  const result = new Map<string, InspectionDraftRecordLike>()
+  const used = new Set<InspectionDraftRecordLike>()
+  const byKey = new Map(draftRecords.map((row) => [row.row_key, row]))
+  sourceRows.forEach((row) => {
+    const exact = byKey.get(row.row_key)
+    if (exact && !used.has(exact)) {
+      result.set(row.row_key, exact)
+      used.add(exact)
+      return
+    }
+    const available = draftRecords.filter((draft) => !used.has(draft) && templateRowMatchesProject(row, draft.project))
+    const sameGroup = available.filter((draft) => semanticGroup(draft.group_title) === semanticGroup(row.group_title))
+    const matches = sameGroup.length > 0 ? sameGroup : available
+    if (matches.length === 1) {
+      result.set(row.row_key, matches[0])
+      used.add(matches[0])
+    }
+  })
+  return result
+}
+
 export function buildInspectionWorkbench(options: {
   template?: InspectionTemplateDto | null
   draft?: InspectionDraftLike | null
@@ -106,7 +182,6 @@ export function buildInspectionWorkbench(options: {
   if (!template && draftRecords.length === 0) {
     throw new Error('线上检验模板尚未配置')
   }
-  const draftByKey = new Map(draftRecords.map((row) => [row.row_key, row]))
   const sourceRows: InspectionTemplateRowDto[] = template
     ? template.rows
     : draftRecords.map((row, index) => ({
@@ -119,23 +194,21 @@ export function buildInspectionWorkbench(options: {
       measurement_standards: row.measurement_standards,
       note: row.note,
     }))
-  const rows = [...sourceRows]
-    .sort((left, right) => left.display_order - right.display_order)
+  const orderedRows = [...sourceRows].sort((left, right) => left.display_order - right.display_order)
+  const matchedDrafts = matchDraftRecords(orderedRows, draftRecords)
+  const rows = orderedRows
     .map((row) => {
-      const saved = draftByKey.get(row.row_key)
+      const saved = matchedDrafts.get(row.row_key)
       const photoRequired = fallbackPhotoRequired(row)
       return {
         rowKey: row.row_key,
         groupTitle: row.group_title,
         displayOrder: row.display_order,
         project: row.project,
-        method: saved?.method || row.method,
-        standard: saved?.standard || row.standard,
+        method: row.method,
+        standard: row.standard,
         measurements: normalizeTenValues(saved?.sample_data || []),
-        measurementStandards: {
-          ...row.measurement_standards,
-          ...(saved?.measurement_standards || {}),
-        },
+        measurementStandards: { ...row.measurement_standards },
         decision: saved?.decision || '',
         note: saved?.note || row.note,
         photoRequired,
@@ -199,14 +272,6 @@ export interface RecognitionMergeResult {
   unmatched: UnmatchedRecognitionRow[]
 }
 
-function normalizedProject(value: string): string {
-  return value
-    .trim()
-    .toLowerCase()
-    .replace(/[\s，。；：、,.;:()（）【】\[\]_-]+/g, '')
-    .replace(/^产品/, '')
-}
-
 function isOcrTarget(row: InspectionWorkbenchRow): boolean {
   if (row.inputMode === 'ocr_measurement') return true
   const group = normalizedGroup(row.groupTitle)
@@ -222,16 +287,19 @@ export function mergeRecognitionRecord(
   const matchedKeys = new Set<string>()
 
   record.rows.forEach((recognized) => {
-    const targets = nextRows.filter(isOcrTarget)
-    let target = targets.find((row) => (
-      row.rowKey === recognized.id && !matchedKeys.has(row.rowKey)
+    const targets = nextRows.filter((row) => isOcrTarget(row) && !matchedKeys.has(row.rowKey))
+    const generatedApiKey = /^api-row-\d+$/.test(recognized.id)
+    let target = generatedApiKey ? undefined : targets.find((row) => (
+      row.rowKey === recognized.id && workbenchRowMatchesProject(row, recognized.item)
     ))
     if (!target) {
-      const project = normalizedProject(recognized.item)
-      const projectMatches = targets.filter((row) => (
-        normalizedProject(row.project) === project && !matchedKeys.has(row.rowKey)
-      ))
-      if (projectMatches.length === 1) target = projectMatches[0]
+      const projectMatches = targets.filter((row) => workbenchRowMatchesProject(row, recognized.item))
+      const recognizedGroup = semanticGroup(recognized.groupTitle || '')
+      const sameGroupMatches = recognizedGroup
+        ? projectMatches.filter((row) => semanticGroup(row.groupTitle) === recognizedGroup)
+        : []
+      const matches = sameGroupMatches.length > 0 ? sameGroupMatches : projectMatches
+      if (matches.length === 1) target = matches[0]
     }
     if (!target) {
       unmatched.push({
@@ -280,7 +348,7 @@ export interface WorkbenchDraftPayload {
   inspection_records: WorkbenchDraftRecord[]
   ai_workbench_result: Record<string, unknown>
   ai_workbench_images: string[]
-  record_merge_mode: 'matched_only'
+  record_merge_mode: 'workbench'
 }
 
 export function workbenchToDraft(
@@ -323,7 +391,7 @@ export function workbenchToDraft(
       unmatched_recognition_rows: options.unmatched,
     },
     ai_workbench_images: [...options.reportImages],
-    record_merge_mode: 'matched_only',
+    record_merge_mode: 'workbench',
   }
 }
 

@@ -255,7 +255,7 @@ test('workbenchToDraft preserves online rows and only serializes uploaded photo 
     reportImages: ['data:image/jpeg;base64,YQ=='],
   })
 
-  assert.equal(draft.record_merge_mode, 'matched_only')
+  assert.equal(draft.record_merge_mode, 'workbench')
   assert.deepEqual(draft.inspection_records[0].images, [
     'https://example.com/a.jpg',
   ])
@@ -361,7 +361,7 @@ test('new photo ids stay unique after a previously added photo is removed', () =
   assert.equal(new Set(ids).size, ids.length)
 })
 
-test('online item detail generates the same product template when task summary has no template', () => {
+test('online item detail follows the Web report matcher instead of a separate database quality template', () => {
   const template = buildOnlineInspectionTemplate({
     task: { id: 12, task_no: 'QI-12' },
     item: {
@@ -371,33 +371,62 @@ test('online item detail generates the same product template when task summary h
       packaging_method: '彩盒',
     },
     master_product: {
+      category: 'WB',
       subcategory: '曲丝钢丝刷',
       name: '钢丝刷',
-      spec_pairs: [
-        { label: '直径', value: '100 mm' },
-        { label: '丝径', value: '0.30 mm' },
-        { label: '柄直径', value: '6 mm' },
-      ],
-      attribute_pairs: [
-        { label: '材质', value: '高碳钢丝' },
-        { label: '最大转速', value: '8500 RPM' },
-      ],
+      spec_pairs: [{ label: '丝径', value: '0.30 mm' }],
+      attribute_pairs: [{ label: '最大转速', value: '8500 RPM' }],
     },
     customer_product: {
       packaging_method: '彩盒',
       extra_info_text: '外箱标签：按客户图稿',
       extra_info_attachments: [],
     },
-  })
+  }, [{
+    scope: 'WB::曲丝钢丝刷',
+    scope_label: 'WB / 曲丝钢丝刷',
+    category: 'WB',
+    subcategory: '曲丝钢丝刷',
+    updated_at: '2026-07-27T10:00:00',
+    rows: [
+      {
+        id: 'wire-appearance',
+        section: '外观项目',
+        item: '丝形态',
+        method: '目视',
+        requirement: '与母库一致',
+        standard: '符合为 OK，不符合为 NG',
+      },
+      {
+        id: 'wire-diameter',
+        section: '尺寸项目',
+        item: '丝径',
+        method: '千分尺',
+        requirement: '0.30 mm',
+        standard: '符合公差要求',
+      },
+      {
+        id: 'wire-speed',
+        section: '安全项目',
+        item: '最大转速',
+        method: '回转仪',
+        requirement: '8500 RPM',
+        standard: '不低于要求',
+      },
+    ],
+  }])
 
-  assert.equal(template.template_id, 'BSP-QR-ZJ-A21')
-  assert.equal(template.version, 'online-web/wire_brush')
-  assert.ok(template.rows.some((row) => row.project === '丝径(㎜)' && row.standard === '0.30 mm'))
-  assert.ok(template.rows.some((row) => row.project === '转速' && row.standard === '8500 RPM'))
-  assert.ok(template.rows.some((row) => row.group_title === '产品包装' && row.photo_required))
-  assert.ok(template.rows
-    .filter((row) => ['产品尺寸', '安全性能'].includes(row.group_title))
-    .every((row) => row.input_mode === 'ocr_measurement'))
+  assert.equal(template.template_id, 'online-report:wire_brush')
+  assert.equal(template.version, 'online-web/QualityInspectionWorkbench/formal-v1')
+  assert.equal(template.rows.some((row) => row.project === '丝形态'), false)
+  assert.deepEqual(template.rows
+    .filter((row) => ['产品尺寸', '产品安全', '产品性能'].includes(row.group_title))
+    .map((row) => row.project), [
+    '外径', '丝径', '出锋长度', '柄直径', '孔径/螺纹',
+    '回转测试', '刷丝拉脱强度', '除锈/去毛刺效果', '使用寿命',
+  ])
+  assert.equal(template.rows.find((row) => row.project === '丝径')?.standard, '0.30 mm')
+  assert.equal(template.rows.find((row) => row.project === '回转测试')?.standard, 'EN 1083 / ANSI B165.1')
   assert.deepEqual(template.columns.map((column) => column.key), [
     'project',
     'standard',
@@ -416,4 +445,301 @@ test('online item detail generates the same product template when task summary h
     'decision',
     'note',
   ])
+})
+
+test('online item detail falls back to the same generic report used by the online Web workbench', () => {
+  const template = buildOnlineInspectionTemplate({
+    task: { id: 12, task_no: 'QI-12' },
+    item: { id: 34, material_name: '未配置模板产品' },
+    master_product: {
+      category: 'NEW',
+      subcategory: '全新品类',
+      spec_pairs: [{ label: '外径', value: '100 mm' }],
+      attribute_pairs: [{ label: '表面处理', value: '镀锌' }],
+      grade_pairs: [{ label: '安全等级', value: 'A级' }],
+    },
+    customer_product: { packaging_method: '彩盒' },
+  }, [])
+
+  assert.equal(template.template_id, 'online-report:generic')
+  assert.deepEqual(template.rows.map((row) => row.project), [
+    '产品外观',
+    '包装方式',
+    '关键尺寸',
+    '产品安全性',
+    '产品性能',
+  ])
+  assert.equal(template.rows[0].input_mode, 'manual_photo')
+  assert.equal(template.rows[2].input_mode, 'ocr_measurement')
+})
+
+
+test('online web report matcher selects the velcro sanding disc table from a standalone item name', () => {
+  const template = buildOnlineInspectionTemplate({
+    task: { id: 252, task_no: 'MATCH-UPLOAD-TEST-870d95c3f7' },
+    item: {
+      id: 221,
+      material_code: 'ITEM-870d95c3f7',
+      material_name: '拉绒片',
+      spec_desc: '115x22.23mm',
+    },
+    master_product: {
+      category: '',
+      subcategory: '',
+      name: '拉绒片',
+      master_code: 'ITEM-870d95c3f7',
+      spec_pairs: [],
+      attribute_pairs: [],
+      grade_pairs: [],
+    },
+    customer_product: {},
+  }, [])
+
+  assert.equal(template.template_id, 'online-report:velcro_sanding_disc')
+  assert.equal(template.version, 'online-web/QualityInspectionWorkbench/formal-v1')
+  assert.deepEqual(template.rows.map((row) => row.project), [
+    '产品外观',
+    '长度',
+    '宽度',
+    '直径',
+    '孔径',
+    '厚度',
+    '孔数',
+    '粘接/剥离强度',
+    '回转测试（圆片）',
+    '磨削效率',
+    '砂痕一致性/寿命',
+  ])
+  assert.deepEqual(template.rows.map((row) => row.group_title), [
+    '产品外观',
+    '产品尺寸', '产品尺寸', '产品尺寸', '产品尺寸', '产品尺寸', '产品尺寸',
+    '产品安全', '产品安全',
+    '产品性能', '产品性能',
+  ])
+  assert.equal(template.rows[0].photo_required, true)
+  assert.equal(template.rows[1].input_mode, 'ocr_measurement')
+})
+
+
+test('formal online template keeps its structure and only merges compatible values from a stale draft', () => {
+  const template = buildOnlineInspectionTemplate({
+    task: { id: 252, task_no: 'MATCH-UPLOAD-TEST-870d95c3f7' },
+    item: {
+      id: 221,
+      material_code: 'ITEM-870d95c3f7',
+      material_name: '拉绒片',
+      spec_desc: '115x22.23mm',
+    },
+    master_product: { name: '拉绒片' },
+    customer_product: {},
+  }, [])
+  const workbench = buildInspectionWorkbench({
+    template,
+    draft: {
+      records: [
+        {
+          row_key: 'legacy-diameter',
+          group_title: '产品尺寸',
+          project: '直径(㎜)',
+          method: '',
+          standard: '',
+          decision: '',
+          sample_data: ['115.2'],
+          measurement_standards: {},
+          note: '',
+          ai_result: {},
+          images: [],
+        },
+        {
+          row_key: 'formal-strength',
+          group_title: '金刚石锯片正式项目',
+          project: '粘扣强度',
+          method: '',
+          standard: '',
+          decision: 'OK',
+          sample_data: ['合格'],
+          measurement_standards: {},
+          note: '',
+          ai_result: {},
+          images: [],
+        },
+      ],
+      ai_workbench_result: {},
+      ai_workbench_images: [],
+    },
+  })
+
+  assert.equal(workbench.rows.some((row) => row.groupTitle.includes('金刚石锯片')), false)
+  assert.equal(workbench.rows.some((row) => row.project === '粘扣强度'), false)
+  const diameter = workbench.rows.find((row) => row.project === '直径')
+  assert.ok(diameter)
+  assert.equal(diameter.groupTitle, '产品尺寸')
+  assert.equal(diameter.measurements[0], '115.2')
+})
+
+
+test('online Web resin report adds master QC rows before deduplicating template items', () => {
+  const template = buildOnlineInspectionTemplate({
+    task: { id: 300, task_no: 'QI-AW-300' },
+    item: {
+      id: 301,
+      material_code: 'AW-115',
+      material_name: '树脂切割片',
+      spec_desc: '115x1.2x22.23mm',
+    },
+    master_product: {
+      category: 'AW',
+      subcategory: '树脂切割片',
+      name: '树脂切割片',
+      spec_pairs: [
+        { label: '外径', value: '115 mm' },
+        { label: '厚度', value: '1.2 mm' },
+        { label: '孔径', value: '22.23 mm' },
+      ],
+      attribute_pairs: [
+        { label: '安全速度', value: '80 m/s' },
+        { label: '强化层', value: '双网' },
+        { label: '切割材料', value: '不锈钢' },
+        { label: '切割性能', value: '≥50刀' },
+      ],
+    },
+    customer_product: {},
+  }, [])
+
+  assert.equal(template.template_id, 'online-report:resin_cutting_disc')
+  assert.deepEqual(template.rows
+    .filter((row) => row.group_title === '产品外观')
+    .map((row) => row.project), ['产品外观'])
+  assert.equal(template.rows.filter((row) => row.project === '外径').length, 1)
+  assert.equal(template.rows.find((row) => row.project === '外径')?.standard, '115 mm')
+  assert.equal(template.rows.find((row) => row.project === '孔径')?.standard, '22.23 mm')
+  assert.equal(template.rows.find((row) => row.project === '回转/破裂测试')?.standard, 'EN 12413')
+  assert.equal(template.rows.find((row) => row.project === '切割/磨削性能')?.standard, '按母库性能标准')
+})
+
+function createRecognitionRows(items: Array<{ id: string; groupTitle?: string; item: string; value: string }>) {
+  return {
+    productType: 'steel_brush' as const,
+    customer: '',
+    supplier: '',
+    trademark: '',
+    orderNumber: '',
+    model: '',
+    arrivalQuantity: '',
+    inspectionDate: '',
+    rows: items.map((item) => ({
+      id: item.id,
+      groupTitle: item.groupTitle || '',
+      item: item.item,
+      requirement: '',
+      specification: '',
+      measurements: [item.value],
+      lowConfidenceFields: [],
+    })),
+    sampleJudgements: Array(10).fill('') as Array<''>,
+    notes: '',
+    reviewer: '',
+    inspector: '',
+    lowConfidenceFields: [],
+  }
+}
+
+test('wire brush detail uses the same formal dimension, safety and performance entries as online', () => {
+  const template = buildOnlineInspectionTemplate({
+    task: { id: 270, task_no: 'QI-270' },
+    item: { id: 271, material_name: '钢丝刷', spec_desc: '100mm' },
+    master_product: { category: 'WB', subcategory: '曲丝钢丝刷', name: '钢丝刷' },
+    customer_product: {},
+  })
+
+  assert.deepEqual(
+    template.rows
+      .filter((row) => ['产品尺寸', '产品安全', '产品性能'].includes(row.group_title))
+      .map((row) => `${row.group_title}:${row.project}`),
+    [
+      '产品尺寸:外径',
+      '产品尺寸:丝径',
+      '产品尺寸:出锋长度',
+      '产品尺寸:柄直径',
+      '产品尺寸:孔径/螺纹',
+      '产品安全:回转测试',
+      '产品安全:刷丝拉脱强度',
+      '产品性能:除锈/去毛刺效果',
+      '产品性能:使用寿命',
+    ],
+  )
+})
+
+test('flap disc detail uses the same formal dimension, safety and performance entries as online', () => {
+  const template = buildOnlineInspectionTemplate({
+    task: { id: 6, task_no: 'QI-6' },
+    item: { id: 7, material_name: '煅烧蓝氧化铝百叶轮', spec_desc: '115x22mm' },
+    master_product: { category: 'CA', subcategory: '百页轮叶片式', name: '煅烧蓝氧化铝百叶轮' },
+    customer_product: {},
+  })
+
+  assert.deepEqual(
+    template.rows
+      .filter((row) => ['产品尺寸', '产品安全', '产品性能'].includes(row.group_title))
+      .map((row) => `${row.group_title}:${row.project}`),
+    [
+      '产品尺寸:外径',
+      '产品尺寸:孔径/柄径',
+      '产品尺寸:页片长度',
+      '产品尺寸:页片宽度',
+      '产品尺寸:页片数量',
+      '产品安全:回转测试',
+      '产品安全:页片粘接强度',
+      '产品性能:磨削效率',
+      '产品性能:磨削寿命',
+    ],
+  )
+})
+
+test('recognition aliases fill the intended formal rows and ignore a semantically incompatible row key', () => {
+  const template = buildOnlineInspectionTemplate({
+    task: { id: 6, task_no: 'QI-6' },
+    item: { id: 7, material_name: '煅烧蓝氧化铝百叶轮', spec_desc: '115x22mm' },
+    master_product: { category: 'CA', subcategory: '百页轮叶片式', name: '煅烧蓝氧化铝百叶轮' },
+    customer_product: {},
+  })
+  const workbench = buildInspectionWorkbench({ template })
+  const outer = workbench.rows.find((row) => row.project === '外径')!
+  const result = mergeRecognitionRecord(workbench.rows, createRecognitionRows([
+    { id: outer.rowKey, groupTitle: '产品尺寸', item: '中孔径(㎜)', value: '22.2' },
+    { id: 'api-row-2', groupTitle: '产品尺寸', item: '直径(㎜)', value: '115.1' },
+    { id: 'api-row-3', groupTitle: '产品尺寸', item: '叶片长度(㎜)', value: '18.0' },
+    { id: 'api-row-4', groupTitle: '产品尺寸', item: '叶片宽度(㎜)', value: '16.0' },
+    { id: 'api-row-5', groupTitle: '安全性能', item: '回转', value: 'OK' },
+  ]))
+
+  assert.equal(result.rows.find((row) => row.project === '孔径/柄径')?.measurements[0], '22.2')
+  assert.equal(result.rows.find((row) => row.project === '外径')?.measurements[0], '115.1')
+  assert.equal(result.rows.find((row) => row.project === '页片长度')?.measurements[0], '18.0')
+  assert.equal(result.rows.find((row) => row.project === '页片宽度')?.measurements[0], '16.0')
+  assert.equal(result.rows.find((row) => row.project === '回转测试')?.measurements[0], 'OK')
+  assert.equal(result.unmatched.length, 0)
+})
+
+test('formal dimension rows keep master values when online labels use page-blade aliases', () => {
+  const template = buildOnlineInspectionTemplate({
+    task: { id: 6, task_no: 'QI-6' },
+    item: { id: 7, material_name: '百叶轮', spec_desc: '115x22mm' },
+    master_product: {
+      subcategory: '百页轮叶片式',
+      name: '百叶轮',
+      spec_pairs: [
+        { label: '外径', value: '115 mm' },
+        { label: '孔径', value: '22.23 mm' },
+        { label: '叶片长度', value: '18 mm' },
+        { label: '叶片宽度', value: '16 mm' },
+      ],
+      attribute_pairs: [{ label: '叶片数量', value: '72' }],
+    },
+    customer_product: {},
+  })
+
+  assert.equal(template.rows.find((row) => row.project === '页片长度')?.standard, '18 mm')
+  assert.equal(template.rows.find((row) => row.project === '页片宽度')?.standard, '16 mm')
+  assert.equal(template.rows.find((row) => row.project === '页片数量')?.standard, '72')
 })
