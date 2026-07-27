@@ -48,11 +48,16 @@ import {
   submitInspection,
 } from '../../services/inspection-service'
 import { exportInspectionJson } from '../../services/export-service'
-import { getCurrentUser } from '../../services/auth-service'
+import {
+  AuthUser,
+  getCurrentUser,
+  logout,
+} from '../../services/auth-service'
 import { DEMO_MODE } from '../../config/server'
 import { ServerClientError } from '../../services/server-client'
 import {
   applyInspectionDateToTaskItems,
+  autoWriteRecognizedInspectionToPendingItem,
   createStandaloneInspection,
   deleteRemoteInspectionRecord,
   getInspectionTask,
@@ -85,7 +90,7 @@ interface HistoryEditorInput {
   record: InspectionRecord
 }
 
-type WorkspaceTab = 'scan' | 'tasks' | 'history'
+type WorkspaceTab = 'scan' | 'tasks' | 'history' | 'account'
 
 const productLabels = PRODUCT_OPTIONS.map((option) => option.label)
 const measurementHeaders = Array.from({ length: MEASUREMENT_COUNT }, (_, index) => index + 1)
@@ -93,6 +98,31 @@ const judgementOptions: Judgement[] = ['', 'OK', 'NG']
 const RECOGNITION_PROGRESS_TICK_MS = 300
 const recognitionProgressTimers = new Map<string, ReturnType<typeof setInterval>>()
 const recognitionProgressStartedAt = new Map<string, number>()
+const attachedWorkspaceComponents = new WeakSet<object>()
+const recognitionStageTimers = new WeakMap<object, Set<ReturnType<typeof setTimeout>>>()
+
+function scheduleRecognitionStage(component: object, callback: () => void): void {
+  if (!attachedWorkspaceComponents.has(component)) return
+  let timers = recognitionStageTimers.get(component)
+  if (!timers) {
+    timers = new Set()
+    recognitionStageTimers.set(component, timers)
+  }
+  const timer = setTimeout(() => {
+    timers?.delete(timer)
+    if (attachedWorkspaceComponents.has(component)) callback()
+  }, 350)
+  timers.add(timer)
+}
+
+function clearRecognitionStageTimers(component: object): void {
+  recognitionStageTimers.get(component)?.forEach((timer) => clearTimeout(timer))
+  recognitionStageTimers.delete(component)
+}
+
+function getAccountInitial(user: AuthUser): string {
+  return String(user.real_name || user.username || '账').trim().slice(0, 1) || '账'
+}
 
 Component({
   data: {
@@ -150,27 +180,89 @@ Component({
     historySaving: false,
     historyExporting: false,
     pressedTab: '' as WorkspaceTab | '',
+    currentUser: null as AuthUser | null,
+    accountInitial: '账',
+    accountLoading: !DEMO_MODE,
+    accountError: DEMO_MODE ? '演示模式不包含登录账户' : '',
+    loggingOut: false,
   },
   lifetimes: {
     attached() {
+      attachedWorkspaceComponents.add(this)
       if (!DEMO_MODE) {
         getCurrentUser()
+          .then((currentUser) => {
+            this.setData({
+              currentUser,
+              accountInitial: getAccountInitial(currentUser),
+              accountLoading: false,
+              accountError: '',
+            })
+          })
           .catch((error: Error) => {
             if (error instanceof ServerClientError && error.statusCode === 401) {
               wx.reLaunch({ url: '/pages/login/login' })
               return
             }
+            this.setData({
+              accountLoading: false,
+              accountError: error.message || '账户信息加载失败',
+            })
             wx.showToast({ title: error.message || '会话检查失败', icon: 'none' })
           })
       }
     },
     detached() {
+      attachedWorkspaceComponents.delete(this)
+      clearRecognitionStageTimers(this)
       this.stopAllRecognitionProgress()
     },
   },
   methods: {
     onNavigationHeightChange(event: NavigationHeightChangeEvent) {
       this.setData({ navigationBarHeight: event.detail.height })
+    },
+    loadAccountUser() {
+      if (DEMO_MODE || this.data.accountLoading) return
+      this.setData({ accountLoading: true, accountError: '' })
+      getCurrentUser()
+        .then((currentUser) => {
+          this.setData({
+            currentUser,
+            accountInitial: getAccountInitial(currentUser),
+            accountLoading: false,
+            accountError: '',
+          })
+        })
+        .catch((error: Error) => {
+          if (error instanceof ServerClientError && error.statusCode === 401) {
+            wx.reLaunch({ url: '/pages/login/login' })
+            return
+          }
+          this.setData({
+            accountLoading: false,
+            accountError: error.message || '账户信息加载失败',
+          })
+        })
+    },
+    confirmLogout() {
+      if (this.data.loggingOut) return
+      wx.showModal({
+        title: '退出登录',
+        content: '退出后需要重新登录，是否继续？',
+        confirmText: '退出',
+        confirmColor: '#b93d49',
+        success: (result) => {
+          if (!result.confirm) return
+          this.setData({ loggingOut: true })
+          logout()
+            .catch(() => undefined)
+            .finally(() => {
+              this.setData({ loggingOut: false })
+              wx.reLaunch({ url: '/pages/login/login' })
+            })
+        },
+      })
     },
     refreshHistory(force = false): Promise<void> {
       const forceRefresh = force === true
@@ -350,6 +442,7 @@ Component({
     },
     syncHistoryRecord(record: StoredInspectionRecord): Promise<StoredInspectionRecord> {
       return syncStoredInspection(record, {
+        listTasks: listInspectionTasks,
         createStandalone: createStandaloneInspection,
         saveDraft: saveInspectionDraft,
         imageToDataUrl: inspectionImageToDataUrl,
@@ -357,7 +450,7 @@ Component({
           const task = await getInspectionTask(taskId)
           const item = task.items?.find((candidate) => candidate.id === itemId)
           return (item?.inspection_draft?.ai_workbench_images || [])
-            .filter((image) => image.startsWith('data:image/'))
+            .filter((image) => typeof image === 'string')
             .slice(0, 1)
         },
         updateState: async (nextRecord) => (
@@ -399,7 +492,9 @@ Component({
         .then((result) => this.refreshHistory(true).then(() => result))
         .then((result) => {
           wx.showToast({
-            title: result.syncStatus === 'synced' ? '同步成功' : '同步失败，请重试',
+            title: result.syncStatus === 'synced'
+              ? '同步成功'
+              : result.syncError || '同步失败，请重试',
             icon: 'none',
           })
         })
@@ -450,7 +545,7 @@ Component({
         count: sourceType.includes('album') ? Math.min(9, remaining) : 1,
         mediaType: ['image'],
         sourceType,
-        sizeType: ['compressed'],
+        sizeType: ['original'],
         success: (result) => this.enqueueRecognitionFiles(
           result.tempFiles.map((file) => file.tempFilePath),
         ),
@@ -478,7 +573,12 @@ Component({
       this.stopRecognitionProgress(id)
       recognitionProgressStartedAt.set(id, Date.now())
       const tick = () => {
-        const current = this.data.recognitionQueue.find((item) => item.id === id)
+        if (!attachedWorkspaceComponents.has(this)) {
+          this.stopRecognitionProgress(id)
+          return
+        }
+        const queueIndex = this.data.recognitionQueue.findIndex((item) => item.id === id)
+        const current = this.data.recognitionQueue[queueIndex]
         const startedAt = recognitionProgressStartedAt.get(id)
         if (
           !current
@@ -496,8 +596,13 @@ Component({
             current.progressProfile,
           ),
         )
-        if (progress === current.progress) return
-        this.applyRecognitionQueue(updateQueueItem(this.data.recognitionQueue, id, { progress }))
+        if (progress === current.progress) {
+          if (progress >= current.progressProfile.tailCeiling) this.stopRecognitionProgress(id)
+          return
+        }
+        const progressPath = `recognitionQueue[${queueIndex}].progress`
+        this.setData({ [progressPath]: progress })
+        if (progress >= current.progressProfile.tailCeiling) this.stopRecognitionProgress(id)
       }
       recognitionProgressTimers.set(id, setInterval(tick, RECOGNITION_PROGRESS_TICK_MS))
       tick()
@@ -525,6 +630,7 @@ Component({
       }, () => this.runRecognitionQueue())
     },
     runRecognitionQueue() {
+      if (!attachedWorkspaceComponents.has(this)) return
       const claimed = claimQueuedRecognitionItems(
         this.data.recognitionQueue,
         MAX_CONCURRENT_RECOGNITIONS,
@@ -535,17 +641,19 @@ Component({
       })
     },
     startQueueRecognition(id: string) {
+      if (!attachedWorkspaceComponents.has(this)) return
       const next = this.data.recognitionQueue.find((item) => item.id === id)
       if (!next || next.status !== 'preparing') return
       this.startRecognitionProgress(id)
-      setTimeout(() => {
+      scheduleRecognitionStage(this, () => {
         const current = this.data.recognitionQueue.find((item) => item.id === id)
         if (!current || current.status !== 'preparing') return
         const recognizingQueue = markQueueItemRecognizing(this.data.recognitionQueue, id)
         this.applyRecognitionQueue(recognizingQueue)
-      }, 350)
+      })
       recognizeInspection(next.imagePath)
         .then((result) => {
+          if (!attachedWorkspaceComponents.has(this)) return
           const current = this.data.recognitionQueue.find((item) => item.id === id)
           const taskPrefill = current?.taskPrefill
           const recognizedRecord = taskPrefill
@@ -568,8 +676,10 @@ Component({
             hints,
           )
           this.applyRecognitionQueue(completed)
+          void this.autoWriteQueueRecognition(id, recognizedRecord, next.imagePath)
         })
         .catch((error: Error) => {
+          if (!attachedWorkspaceComponents.has(this)) return
           const failed = failQueueItem(
             this.data.recognitionQueue,
             id,
@@ -579,8 +689,62 @@ Component({
         })
         .finally(() => {
           this.stopRecognitionProgress(id)
-          this.runRecognitionQueue()
+          if (attachedWorkspaceComponents.has(this)) this.runRecognitionQueue()
         })
+    },
+    async autoWriteQueueRecognition(
+      id: string,
+      record: InspectionRecord,
+      imagePath: string,
+    ) {
+      try {
+        const matched = await autoWriteRecognizedInspectionToPendingItem(record, imagePath)
+        if (!attachedWorkspaceComponents.has(this)) return
+        const current = this.data.recognitionQueue.find((item) => item.id === id)
+        if (!current || current.status !== 'ready') return
+        if (matched.status === 'matched' && matched.task && matched.item) {
+          const taskPrefill = taskItemToInspectionRecord(matched.task, matched.item)
+          this.applyRecognitionQueue(updateQueueItem(this.data.recognitionQueue, id, {
+            sourceType: 'purchase_order',
+            taskId: matched.task.id,
+            itemId: matched.item.id,
+            taskPrefill,
+            stage: '已写入待检产品，可直接进入',
+          }))
+          if (this.data.reviewQueueItemId === id) {
+            this.setData({
+              selectedTaskId: matched.task.id,
+              selectedItemId: matched.item.id,
+            })
+          }
+          return
+        }
+        let stage = '识别完成，请手动选择待检产品'
+        switch (matched.status) {
+          case 'missing_order_number': stage = '识别完成，未识别到订单号'; break
+          case 'order_not_found': stage = '识别完成，未匹配到待检订单'; break
+          case 'order_ambiguous': stage = '识别完成，匹配到多个待检订单，请手动选择'; break
+          case 'item_not_found': stage = '识别完成，订单中没有待检产品'; break
+          case 'item_ambiguous': stage = '识别完成，订单内产品无法唯一匹配，请手动选择'; break
+        }
+        this.applyRecognitionQueue(updateQueueItem(this.data.recognitionQueue, id, { stage }))
+      } catch (error) {
+        if (!attachedWorkspaceComponents.has(this)) return
+        const current = this.data.recognitionQueue.find((item) => item.id === id)
+        if (!current || current.status !== 'ready') return
+        const message = error instanceof Error && error.message
+          ? error.message
+          : '自动写入失败'
+        this.applyRecognitionQueue(updateQueueItem(this.data.recognitionQueue, id, {
+          stage: `识别完成，自动写入失败：${message}`,
+        }))
+      }
+    },
+    jumpToMatchedInspection(event: WechatMiniprogram.TouchEvent) {
+      const id = String(event.currentTarget.dataset.id || '')
+      const item = this.data.recognitionQueue.find((candidate) => candidate.id === id)
+      if (!item?.taskId || !item.itemId) return
+      this.openWorkbenchModal(item.taskId, item.itemId)
     },
     openQueueReview(event: WechatMiniprogram.TouchEvent) {
       const id = String(event.currentTarget.dataset.id || '')
@@ -844,7 +1008,7 @@ Component({
           wx.showToast({
             title: result.syncStatus === 'synced'
               ? '记录已更新并同步'
-              : '已本地保存，同步失败',
+              : result.syncError || '已本地保存，未同步',
             icon: 'none',
           })
         })
@@ -997,9 +1161,9 @@ Component({
             recognitionQueueStats: getQueueStats(queue),
           })
           this.refreshHistory(true)
-          if (stored.syncStatus === 'failed') {
+          if (stored.syncStatus !== 'synced' && stored.syncError) {
             wx.showToast({
-              title: '已本地保存，可在历史记录重试',
+              title: stored.syncError,
               icon: 'none',
               duration: 2800,
             })

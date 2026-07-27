@@ -1,11 +1,11 @@
-<navigation-bar title="{{activeTab === 'scan' ? '检验报告识别' : activeTab === 'tasks' ? '采购待检任务' : '识别记录'}}" back="{{false}}" color="#17233d" background="rgba(246, 249, 252, .48)" bindheightchange="onNavigationHeightChange"></navigation-bar>
+<navigation-bar title="{{activeTab === 'scan' ? '检验报告识别' : activeTab === 'tasks' ? '采购待检任务' : activeTab === 'history' ? '识别记录' : '账户'}}" back="{{false}}" color="#17233d" background="rgba(246, 249, 252, .48)" bindheightchange="onNavigationHeightChange"></navigation-bar>
 <scroll-view class="page-scroll" scroll-y enhanced show-scrollbar="{{false}}" bindscrolltolower="loadMoreTasks">
   <view class="page-shell" style="padding-top: calc({{navigationBarHeight}}px + 32rpx);">
     <block wx:if="{{activeTab === 'scan'}}">
     <block wx:if="{{screen === 'capture'}}">
       <view class="hero-card queue-capture-card">
         <view class="eyebrow">AI INSPECTION QUEUE</view>
-        <view class="hero-title">连续识别检验报告</view>
+        <view class="hero-title">识别检验报告</view>
         <view class="hero-desc">识别过程中仍可继续添加图片，系统会按照加入顺序逐张处理。</view>
         <view class="queue-add-actions">
           <button class="primary-button queue-add-camera" bindtap="takePhoto">拍摄报告</button>
@@ -46,6 +46,7 @@
               <text wx:if="{{queueItem.reviewHints.warningCount}}" class="queue-risk is-warning">黄色 {{queueItem.reviewHints.warningCount}}</text>
             </view>
             <view class="queue-item-actions">
+              <button wx:if="{{queueItem.status === 'ready' && queueItem.taskId && queueItem.itemId}}" class="queue-action is-linked" data-id="{{queueItem.id}}" bindtap="jumpToMatchedInspection">进入待检产品</button>
               <button wx:if="{{queueItem.status === 'ready'}}" class="queue-action is-primary" data-id="{{queueItem.id}}" bindtap="openQueueReview">审核结果</button>
               <button wx:if="{{queueItem.status === 'failed'}}" class="queue-action is-primary" data-id="{{queueItem.id}}" bindtap="retryQueueRecognition">重试</button>
               <button wx:if="{{queueItem.status === 'queued' || queueItem.status === 'failed' || queueItem.status === 'ready'}}" class="queue-action" data-id="{{queueItem.id}}" bindtap="removeQueueRecognition">删除</button>
@@ -269,13 +270,13 @@
       </view>
     </block>
 
-    <block wx:else>
+    <block wx:elif="{{activeTab === 'history'}}">
       <view class="history-header">
         <view>
           <view class="history-title">质检记录</view>
-          <view class="history-subtitle">共 {{historyRecords.length}} 份本地与服务器记录</view>
+
         </view>
-        <view class="local-pill">共享后端</view>
+        <view class="local-pill">{{historyRecords.length}} 份数据</view>
       </view>
 
       <view wx:if="{{historyError}}" class="history-error-bar" bindtap="retryHistoryRefresh">
@@ -354,7 +355,7 @@
                 catchtap="retryHistorySync"
               >重试同步</button>
             </view>
-            <view wx:if="{{item.origin === 'local' && item.syncStatus === 'failed' && item.syncError}}" class="history-sync-error">{{item.syncError}}</view>
+            <view wx:if="{{item.origin === 'local' && item.syncError && (item.syncStatus === 'failed' || item.syncStatus === 'local')}}" class="history-sync-error">{{item.syncError}}</view>
           </view>
           <button
             class="history-delete-button"
@@ -363,7 +364,66 @@
             disabled="{{!!historyDeletingId}}"
             catchtap="deleteHistory"
             aria-label="删除识别记录"
-          >删除</button>
+          ><text class="history-delete-icon" wx:if="{{historyDeletingId !== item.id}}">×</text></button>
+        </view>
+      </view>
+    </block>
+
+    <block wx:else>
+      <view class="account-page">
+        <view class="account-profile-card card">
+          <view wx:if="{{accountLoading}}" class="account-loading">
+            <view class="account-avatar account-avatar--skeleton skeleton-block"></view>
+            <view class="account-loading-copy">
+              <view class="skeleton-line account-skeleton-name"></view>
+              <view class="skeleton-line account-skeleton-meta"></view>
+            </view>
+          </view>
+
+          <view wx:elif="{{accountError}}" class="account-error">
+            <view class="account-error-icon">!</view>
+            <view class="account-error-title">账户信息加载失败</view>
+            <view class="account-error-desc">{{accountError}}</view>
+            <button class="account-retry-button" bindtap="loadAccountUser">重新加载</button>
+          </view>
+
+          <block wx:elif="{{currentUser}}">
+            <view class="account-profile-head">
+              <image wx:if="{{currentUser.avatar_url}}" class="account-avatar" src="{{currentUser.avatar_url}}" mode="aspectFill"></image>
+              <view wx:else class="account-avatar account-avatar--fallback">{{accountInitial}}</view>
+              <view class="account-profile-copy">
+                <view class="account-name">{{currentUser.real_name || currentUser.username || '当前用户'}}</view>
+                <view class="account-username">用户名：{{currentUser.username || '未设置'}}</view>
+              </view>
+              <view class="account-online-pill"><view></view><text>已登录</text></view>
+            </view>
+
+            <view class="account-detail-list">
+              <view class="account-detail-row">
+                <text class="account-detail-label">账户 ID</text>
+                <text class="account-detail-value">{{currentUser.id}}</text>
+              </view>
+              <view class="account-detail-row">
+                <text class="account-detail-label">角色</text>
+                <text class="account-detail-value">{{currentUser.role || '未设置'}}</text>
+              </view>
+              <view class="account-detail-row">
+                <text class="account-detail-label">已授权权限</text>
+                <text class="account-detail-value">{{currentUser.permissions.length}} 项</text>
+              </view>
+            </view>
+          </block>
+        </view>
+
+        <view class="account-security-card card">
+          <view class="account-section-title">登录与安全</view>
+          <view class="account-section-desc">退出后将清除本机登录状态，再次使用时需要重新登录。</view>
+          <button
+            class="account-logout-button"
+            loading="{{loggingOut}}"
+            disabled="{{loggingOut}}"
+            bindtap="confirmLogout"
+          >{{loggingOut ? '正在退出…' : '退出登录'}}</button>
         </view>
       </view>
     </block>
@@ -465,7 +525,7 @@
 />
 
 <view class="floating-tabs">
-  <view class="tab-indicator {{activeTab === 'tasks' ? 'is-tasks' : activeTab === 'history' ? 'is-history' : ''}}">
+  <view class="tab-indicator {{activeTab === 'tasks' ? 'is-tasks' : activeTab === 'history' ? 'is-history' : activeTab === 'account' ? 'is-account' : ''}}">
     <view class="tab-indicator-fill {{pressedTab === activeTab ? 'is-pressing' : ''}}"></view>
   </view>
   <view class="floating-tab {{activeTab === 'scan' ? 'is-active' : ''}}" data-tab="scan" bindtap="switchTab" bindtouchstart="onTabPressStart" bindtouchend="onTabPressEnd" bindtouchcancel="onTabPressEnd">
@@ -479,5 +539,9 @@
   <view class="floating-tab {{activeTab === 'history' ? 'is-active' : ''}}" data-tab="history" bindtap="switchTab" bindtouchstart="onTabPressStart" bindtouchend="onTabPressEnd" bindtouchcancel="onTabPressEnd">
     <view class="history-tab-icon"><view></view><view></view><view></view></view>
     <text>记录</text>
+  </view>
+  <view class="floating-tab {{activeTab === 'account' ? 'is-active' : ''}}" data-tab="account" bindtap="switchTab" bindtouchstart="onTabPressStart" bindtouchend="onTabPressEnd" bindtouchcancel="onTabPressEnd">
+    <view class="account-tab-icon"><view class="account-tab-head"></view><view class="account-tab-body"></view></view>
+    <text>账户</text>
   </view>
 </view>

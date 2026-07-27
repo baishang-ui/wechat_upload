@@ -75,6 +75,8 @@ test('record cards expose server-aware delete controls', () => {
   const scss = source('miniprogram/pages/index/index.scss')
   const page = source('miniprogram/pages/index/index.ts')
   assert.match(wxml, /class="history-delete-button"/)
+  assert.match(wxml, /class="history-delete-icon"[^>]*>×<\/text>/)
+  assert.doesNotMatch(wxml, />删<\/text>/)
   assert.match(wxml, /loading="\{\{historyDeletingId === item\.id\}\}"/)
   assert.match(wxml, /catchtap="deleteHistory"/)
   assert.doesNotMatch(
@@ -83,9 +85,52 @@ test('record cards expose server-aware delete controls', () => {
   )
   assert.match(scss, /\.history-delete-button\s*\{/)
   const cardMain = scss.match(/\.history-main\s*\{([^}]*)\}/)?.[1] || ''
-  assert.match(cardMain, /padding-right:\s*64rpx;/)
+  const cardRow = scss.match(/\.history-row\s*\{([^}]*)\}/)?.[1] || ''
+  const deleteButton = scss.match(/\.history-delete-button\s*\{([^}]*)\}/)?.[1] || ''
+  const syncRow = scss.match(/\.history-sync-row\s*\{([^}]*)\}/)?.[1] || ''
+  const syncStatus = scss.match(/\.history-sync-status\s*\{([^}]*)\}/)?.[1] || ''
+  const syncError = scss.match(/\.history-sync-error\s*\{([^}]*)\}/)?.[1] || ''
+  assert.match(cardMain, /padding-right:\s*0;/)
+  assert.match(cardRow, /padding-right:\s*72rpx;/)
+  assert.match(deleteButton, /top:\s*18rpx;/)
+  assert.doesNotMatch(deleteButton, /bottom:/)
+  assert.match(deleteButton, /width:\s*56rpx;/)
+  assert.match(deleteButton, /height:\s*56rpx;/)
+  assert.match(deleteButton, /min-width:\s*56rpx;/)
+  assert.match(deleteButton, /max-width:\s*56rpx;/)
+  assert.match(deleteButton, /box-sizing:\s*border-box;/)
+  assert.match(deleteButton, /border-radius:\s*50%;/)
+  assert.match(scss, /\.history-delete-icon\s*\{/)
+  assert.match(syncRow, /flex-wrap:\s*nowrap;/)
+  assert.match(syncStatus, /white-space:\s*nowrap;/)
+  assert.match(syncError, /white-space:\s*normal;/)
+  assert.match(syncError, /-webkit-line-clamp:\s*2;/)
   assert.match(page, /deleteRemoteInspectionRecord/)
   assert.match(page, /deleteInspectionHistoriesByServerRecord/)
+})
+
+test('workspace exposes an account tab with current-user details and logout', () => {
+  const page = source('miniprogram/pages/index/index.ts')
+  const wxml = source('miniprogram/pages/index/index.wxml')
+  const scss = source('miniprogram/pages/index/index.scss')
+
+  assert.match(page, /type WorkspaceTab = 'scan' \| 'tasks' \| 'history' \| 'account'/)
+  const authImport = page.match(/import \{([^}]*)\} from '\.\.\/\.\.\/services\/auth-service'/s)?.[1] || ''
+  assert.match(authImport, /AuthUser/)
+  assert.match(authImport, /getCurrentUser/)
+  assert.match(authImport, /logout/)
+  assert.match(page, /currentUser:\s*null as AuthUser \| null/)
+  assert.match(page, /confirmLogout\(\)/)
+  assert.match(page, /logout\(\)/)
+  assert.match(page, /wx\.reLaunch\(\{ url: '\/pages\/login\/login' \}\)/)
+  assert.match(wxml, /activeTab === 'account'/)
+  assert.match(wxml, /class="account-profile-card card"/)
+  assert.match(wxml, /bindtap="confirmLogout"/)
+  assert.match(wxml, /data-tab="account"/)
+  assert.match(wxml, />账户<\/text>/)
+  assert.match(scss, /grid-template-columns:\s*repeat\(4, minmax\(0, 1fr\)\);/)
+  assert.match(scss, /\.tab-indicator\.is-account\s*\{/)
+  assert.match(scss, /\.account-logout-button\s*\{/)
 })
 
 test('task and history lists expose animated loading skeletons', () => {
@@ -143,7 +188,11 @@ test('recognition cards advance progress on a 300ms wall-clock timer while a req
   assert.match(page, /claimQueuedRecognitionItems\(\s*this\.data\.recognitionQueue\s*,\s*MAX_CONCURRENT_RECOGNITIONS\s*,?\s*\)/)
   assert.match(page, /claimed\.claimed\.forEach\(\(item\) => this\.startQueueRecognition\(item\.id\)\)/)
   assert.match(page, /this\.stopRecognitionProgress\(id\)/)
-  assert.match(page, /updateQueueItem\([\s\S]*?progress/)
+  assert.match(page, /const queueIndex = this\.data\.recognitionQueue\.findIndex/)
+  assert.match(page, /`recognitionQueue\[\$\{queueIndex\}\]\.progress`/)
+  assert.match(page, /this\.setData\(\{ \[progressPath\]: progress \}\)/)
+  assert.doesNotMatch(page, /applyRecognitionQueue\(updateQueueItem\(this\.data\.recognitionQueue, id, \{ progress \}\)\)/)
+  assert.match(page, /if \(progress >= current\.progressProfile\.tailCeiling\) this\.stopRecognitionProgress\(id\)/)
   assert.doesNotMatch(page, /activeRecognitionQueueId/)
   assert.match(
     skipQueueRecognition,
@@ -256,4 +305,35 @@ test('all glass navigation variants share one content height', () => {
   assert.equal(baseHeight, '36px')
   assert.equal(androidHeight, baseHeight)
   assert.match(skeletonWxss, new RegExp(`\\.bar--weui-navigation-bar\\s*\\{[^}]*--height:\\s*${baseHeight}`))
+})
+
+test('all image pickers request original files without client-side compression', () => {
+  const pickerFiles = [
+    'miniprogram/pages/index/index.ts',
+    'miniprogram/pages/inspection-workbench/inspection-workbench.ts',
+    'miniprogram/components/inspection-workbench-modal/inspection-workbench-modal.ts',
+  ]
+
+  pickerFiles.forEach((file) => {
+    const fileSource = source(file)
+    assert.doesNotMatch(fileSource, /sizeType:\s*\['compressed'\]/)
+    assert.match(fileSource, /sizeType:\s*\['original'\]/)
+  })
+})
+
+test('recognition work stops scheduling UI work after the workspace is detached', () => {
+  const page = source('miniprogram/pages/index/index.ts')
+  const detached = page.match(/detached\(\) \{([\s\S]*?)\n    \},/)?.[1] || ''
+  const startQueueRecognition = page.match(
+    /startQueueRecognition\(id: string\) \{([\s\S]*?)\n    \},\n    async autoWriteQueueRecognition/,
+  )?.[1] || ''
+
+  assert.match(page, /const attachedWorkspaceComponents = new WeakSet<object>\(\)/)
+  assert.match(page, /const recognitionStageTimers = new WeakMap<object, Set<ReturnType<typeof setTimeout>>>\(\)/)
+  assert.match(page, /attachedWorkspaceComponents\.add\(this\)/)
+  assert.match(detached, /attachedWorkspaceComponents\.delete\(this\)/)
+  assert.match(detached, /clearRecognitionStageTimers\(this\)/)
+  assert.match(startQueueRecognition, /scheduleRecognitionStage\(this, \(\) => \{/)
+  assert.match(startQueueRecognition, /if \(!attachedWorkspaceComponents\.has\(this\)\) return/)
+  assert.match(startQueueRecognition, /\.finally\(\(\) => \{[\s\S]*if \(attachedWorkspaceComponents\.has\(this\)\) this\.runRecognitionQueue\(\)/)
 })
