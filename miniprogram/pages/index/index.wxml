@@ -154,9 +154,9 @@
 
       <view class="bottom-actions">
         <button class="secondary-button" bindtap="backToRecognitionQueue">返回队列</button>
+        <button class="export-button review-export" loading="{{exporting}}" disabled="{{exporting}}" bindtap="exportCurrentRecord">导出 JSON</button>
         <button class="primary-button" loading="{{submitting}}" disabled="{{submitting}}" bindtap="submitRecord">{{editingRecordId ? '保存更新' : '确认保存'}}</button>
       </view>
-      <button class="export-button review-export" loading="{{exporting}}" disabled="{{exporting}}" bindtap="exportCurrentRecord">导出 JSON</button>
     </block>
 
     <block wx:else>

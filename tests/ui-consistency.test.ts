@@ -337,3 +337,22 @@ test('recognition work stops scheduling UI work after the workspace is detached'
   assert.match(startQueueRecognition, /if \(!attachedWorkspaceComponents\.has\(this\)\) return/)
   assert.match(startQueueRecognition, /\.finally\(\(\) => \{[\s\S]*if \(attachedWorkspaceComponents\.has\(this\)\) this\.runRecognitionQueue\(\)/)
 })
+
+test('review actions keep return, export, and save controls in one balanced row', () => {
+  const wxml = source('miniprogram/pages/index/index.wxml')
+  const scss = source('miniprogram/pages/index/index.scss')
+  const actions = wxml.match(/<view class="bottom-actions">([\s\S]*?)<\/view>/)?.[1] || ''
+  const layout = scss.match(/\.bottom-actions\s*\{([^}]*)\}/)?.[1] || ''
+  const buttons = scss.match(
+    /\.bottom-actions \.primary-button,\s*\n\.bottom-actions \.secondary-button,\s*\n\.bottom-actions \.export-button\s*\{([^}]*)\}/,
+  )?.[1] || ''
+
+  assert.match(actions, /bindtap="backToRecognitionQueue"/)
+  assert.match(actions, /bindtap="exportCurrentRecord"/)
+  assert.match(actions, /bindtap="submitRecord"/)
+  assert.match(layout, /grid-template-columns:\s*repeat\(3, minmax\(0, 1fr\)\);/)
+  assert.match(buttons, /height:\s*88rpx;/)
+  assert.match(buttons, /margin-top:\s*0;/)
+  assert.match(buttons, /font-size:\s*26rpx;/)
+  assert.match(buttons, /white-space:\s*nowrap;/)
+})
