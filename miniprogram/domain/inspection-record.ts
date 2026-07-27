@@ -93,8 +93,13 @@ function asObject(value: unknown): Record<string, unknown> {
     : {}
 }
 
+function normalizeMeasurementValue(value: unknown): string {
+  const normalized = asString(value)
+  return normalized === '√' ? '✓' : normalized
+}
+
 export function normalizeTenValues(values: unknown[] = []): string[] {
-  return Array.from({ length: MEASUREMENT_COUNT }, (_, index) => asString(values[index]))
+  return Array.from({ length: MEASUREMENT_COUNT }, (_, index) => normalizeMeasurementValue(values[index]))
 }
 
 function normalizeJudgements(values: unknown[] = []): Judgement[] {

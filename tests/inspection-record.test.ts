@@ -33,6 +33,13 @@ test('normalizeTenValues pads and truncates values to ten entries', () => {
   )
 })
 
+test('normalizeTenValues renders an OCR square-root mark as a check mark', () => {
+  assert.deepEqual(
+    normalizeTenValues(['√', '√2']),
+    ['✓', '√2', '', '', '', '', '', '', '', ''],
+  )
+})
+
 test('createMockRecord creates an empty ten-sample form state', () => {
   const record = createMockRecord()
   assert.equal(record.rows.length, 0)
