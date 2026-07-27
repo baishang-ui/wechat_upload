@@ -569,7 +569,24 @@ page {
 .cell-spec { width: 190rpx; }
 .cell-value { width: 126rpx; justify-content: center; }
 .judgement-row { background: #fafbfe; font-weight: 700; }
-.judgement { color: #16865f; }
+.judgement-switch-control {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+.judgement-switch {
+  height: 54rpx;
+  transform: scale(0.62);
+  transform-origin: center;
+}
+.judgement {
+  margin-top: -10rpx;
+  color: #16865f;
+  font-size: 20rpx;
+  line-height: 28rpx;
+}
 .judgement--ng { color: #dc3e4f; }
 
 .bottom-actions {

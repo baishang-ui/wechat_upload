@@ -128,7 +128,7 @@ test('addLocalPhotos keeps every photo across repeated batches without a total l
 })
 
 
-test('mergeRecognitionRecord only fills OCR measurement rows and keeps unmatched content for review', () => {
+test('mergeRecognitionRecord fills recognized appearance and OCR rows while keeping unknown content for review', () => {
   const workbench = buildInspectionWorkbench({
     template: createTemplate(),
     draft: {
@@ -197,16 +197,15 @@ test('mergeRecognitionRecord only fills OCR measurement rows and keeps unmatched
   const size = result.rows.find((row) => row.rowKey === 'size-outer')!
   assert.deepEqual(size.measurements.slice(0, 2), ['100.1', '99.9'])
   assert.equal(size.standard, '100±1mm')
-  assert.deepEqual(appearance.measurements.slice(0, 1), ['人工确认'])
+  assert.deepEqual(appearance.measurements.slice(0, 1), ['NG'])
   assert.equal(appearance.note, '不要覆盖')
   assert.deepEqual(appearance.images.map((photo) => photo.remoteUrl), [
     'https://example.com/manual.jpg',
   ])
   assert.deepEqual(result.unmatched.map((row) => row.project), [
-    '表面质量',
     '未知尺寸',
   ])
-  assert.equal(result.unmatched[1].groupTitle, '安全性能补充')
+  assert.equal(result.unmatched[0].groupTitle, '安全性能补充')
 })
 
 
@@ -721,6 +720,26 @@ test('recognition aliases fill the intended formal rows and ignore a semanticall
   assert.equal(result.unmatched.length, 0)
 })
 
+test('recognition maps product appearance and page-blade shorthand into formal rows', () => {
+  const template = buildOnlineInspectionTemplate({
+    task: { id: 6, task_no: 'QI-6' },
+    item: { id: 7, material_name: '煅烧蓝氧化铝百叶轮', spec_desc: '115x22mm' },
+    master_product: { category: 'CA', subcategory: '百页轮叶片式', name: '煅烧蓝氧化铝百叶轮' },
+    customer_product: {},
+  })
+  const workbench = buildInspectionWorkbench({ template })
+  const result = mergeRecognitionRecord(workbench.rows, createRecognitionRows([
+    { id: 'api-row-1', groupTitle: '产品外观', item: '产品外观', value: '✓' },
+    { id: 'api-row-2', groupTitle: '产品尺寸', item: '页片长(㎜)', value: '18.0' },
+    { id: 'api-row-3', groupTitle: '产品尺寸', item: '页片宽(㎜)', value: '16.0' },
+  ]))
+
+  assert.equal(result.rows.find((row) => row.project === '产品外观')?.measurements[0], '✓')
+  assert.equal(result.rows.find((row) => row.project === '页片长度')?.measurements[0], '18.0')
+  assert.equal(result.rows.find((row) => row.project === '页片宽度')?.measurements[0], '16.0')
+  assert.equal(result.unmatched.length, 0)
+})
+
 test('formal dimension rows keep master values when online labels use page-blade aliases', () => {
   const template = buildOnlineInspectionTemplate({
     task: { id: 6, task_no: 'QI-6' },
@@ -742,4 +761,54 @@ test('formal dimension rows keep master values when online labels use page-blade
   assert.equal(template.rows.find((row) => row.project === '页片长度')?.standard, '18 mm')
   assert.equal(template.rows.find((row) => row.project === '页片宽度')?.standard, '16 mm')
   assert.equal(template.rows.find((row) => row.project === '页片数量')?.standard, '72')
+})
+
+test('page-blade length and width prefer their dedicated specifications over unrelated dimensions', () => {
+  const template = buildOnlineInspectionTemplate({
+    task: { id: 6, task_no: 'QI-6' },
+    item: { id: 7, material_name: '百叶轮', spec_desc: '115x22mm' },
+    master_product: {
+      subcategory: '百页轮叶片式',
+      name: '百叶轮',
+      spec_pairs: [
+        { label: '包装长度', value: '200 mm' },
+        { label: '包装宽度', value: '100 mm' },
+        { label: '页片长度', value: '18 mm' },
+        { label: '页片宽度', value: '16 mm' },
+      ],
+    },
+    customer_product: {},
+  })
+
+  assert.equal(template.rows.find((row) => row.project === '页片长度')?.standard, '18 mm')
+  assert.equal(template.rows.find((row) => row.project === '页片宽度')?.standard, '16 mm')
+})
+
+test('workbench binary decisions default to NG and preserve saved OK values', () => {
+  const template = createTemplate()
+  const fresh = buildInspectionWorkbench({ template })
+  assert.ok(fresh.rows.length > 0)
+  assert.ok(fresh.rows.every((row) => row.decision === 'NG'))
+
+  const restored = buildInspectionWorkbench({
+    template,
+    draft: {
+      inspection_records: [{
+        row_key: template.rows[0].row_key,
+        group_title: template.rows[0].group_title,
+        project: template.rows[0].project,
+        method: template.rows[0].method,
+        standard: template.rows[0].standard,
+        decision: 'OK',
+        sample_data: [],
+        measurement_standards: {},
+        note: '',
+        ai_result: {},
+        images: [],
+      }],
+      ai_workbench_result: {},
+      ai_workbench_images: [],
+    },
+  })
+  assert.equal(restored.rows.find((row) => row.rowKey === template.rows[0].row_key)?.decision, 'OK')
 })

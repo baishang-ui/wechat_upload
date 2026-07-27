@@ -782,3 +782,23 @@ test('inspectionImageToDataUrl embeds large images without checking a client-sid
     ;(globalThis as { wx?: unknown }).wx = previousWx
   }
 })
+
+test('pending task refresh policy caches normal tab visits for thirty seconds', () => {
+  const {
+    TASK_REFRESH_TTL_MS,
+    shouldQueueInspectionTaskRefresh,
+    shouldRefreshInspectionTasks,
+  } = require('../miniprogram/services/quality-inspection-service') as typeof import('../miniprogram/services/quality-inspection-service')
+  const now = 1_000_000
+
+  assert.equal(TASK_REFRESH_TTL_MS, 30_000)
+  assert.equal(shouldRefreshInspectionTasks(0, now), true)
+  assert.equal(shouldRefreshInspectionTasks(now - 29_999, now), false)
+  assert.equal(shouldRefreshInspectionTasks(now - 30_000, now), true)
+  assert.equal(shouldRefreshInspectionTasks(now - 1_000, now, true), true)
+  assert.equal(shouldQueueInspectionTaskRefresh(true, true, true, false), true)
+  assert.equal(shouldQueueInspectionTaskRefresh(true, true, true, true), false)
+  assert.equal(shouldQueueInspectionTaskRefresh(true, true, false, false), false)
+  assert.equal(shouldQueueInspectionTaskRefresh(true, false, true, false), false)
+  assert.equal(shouldQueueInspectionTaskRefresh(false, true, true, false), false)
+})

@@ -27,7 +27,6 @@ import {
   createMockRecord,
   InspectionRecord,
   InspectionRowField,
-  Judgement,
   MEASUREMENT_COUNT,
   PRODUCT_OPTIONS,
   updateMeasurement,
@@ -69,7 +68,9 @@ import {
   QualityInspectionTaskDto,
   saveInspectionDraft,
   shouldQueueInspectionHistoryRefresh,
+  shouldQueueInspectionTaskRefresh,
   shouldRefreshInspectionHistory,
+  shouldRefreshInspectionTasks,
   syncStoredInspection,
   taskItemToInspectionRecord,
 } from '../../services/quality-inspection-service'
@@ -94,7 +95,6 @@ type WorkspaceTab = 'scan' | 'tasks' | 'history' | 'account'
 
 const productLabels = PRODUCT_OPTIONS.map((option) => option.label)
 const measurementHeaders = Array.from({ length: MEASUREMENT_COUNT }, (_, index) => index + 1)
-const judgementOptions: Judgement[] = ['', 'OK', 'NG']
 const RECOGNITION_PROGRESS_TICK_MS = 300
 const recognitionProgressTimers = new Map<string, ReturnType<typeof setInterval>>()
 const recognitionProgressStartedAt = new Map<string, number>()
@@ -132,8 +132,15 @@ Component({
     taskPage: 1,
     taskTotal: 0,
     taskSearch: '',
+    taskAppliedSearch: '',
     taskStatus: 'pending',
     taskLoading: false,
+    taskRefreshing: false,
+    taskLoadedAt: 0,
+    taskLoadedQueryKey: '',
+    taskRefreshQueued: false,
+    taskRequestId: 0,
+    taskOpeningId: 0,
     selectedTaskId: 0,
     selectedItemId: 0,
     workbenchModalVisible: false,
@@ -150,7 +157,6 @@ Component({
     productLabels,
     productIndex: 0,
     measurementHeaders,
-    judgementOptions,
     illustrationCells: Array.from({ length: 9 }, (_, index) => index + 1),
     record: createMockRecord(),
     submitting: false,
@@ -333,7 +339,7 @@ Component({
           : {}),
       })
       if (activeTab === 'history' && previousTab !== 'history') this.refreshHistory()
-      if (activeTab === 'tasks') this.loadTasks(true)
+      if (activeTab === 'tasks' && previousTab !== 'tasks') this.loadTasks(true)
     },
     switchTab(event: WechatMiniprogram.TouchEvent) {
       this.activateTab(event.currentTarget.dataset.tab as WorkspaceTab)
@@ -351,34 +357,91 @@ Component({
     showHistory() {
       this.activateTab('history')
     },
-    loadTasks(reset = false) {
-      if (this.data.taskLoading) return
-      const page = reset ? 1 : this.data.taskPage
-      if (!reset && this.data.taskItems.length >= this.data.taskTotal) return
+    loadTasks(reset = false, force = false): Promise<void> {
+      const resetList = reset === true
+      const forceRefresh = force === true
+      if (this.data.taskLoading) {
+        if (shouldQueueInspectionTaskRefresh(
+          this.data.taskLoading,
+          resetList,
+          forceRefresh,
+          this.data.taskRefreshQueued,
+        )) {
+          this.setData({ taskRefreshQueued: true })
+        }
+        return Promise.resolve()
+      }
+
+      const search = this.data.taskAppliedSearch.trim()
+      const status = this.data.taskStatus
+      const queryKey = JSON.stringify([status, search])
+      const queryChanged = queryKey !== this.data.taskLoadedQueryKey
+      if (resetList && !shouldRefreshInspectionTasks(
+        this.data.taskLoadedAt,
+        Date.now(),
+        forceRefresh || queryChanged,
+      )) return Promise.resolve()
+      if (!resetList && this.data.taskItems.length >= this.data.taskTotal) return Promise.resolve()
+
+      const page = resetList ? 1 : this.data.taskPage
+      const requestId = this.data.taskRequestId + 1
+      const preserveTaskItems = resetList && !queryChanged && this.data.taskItems.length > 0
       this.setData({
         taskLoading: true,
-        ...(reset ? { taskItems: [], taskPage: 1, taskTotal: 0 } : {}),
+        taskRefreshing: preserveTaskItems,
+        taskRequestId: requestId,
+        ...(resetList && queryChanged ? {
+          taskItems: [],
+          taskPage: 1,
+          taskTotal: 0,
+          selectedTaskId: 0,
+          selectedItemId: 0,
+        } : {}),
       })
-      listInspectionTasks({
+      return listInspectionTasks({
         page,
         pageSize: 20,
-        search: this.data.taskSearch.trim() || undefined,
-        status: this.data.taskStatus === 'all' ? undefined : this.data.taskStatus,
+        search: search || undefined,
+        status: status === 'all' ? undefined : status,
         sourceType: 'purchase_order',
       })
         .then((data) => {
+          if (this.data.taskRequestId !== requestId) return
+          const currentQueryKey = JSON.stringify([
+            this.data.taskStatus,
+            this.data.taskAppliedSearch.trim(),
+          ])
+          if (currentQueryKey !== queryKey) {
+            this.setData({ taskRefreshQueued: true })
+            return
+          }
           this.setData({
-            taskItems: reset
+            taskItems: resetList
               ? data.items
               : [...this.data.taskItems, ...data.items],
             taskTotal: data.total,
             taskPage: page + 1,
+            ...(resetList ? {
+              taskLoadedAt: Date.now(),
+              taskLoadedQueryKey: queryKey,
+            } : {}),
           })
         })
         .catch((error: Error) => {
+          if (this.data.taskRequestId !== requestId) return
           wx.showToast({ title: error.message || '待检任务加载失败', icon: 'none' })
         })
-        .finally(() => this.setData({ taskLoading: false }))
+        .finally(() => {
+          if (this.data.taskRequestId !== requestId) return
+          const queuedRefresh = this.data.taskRefreshQueued
+          this.setData({
+            taskLoading: false,
+            taskRefreshing: false,
+            taskRefreshQueued: false,
+          }, () => {
+            if (queuedRefresh) this.loadTasks(true, true)
+          })
+        })
     },
     loadMoreTasks() {
       if (this.data.activeTab === 'tasks') this.loadTasks(false)
@@ -387,11 +450,20 @@ Component({
       this.setData({ taskSearch: event.detail.value })
     },
     confirmTaskSearch() {
-      this.loadTasks(true)
+      const taskAppliedSearch = this.data.taskSearch.trim()
+      if (taskAppliedSearch === this.data.taskAppliedSearch) {
+        this.loadTasks(true, true)
+        return
+      }
+      this.setData({ taskAppliedSearch }, () => this.loadTasks(true, true))
     },
     changeTaskStatus(event: WechatMiniprogram.TouchEvent) {
       const taskStatus = String(event.currentTarget.dataset.status || 'pending')
-      this.setData({ taskStatus }, () => this.loadTasks(true))
+      if (taskStatus === this.data.taskStatus) {
+        this.loadTasks(true, true)
+        return
+      }
+      this.setData({ taskStatus }, () => this.loadTasks(true, true))
     },
     openTask(event: WechatMiniprogram.TouchEvent) {
       const taskId = Number(event.currentTarget.dataset.id)
@@ -400,9 +472,11 @@ Component({
         this.setData({ selectedTaskId: 0, selectedItemId: 0 })
         return
       }
-      this.setData({ taskLoading: true })
+      if (this.data.taskOpeningId) return
+      this.setData({ taskOpeningId: taskId })
       getInspectionTask(taskId)
         .then((task) => {
+          if (this.data.taskOpeningId !== taskId) return
           this.setData({
             selectedTaskId: task.id,
             selectedItemId: 0,
@@ -412,9 +486,12 @@ Component({
           })
         })
         .catch((error: Error) => {
+          if (this.data.taskOpeningId !== taskId) return
           wx.showToast({ title: error.message || '任务详情加载失败', icon: 'none' })
         })
-        .finally(() => this.setData({ taskLoading: false }))
+        .finally(() => {
+          if (this.data.taskOpeningId === taskId) this.setData({ taskOpeningId: 0 })
+        })
     },
     selectTaskItem(event: WechatMiniprogram.TouchEvent) {
       const taskId = Number(event.currentTarget.dataset.taskId)
@@ -438,7 +515,7 @@ Component({
       })
     },
     onWorkbenchSaved() {
-      void this.loadTasks(true)
+      void this.loadTasks(true, true)
     },
     syncHistoryRecord(record: StoredInspectionRecord): Promise<StoredInspectionRecord> {
       return syncStoredInspection(record, {
@@ -963,9 +1040,9 @@ Component({
         ),
       })
     },
-    onHistoryJudgementChange(event: WechatMiniprogram.CustomEvent<{ value: string }>) {
+    onHistoryJudgementChange(event: WechatMiniprogram.CustomEvent<{ value: boolean }>) {
       const sampleIndex = Number(event.currentTarget.dataset.sampleIndex)
-      const judgement = judgementOptions[Number(event.detail.value)]
+      const judgement = event.detail.value ? 'OK' : 'NG'
       this.setData({
         historyEditRecord: updateSampleJudgement(this.data.historyEditRecord, sampleIndex, judgement),
       })
@@ -1104,9 +1181,9 @@ Component({
         ),
       })
     },
-    onJudgementChange(event: WechatMiniprogram.CustomEvent<{ value: string }>) {
+    onJudgementChange(event: WechatMiniprogram.CustomEvent<{ value: boolean }>) {
       const sampleIndex = Number(event.currentTarget.dataset.sampleIndex)
-      const judgement = judgementOptions[Number(event.detail.value)]
+      const judgement = event.detail.value ? 'OK' : 'NG'
       this.setData({
         record: updateSampleJudgement(this.data.record, sampleIndex, judgement),
         reviewHints: markReviewHintReviewed(

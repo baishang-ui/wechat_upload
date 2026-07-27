@@ -35,6 +35,13 @@ interface InputEvent {
   }
 }
 
+interface SwitchEvent {
+  detail: { value: boolean }
+  currentTarget: {
+    dataset: Record<string, string | number | undefined>
+  }
+}
+
 interface RowActionEvent {
   currentTarget: {
     dataset: Record<string, string | number | undefined>
@@ -327,10 +334,22 @@ Page({
     ))
   },
 
+  onDecisionChange(event: SwitchEvent) {
+    const rowKey = text(event.currentTarget.dataset.rowKey)
+    if (!this.data.workbench || !rowKey) return
+    const decision = event.detail.value ? 'OK' : 'NG'
+    this.setRows(updateWorkbenchRowField(
+      this.data.workbench.rows,
+      rowKey,
+      'decision',
+      decision,
+    ))
+  },
+
   onRowFieldInput(event: InputEvent) {
     const rowKey = text(event.currentTarget.dataset.rowKey)
     const field = text(event.currentTarget.dataset.field)
-    if (!this.data.workbench || !rowKey || (field !== 'decision' && field !== 'note')) return
+    if (!this.data.workbench || !rowKey || field !== 'note') return
     this.setRows(updateWorkbenchRowField(
       this.data.workbench.rows,
       rowKey,

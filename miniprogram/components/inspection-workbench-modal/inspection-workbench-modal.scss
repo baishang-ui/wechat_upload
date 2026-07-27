@@ -286,7 +286,11 @@
 .form-field input { min-width: 0; flex: 1; color: $ui-text-primary; font-size: 23rpx; }
 .field-grid { margin-top: 18rpx; display: grid; grid-template-columns: 1fr 1.5fr; gap: 14rpx; }
 .form-field { min-width: 0; padding: 13rpx 15rpx; border: 1rpx solid $ui-field-border; border-radius: 14rpx; background: #fff; }
-.form-field text { display: block; margin-bottom: 6rpx; color: $ui-text-secondary; font-size: 20rpx; }
+.form-field > text { display: block; margin-bottom: 6rpx; color: $ui-text-secondary; font-size: 20rpx; }
+.decision-switch-control { min-height: 54rpx; display: flex; align-items: center; gap: 4rpx; }
+.decision-switch { width: 90rpx; transform: scale(.68); transform-origin: left center; }
+.decision-switch-label { margin-left: -20rpx; color: #16865f; font-size: 23rpx; font-weight: 700; }
+.decision-switch-label.is-ng { color: $ui-danger; }
 .photo-section { margin-top: 22rpx; }
 .workbench-photo-grid { margin-top: 10rpx; display: grid; grid-template-columns: repeat(3, 1fr); gap: 10rpx; }
 .workbench-photo,

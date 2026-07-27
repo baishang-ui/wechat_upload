@@ -134,9 +134,10 @@
               <view class="table-cell cell-requirement"></view>
               <view class="table-cell cell-spec"></view>
               <view wx:for="{{record.sampleJudgements}}" wx:key="index" wx:for-item="judgement" wx:for-index="sampleIndex" class="table-cell cell-value judgement-cell {{reviewHints.sampleJudgements[sampleIndex].cssClass}}">
-                <picker mode="selector" range="{{judgementOptions}}" value="{{judgement === 'OK' ? 1 : judgement === 'NG' ? 2 : 0}}" data-sample-index="{{sampleIndex}}" bindchange="onJudgementChange">
-                  <view class="judgement {{judgement === 'NG' ? 'judgement--ng' : ''}}">{{judgement || '—'}}</view>
-                </picker>
+                <view class="judgement-switch-control">
+                  <switch class="judgement-switch" type="switch" color="#1ea978" checked="{{judgement === 'OK'}}" data-sample-index="{{sampleIndex}}" bindchange="onJudgementChange" />
+                  <text class="judgement {{judgement === 'OK' ? '' : 'judgement--ng'}}">{{judgement === 'OK' ? 'OK' : 'NG'}}</text>
+                </view>
               </view>
             </view>
           </view>
@@ -181,7 +182,7 @@
             <view class="task-toolbar-eyebrow">PURCHASE INSPECTION</view>
             <view class="task-toolbar-title">采购待检任务</view>
           </view>
-          <view class="task-toolbar-count">{{taskTotal}} 项</view>
+          <view class="task-toolbar-count {{taskRefreshing ? 'is-refreshing' : ''}}">{{taskRefreshing ? '刷新中' : taskTotal + ' 项'}}</view>
         </view>
         <view class="task-search-row">
           <input
@@ -263,7 +264,8 @@
           </view>
         </view>
         <view class="task-list-footer">
-          <text wx:if="{{taskLoading}}">正在加载更多…</text>
+          <text wx:if="{{taskRefreshing}}">正在刷新任务…</text>
+          <text wx:elif="{{taskLoading}}">正在加载更多…</text>
           <text wx:elif="{{taskItems.length >= taskTotal}}">已加载全部 {{taskTotal}} 个任务</text>
           <text wx:else>上拉加载更多</text>
         </view>
@@ -488,9 +490,10 @@
               <view class="table-cell cell-requirement"></view>
               <view class="table-cell cell-spec"></view>
               <view wx:for="{{historyEditRecord.sampleJudgements}}" wx:key="index" wx:for-item="judgement" wx:for-index="sampleIndex" class="table-cell cell-value judgement-cell">
-                <picker mode="selector" range="{{judgementOptions}}" value="{{judgement === 'OK' ? 1 : judgement === 'NG' ? 2 : 0}}" data-sample-index="{{sampleIndex}}" bindchange="onHistoryJudgementChange">
-                  <view class="judgement {{judgement === 'NG' ? 'judgement--ng' : ''}}">{{judgement || '—'}}</view>
-                </picker>
+                <view class="judgement-switch-control">
+                  <switch class="judgement-switch" type="switch" color="#1ea978" checked="{{judgement === 'OK'}}" data-sample-index="{{sampleIndex}}" bindchange="onHistoryJudgementChange" />
+                  <text class="judgement {{judgement === 'OK' ? '' : 'judgement--ng'}}">{{judgement === 'OK' ? 'OK' : 'NG'}}</text>
+                </view>
               </view>
             </view>
           </view>

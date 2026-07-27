@@ -26,6 +26,25 @@ import {
 } from './image-upload-service'
 
 export const HISTORY_REFRESH_TTL_MS = 30_000
+export const TASK_REFRESH_TTL_MS = 30_000
+
+export function shouldRefreshInspectionTasks(
+  lastLoadedAt: number,
+  now = Date.now(),
+  force = false,
+): boolean {
+  if (force || lastLoadedAt <= 0) return true
+  return now - lastLoadedAt >= TASK_REFRESH_TTL_MS
+}
+
+export function shouldQueueInspectionTaskRefresh(
+  taskLoading: boolean,
+  resetList: boolean,
+  forceRefresh: boolean,
+  refreshQueued: boolean,
+): boolean {
+  return taskLoading && resetList && forceRefresh && !refreshQueued
+}
 
 export function shouldRefreshInspectionHistory(
   lastLoadedAt: number,

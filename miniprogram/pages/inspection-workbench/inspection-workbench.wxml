@@ -157,14 +157,10 @@
                   </block>
 
                   <block wx:elif="{{cell.kind === 'decision'}}">
-                    <input
-                      class="table-input table-input--decision"
-                      value="{{row.decision}}"
-                      placeholder="OK/NG"
-                      data-row-key="{{row.rowKey}}"
-                      data-field="decision"
-                      bindinput="onRowFieldInput"
-                    />
+                    <view class="table-decision-switch">
+                      <switch class="table-decision-switch__control" type="switch" color="#1ea978" checked="{{row.decision === 'OK'}}" data-row-key="{{row.rowKey}}" bindchange="onDecisionChange" />
+                      <text class="table-decision-label {{row.decision === 'OK' ? '' : 'is-ng'}}">{{row.decision === 'OK' ? 'OK' : 'NG'}}</text>
+                    </view>
                   </block>
 
                   <block wx:elif="{{cell.kind === 'note'}}">

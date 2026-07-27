@@ -94,7 +94,7 @@ test('closing the workbench does not refresh pending tasks unless a draft was sa
 
   assert.ok(closeMethod)
   assert.doesNotMatch(closeMethod, /loadTasks/)
-  assert.match(savedMethod, /loadTasks\(true\)/)
+  assert.match(savedMethod, /loadTasks\(true, true\)/)
 })
 
 test('manual save from the drawer does not treat the tap event as a close-after-save request', () => {
@@ -121,4 +121,18 @@ test('workbench drawer discards stale item detail responses before they can over
   assert.match(ts, /requestedTaskId !== this\.data\.taskId/)
   assert.match(ts, /requestedItemId !== this\.data\.itemId/)
   assert.match(ts, /!this\.data\.visible/)
+})
+
+test('pending workbench drawer uses a decision switch with on as OK and off as NG', () => {
+  const wxml = source('miniprogram/components/inspection-workbench-modal/inspection-workbench-modal.wxml')
+  const scss = source('miniprogram/components/inspection-workbench-modal/inspection-workbench-modal.scss')
+  const ts = source('miniprogram/components/inspection-workbench-modal/inspection-workbench-modal.ts')
+  const handler = ts.match(/onDecisionChange\(event: SwitchEvent\) \{([\s\S]*?)\n    \},\n\n    onRowFieldInput/)?.[1] || ''
+
+  assert.match(wxml, /<switch[^>]*checked="\{\{row\.decision === 'OK'\}\}"[^>]*bindchange="onDecisionChange"/)
+  assert.doesNotMatch(wxml, /<input[^>]*data-field="decision"/)
+  assert.match(handler, /event\.detail\.value \? 'OK' : 'NG'/)
+  assert.match(handler, /updateWorkbenchRowField\(this\.data\.workbench\.rows, rowKey, 'decision', decision\)/)
+  assert.match(scss, /\.decision-switch-control/)
+  assert.match(scss, /\.decision-switch-label\.is-ng/)
 })

@@ -367,8 +367,31 @@
   background: $ui-field-background;
 }
 
-.table-input--decision {
+.table-decision-switch {
+  width: 100%;
+  min-height: 68rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+}
+
+.table-decision-switch__control {
+  height: 54rpx;
+  transform: scale(.62);
+  transform-origin: center;
+}
+
+.table-decision-label {
+  margin-top: -10rpx;
+  color: #16865f;
+  font-size: 20rpx;
   font-weight: 700;
+  line-height: 28rpx;
+}
+
+.table-decision-label.is-ng {
+  color: $ui-danger;
 }
 
 .table-textarea {

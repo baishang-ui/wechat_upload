@@ -93,3 +93,17 @@ test('legacy workbench page discards stale item detail responses', () => {
   assert.match(page, /requestedTaskId !== this\.data\.taskId/)
   assert.match(page, /requestedItemId !== this\.data\.itemId/)
 })
+
+test('legacy pending workbench page uses the same binary decision switch', () => {
+  const wxml = source('miniprogram/pages/inspection-workbench/inspection-workbench.wxml')
+  const scss = source('miniprogram/pages/inspection-workbench/inspection-workbench.scss')
+  const ts = source('miniprogram/pages/inspection-workbench/inspection-workbench.ts')
+  const handler = ts.match(/onDecisionChange\(event: SwitchEvent\) \{([\s\S]*?)\n  \},\n\n  onRowFieldInput/)?.[1] || ''
+
+  assert.match(wxml, /<switch[^>]*checked="\{\{row\.decision === 'OK'\}\}"[^>]*bindchange="onDecisionChange"/)
+  assert.doesNotMatch(wxml, /<input[^>]*data-field="decision"/)
+  assert.match(handler, /event\.detail\.value \? 'OK' : 'NG'/)
+  assert.match(handler, /updateWorkbenchRowField\([\s\S]*?'decision',[\s\S]*?decision/)
+  assert.match(scss, /\.table-decision-switch/)
+  assert.match(scss, /\.table-decision-label\.is-ng/)
+})

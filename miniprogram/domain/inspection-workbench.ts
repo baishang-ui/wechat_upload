@@ -91,6 +91,10 @@ function normalizedGroup(value: string): string {
   return value.trim().replace(/\s+/g, '')
 }
 
+function normalizeDecision(value: unknown): 'OK' | 'NG' {
+  return String(value || '').trim().toUpperCase() === 'OK' ? 'OK' : 'NG'
+}
+
 function fallbackPhotoRequired(row: InspectionTemplateRowDto): boolean {
   if (typeof row.photo_required === 'boolean') return row.photo_required
   const group = normalizedGroup(row.group_title)
@@ -110,8 +114,8 @@ function normalizedProject(value: string): string {
   if (/^(外径|直径)$/.test(normalized)) return '外径'
   if (/^(中孔|中孔径|孔径)$/.test(normalized)) return '孔径'
   if (/^(柄径|柄直径)$/.test(normalized)) return '柄直径'
-  if (/^(页片长度|刷丝长度)$/.test(normalized)) return normalized === '刷丝长度' ? '出锋长度' : '页片长度'
-  if (/^页片宽度$/.test(normalized)) return '页片宽度'
+  if (/^(页片长|页片长度|刷丝长度)$/.test(normalized)) return normalized === '刷丝长度' ? '出锋长度' : '页片长度'
+  if (/^页片宽(?:度)?$/.test(normalized)) return '页片宽度'
   if (/^(页片数量|页片数)$/.test(normalized)) return '页片数量'
   if (/^(回转|回转测试|检测转速|空载转速|转速)$/.test(normalized)) return '回转测试'
   if (/^(磨料)?材质$/.test(normalized)) return '材质'
@@ -209,7 +213,7 @@ export function buildInspectionWorkbench(options: {
         standard: row.standard,
         measurements: normalizeTenValues(saved?.sample_data || []),
         measurementStandards: { ...row.measurement_standards },
-        decision: saved?.decision || '',
+        decision: normalizeDecision(saved?.decision),
         note: saved?.note || row.note,
         photoRequired,
         inputMode: row.input_mode || (photoRequired ? 'manual_photo' : 'manual'),
@@ -275,7 +279,7 @@ export interface RecognitionMergeResult {
 function isOcrTarget(row: InspectionWorkbenchRow): boolean {
   if (row.inputMode === 'ocr_measurement') return true
   const group = normalizedGroup(row.groupTitle)
-  return group.includes('尺寸') || group.includes('安全性能')
+  return group.includes('尺寸') || group.includes('安全性能') || group.includes('外观')
 }
 
 export function mergeRecognitionRecord(

@@ -356,3 +356,46 @@ test('review actions keep return, export, and save controls in one balanced row'
   assert.match(buttons, /font-size:\s*26rpx;/)
   assert.match(buttons, /white-space:\s*nowrap;/)
 })
+
+test('pending task refresh preserves cached cards and queues forced reloads', () => {
+  const page = source('miniprogram/pages/index/index.ts')
+  const activateTab = page.match(/activateTab\(activeTab: WorkspaceTab\) \{([\s\S]*?)\n    \},\n    switchTab/)?.[1] || ''
+  const loadTasks = page.match(/loadTasks\(reset = false, force = false\): Promise<void> \{([\s\S]*?)\n    \},\n    loadMoreTasks/)?.[1] || ''
+  const openTask = page.match(/openTask\(event: WechatMiniprogram\.TouchEvent\) \{([\s\S]*?)\n    \},\n    selectTaskItem/)?.[1] || ''
+
+  assert.match(page, /taskAppliedSearch:\s*''/)
+  assert.match(page, /taskLoadedAt:\s*0/)
+  assert.match(page, /taskRefreshQueued:\s*false/)
+  assert.match(page, /taskRequestId:\s*0/)
+  assert.match(page, /taskOpeningId:\s*0/)
+  assert.match(activateTab, /activeTab === 'tasks' && previousTab !== 'tasks'/)
+  assert.match(loadTasks, /const search = this\.data\.taskAppliedSearch\.trim\(\)/)
+  assert.match(loadTasks, /shouldRefreshInspectionTasks/)
+  assert.match(loadTasks, /shouldQueueInspectionTaskRefresh/)
+  assert.match(loadTasks, /const preserveTaskItems = resetList && !queryChanged/)
+  assert.match(loadTasks, /taskRefreshing:\s*preserveTaskItems/)
+  assert.match(loadTasks, /resetList && queryChanged[\s\S]*?taskItems:\s*\[\]/)
+  assert.match(loadTasks, /taskRequestId !== requestId/)
+  assert.match(loadTasks, /taskRefreshQueued/)
+  assert.match(page, /confirmTaskSearch\(\)[\s\S]*?taskAppliedSearch[\s\S]*?loadTasks\(true, true\)/)
+  assert.match(page, /changeTaskStatus[\s\S]*?loadTasks\(true, true\)/)
+  assert.doesNotMatch(openTask, /taskLoading:\s*true/)
+  assert.match(openTask, /taskOpeningId/)
+})
+
+test('sample judgements use binary switches with on as OK and off as NG', () => {
+  const page = source('miniprogram/pages/index/index.ts')
+  const wxml = source('miniprogram/pages/index/index.wxml')
+  const scss = source('miniprogram/pages/index/index.scss')
+  const onJudgementChange = page.match(/onJudgementChange\(event: WechatMiniprogram\.CustomEvent<\{ value: boolean \}>\) \{([\s\S]*?)\n    \},\n    submitRecord/)?.[1] || ''
+  const onHistoryJudgementChange = page.match(/onHistoryJudgementChange\(event: WechatMiniprogram\.CustomEvent<\{ value: boolean \}>\) \{([\s\S]*?)\n    \},\n    exportHistoryRecord/)?.[1] || ''
+
+  assert.equal((wxml.match(/<switch\b/g) || []).length, 2)
+  assert.match(wxml, /<switch[^>]*checked="\{\{judgement === 'OK'\}\}"[^>]*bindchange="onJudgementChange"/)
+  assert.match(wxml, /<switch[^>]*checked="\{\{judgement === 'OK'\}\}"[^>]*bindchange="onHistoryJudgementChange"/)
+  assert.doesNotMatch(wxml, /<picker[^>]*bindchange="on(?:History)?JudgementChange"/)
+  assert.match(onJudgementChange, /event\.detail\.value \? 'OK' : 'NG'/)
+  assert.match(onHistoryJudgementChange, /event\.detail\.value \? 'OK' : 'NG'/)
+  assert.match(scss, /\.judgement-switch-control/)
+  assert.match(scss, /\.judgement-switch/)
+})

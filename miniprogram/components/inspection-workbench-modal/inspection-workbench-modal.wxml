@@ -106,9 +106,12 @@
                 </view>
               </view>
               <view class="field-grid">
-                <view class="form-field">
+                <view class="form-field form-field--decision">
                   <text>判定</text>
-                  <input value="{{row.decision}}" placeholder="OK / NG" data-row-key="{{row.rowKey}}" data-field="decision" bindinput="onRowFieldInput" />
+                  <view class="decision-switch-control">
+                    <switch class="decision-switch" type="switch" color="#1ea978" checked="{{row.decision === 'OK'}}" data-row-key="{{row.rowKey}}" bindchange="onDecisionChange" />
+                    <text class="decision-switch-label {{row.decision === 'OK' ? '' : 'is-ng'}}">{{row.decision === 'OK' ? 'OK' : 'NG'}}</text>
+                  </view>
                 </view>
                 <view class="form-field">
                   <text>备注</text>

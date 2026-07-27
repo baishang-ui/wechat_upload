@@ -246,9 +246,14 @@ function inspectionStandardValue(
     return pairValue(specPairs, ['厚度'])
   }
   if (/厚度/.test(labelText)) return pairValue(specPairs, ['厚度'])
-  if (/刀头长度|叶片长度|基体长度/.test(labelText)) return pairValue(specPairs, ['刀头长度', '叶片长度', '基体长度', '长度'])
+  if (/[叶页]片长度/.test(labelText)) {
+    return pairValue(specPairs, ['页片长度', '叶片长度']) || pairValue(specPairs, ['长度'])
+  }
+  if (/刀头长度|基体长度/.test(labelText)) return pairValue(specPairs, ['刀头长度', '基体长度', '长度'])
   if (/基体宽度|磨块宽度/.test(labelText)) return pairValue(specPairs, ['基体宽度', '磨块宽度', '宽度'])
-  if (/叶片宽度/.test(labelText)) return pairValue(specPairs, ['叶片宽度', '宽度'])
+  if (/[叶页]片宽度/.test(labelText)) {
+    return pairValue(specPairs, ['页片宽度', '叶片宽度']) || pairValue(specPairs, ['宽度'])
+  }
   if (/长度|周长/.test(labelText)) return pairValue(specPairs, ['长度', '周长'])
   if (/宽度/.test(labelText)) return pairValue(specPairs, ['宽度'])
   if (/丝径/.test(labelText)) return pairValue(specPairs, ['丝径']) || pairValue(attrPairs, ['丝径'])
