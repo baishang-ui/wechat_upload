@@ -10,6 +10,7 @@ export type PhotoExifOrientation =
 
 export type CanvasTransformMatrix = [number, number, number, number, number, number]
 export type LandscapeFallbackRotation = 'clockwise' | 'counterclockwise' | 'unknown'
+export type ManualRotationDirection = Exclude<LandscapeFallbackRotation, 'unknown'>
 export type CaptureDeviceOrientation = 'portrait' | 'landscape'
 
 const LANDSCAPE_GAMMA_THRESHOLD = 0.7
@@ -92,7 +93,7 @@ export function getPhotoOrientationPlan(
       }
     case 'up':
     default:
-      if (fallbackRotation !== 'unknown' || width > height) {
+      if (fallbackRotation !== 'unknown') {
         if (fallbackRotation === 'counterclockwise') {
           return {
             outputWidth: height,
@@ -114,5 +115,27 @@ export function getPhotoOrientationPlan(
         matrix: [1, 0, 0, 1, 0, 0],
         requiresNormalization: false,
       }
+  }
+}
+
+/** Returns a lossless-size canvas plan for one explicit 90-degree user rotation. */
+export function getManualRotationPlan(
+  width: number,
+  height: number,
+  direction: ManualRotationDirection,
+): PhotoOrientationPlan {
+  if (direction === 'counterclockwise') {
+    return {
+      outputWidth: height,
+      outputHeight: width,
+      matrix: [0, -1, 1, 0, 0, width],
+      requiresNormalization: true,
+    }
+  }
+  return {
+    outputWidth: height,
+    outputHeight: width,
+    matrix: [0, 1, -1, 0, height, 0],
+    requiresNormalization: true,
   }
 }

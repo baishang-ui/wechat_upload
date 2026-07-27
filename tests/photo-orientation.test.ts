@@ -5,6 +5,7 @@ const assert: typeof strictAssert = strictAssert
 
 import {
   getLandscapeFallbackRotation,
+  getManualRotationPlan,
   getPhotoOrientationPlan,
 } from '../miniprogram/domain/photo-orientation'
 
@@ -76,12 +77,12 @@ test('upright EXIF landscape pixels use the capture-time fallback rotation', () 
   })
 })
 
-test('explicit capture-time landscape rotation overrides misleading portrait pixel dimensions', () => {
+test('upright EXIF does not guess rotation from landscape pixel dimensions', () => {
   assert.deepEqual(getPhotoOrientationPlan('up', 4032, 3024, 'unknown'), {
-    outputWidth: 3024,
-    outputHeight: 4032,
-    matrix: [0, 1, -1, 0, 3024, 0],
-    requiresNormalization: true,
+    outputWidth: 4032,
+    outputHeight: 3024,
+    matrix: [1, 0, 0, 1, 0, 0],
+    requiresNormalization: false,
   })
   assert.deepEqual(getPhotoOrientationPlan('up', 3024, 4032, 'clockwise'), {
     outputWidth: 4032,
@@ -93,6 +94,21 @@ test('explicit capture-time landscape rotation overrides misleading portrait pix
     outputWidth: 4032,
     outputHeight: 3024,
     matrix: [0, -1, 1, 0, 0, 3024],
+    requiresNormalization: true,
+  })
+})
+
+test('manual rotation plans rotate the current preview exactly ninety degrees', () => {
+  assert.deepEqual(getManualRotationPlan(1200, 1600, 'clockwise'), {
+    outputWidth: 1600,
+    outputHeight: 1200,
+    matrix: [0, 1, -1, 0, 1600, 0],
+    requiresNormalization: true,
+  })
+  assert.deepEqual(getManualRotationPlan(1200, 1600, 'counterclockwise'), {
+    outputWidth: 1600,
+    outputHeight: 1200,
+    matrix: [0, -1, 1, 0, 0, 1200],
     requiresNormalization: true,
   })
 })

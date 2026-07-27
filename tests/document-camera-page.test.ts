@@ -80,7 +80,6 @@ test('document camera keeps high-quality pixels and only re-encodes photos that 
   assert.doesNotMatch(cameraScss, /\.photo-orientation-canvas\s*\{[\s\S]*width:\s*1px;[\s\S]*height:\s*1px;/)
   assert.match(cameraTs, /wx\.getImageInfo\(/)
   assert.match(cameraTs, /getPhotoOrientationPlan\(/)
-  assert.match(cameraTs, /getLandscapeFallbackRotation\(\s*captureDeviceGamma,\s*captureDeviceOrientation,\s*\)/)
   assert.match(cameraTs, /if \(!plan\.requiresNormalization\) return originalPath/)
   assert.match(cameraTs, /normalizePhotoOrientation\(originalPath\)/)
   assert.match(cameraTs, /wx\.nextTick\(resolve\)/)
@@ -89,13 +88,9 @@ test('document camera keeps high-quality pixels and only re-encodes photos that 
   assert.doesNotMatch(cameraTs, /perspectiveCorrectDocumentPhoto|cropDocumentPhoto/)
   assert.match(cameraTs, /cancelAutoCapture\(\)/)
   assert.match(cameraTs, /detached\(\)[\s\S]*cancelAutoCapture\(\)/)
-  assert.match(cameraTs, /wx\.startDeviceMotionListening\(\{[\s\S]*interval:\s*'normal'/)
-  assert.match(cameraTs, /wx\.onDeviceMotionChange\(deviceMotionChangeHandler\)/)
-  assert.match(cameraTs, /captureDeviceGamma = latestDeviceGamma/)
-  assert.match(cameraTs, /captureDeviceOrientation = wx\.getSystemInfoSync\(\)\.deviceOrientation/)
-  assert.match(cameraTs, /getLandscapeFallbackRotation\(\s*captureDeviceGamma,\s*captureDeviceOrientation,\s*\)/)
-  assert.match(cameraTs, /hide\(\)[\s\S]*stopDeviceMotionTracking\(\)/)
-  assert.match(cameraTs, /detached\(\)[\s\S]*stopDeviceMotionTracking\(\)/)
+  assert.doesNotMatch(cameraTs, /startDeviceMotionTracking|getLandscapeFallbackRotation/)
+  assert.match(cameraTs, /getManualRotationPlan/)
+  assert.match(cameraTs, /rotatePreview/)
 })
 
 test('photo orientation processing is immediately visible and never fails silently', () => {
@@ -224,4 +219,39 @@ test('document camera reserves an explicit top safe area and keeps the close con
   assert.match(cameraTs, /getMenuButtonBoundingClientRect\(\)/)
   assert.match(cameraTs, /statusBarHeight/)
   assert.match(cameraScss, /\.camera-top-safe-area\s*\{[\s\S]*position:\s*absolute;[\s\S]*top:\s*0;/)
+})
+
+test('document camera preview provides explicit left and right manual rotation controls', () => {
+  const cameraWxml = readProjectFile('miniprogram/pages/document-camera/document-camera.wxml')
+  const cameraTs = readProjectFile('miniprogram/pages/document-camera/document-camera.ts')
+  const cameraScss = readProjectFile('miniprogram/pages/document-camera/document-camera.scss')
+
+  assert.match(cameraWxml, /class="preview-rotate-button[^"]*"[\s\S]*data-direction="counterclockwise"[\s\S]*bindtap="rotatePreview"[\s\S]*向左旋转/)
+  assert.match(cameraWxml, /class="preview-rotate-button[^"]*"[\s\S]*data-direction="clockwise"[\s\S]*bindtap="rotatePreview"[\s\S]*向右旋转/)
+  assert.match(cameraTs, /getManualRotationPlan/)
+  assert.match(cameraTs, /async rotatePreview\(event:/)
+  assert.match(cameraTs, /this\.data\.previewPath/)
+  assert.match(cameraTs, /previewMessage:\s*'已手动旋转照片，可继续调整'/)
+  assert.match(cameraScss, /\.document-preview-rotate-actions\s*\{/)
+  assert.match(cameraScss, /\.preview-rotate-button\s*\{/)
+})
+
+test('document camera no longer guesses upright EXIF rotation from device motion', () => {
+  const cameraTs = readProjectFile('miniprogram/pages/document-camera/document-camera.ts')
+
+  assert.doesNotMatch(cameraTs, /startDeviceMotionTracking|getLandscapeFallbackRotation/)
+  assert.match(cameraTs, /getPhotoOrientationPlan\(\s*image\.orientation,\s*image\.width,\s*image\.height,?\s*\)/)
+})
+
+test('document camera avoids sending identical tracking state across the setData bridge', () => {
+  const cameraTs = readProjectFile('miniprogram/pages/document-camera/document-camera.ts')
+  const applyDetection = cameraTs.match(
+    /applyDetection\(detected: DocumentFrame \| null, now: number\) \{([\s\S]*?)\n    \},\n    onCaptureModePressStart/,
+  )?.[1] || ''
+
+  assert.match(cameraTs, /buildChangedDataPatch/)
+  assert.match(applyDetection, /const detectionPatch = buildChangedDataPatch\(this\.data, \{/)
+  assert.match(applyDetection, /if \(Object\.keys\(detectionPatch\)\.length > 0\)/)
+  assert.match(applyDetection, /this\.setData\(detectionPatch/)
+  assert.doesNotMatch(applyDetection, /this\.setData\(\{\s*frameState:/)
 })

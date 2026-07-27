@@ -11,9 +11,12 @@ import {
   updateDocumentTracking,
 } from '../../domain/document-framing'
 import {
-  getLandscapeFallbackRotation,
+  getManualRotationPlan,
   getPhotoOrientationPlan,
+  ManualRotationDirection,
+  PhotoOrientationPlan,
 } from '../../domain/photo-orientation'
+import { buildChangedDataPatch } from '../../utils/set-data'
 
 interface ConfirmedPhotoPayload {
   tempFilePath?: string
@@ -36,6 +39,14 @@ interface CaptureModeEvent {
   }
 }
 
+interface ManualRotationEvent {
+  currentTarget: {
+    dataset: {
+      direction?: ManualRotationDirection
+    }
+  }
+}
+
 const SEARCH_DETECTION_INTERVAL_MS = 320
 const TRACKING_DETECTION_INTERVAL_MS = 180
 
@@ -46,15 +57,6 @@ let autoCaptureSnapshot: AutoCaptureSnapshot = createAutoCaptureSnapshot()
 let lastDetectionAt = 0
 let detectionRunning = false
 let captureRunning = false
-let latestDeviceGamma: number | null = null
-let captureDeviceGamma: number | null = null
-let captureDeviceOrientation: 'portrait' | 'landscape' = 'portrait'
-let deviceMotionListening = false
-
-const deviceMotionChangeHandler: WechatMiniprogram.OnDeviceMotionChangeCallback = ({ gamma }) => {
-  latestDeviceGamma = Number.isFinite(gamma) ? gamma : null
-}
-
 function getImageInfo(source: string): Promise<WechatMiniprogram.GetImageInfoSuccessCallbackResult> {
   return new Promise((resolve, reject) => {
     wx.getImageInfo({
@@ -96,37 +98,6 @@ function stopFrameListener(): void {
   cameraFrameListener?.stop()
   cameraFrameListener = null
   detectionRunning = false
-}
-
-function startDeviceMotionTracking(): void {
-  if (
-    deviceMotionListening
-    || typeof wx.startDeviceMotionListening !== 'function'
-    || typeof wx.onDeviceMotionChange !== 'function'
-    || typeof wx.offDeviceMotionChange !== 'function'
-    || typeof wx.stopDeviceMotionListening !== 'function'
-  ) return
-
-  deviceMotionListening = true
-  wx.onDeviceMotionChange(deviceMotionChangeHandler)
-  wx.startDeviceMotionListening({
-    interval: 'normal',
-    fail: () => {
-      if (!deviceMotionListening) return
-      wx.offDeviceMotionChange(deviceMotionChangeHandler)
-      deviceMotionListening = false
-      latestDeviceGamma = null
-    },
-  })
-}
-
-function stopDeviceMotionTracking(): void {
-  if (deviceMotionListening) {
-    wx.offDeviceMotionChange(deviceMotionChangeHandler)
-    wx.stopDeviceMotionListening()
-  }
-  deviceMotionListening = false
-  latestDeviceGamma = null
 }
 
 function frameStateFromTracking(snapshot: DocumentTrackingSnapshot): DocumentFrameState {
@@ -194,27 +165,21 @@ Component({
         cameraErrorTop: cameraTopInset + 120,
       })
       cameraContext = wx.createCameraContext()
-      startDeviceMotionTracking()
     },
     detached() {
       stopFrameListener()
-      stopDeviceMotionTracking()
       cancelAutoCapture()
       cameraContext = null
       captureRunning = false
-      captureDeviceGamma = null
-      captureDeviceOrientation = 'portrait'
       resetDetection()
     },
   },
   pageLifetimes: {
     show() {
-      startDeviceMotionTracking()
       if (!this.data.previewPath) this.startFrameDetection()
     },
     hide() {
       stopFrameListener()
-      stopDeviceMotionTracking()
       cancelAutoCapture()
       this.setData({ autoCaptureStatus: 'idle', countdown: 0 })
     },
@@ -310,7 +275,7 @@ Component({
         ? Math.max(0, 100 - elapsed / 6)
         : trackingSnapshot.stableProgress * 100
       const shouldCapture = autoCaptureSnapshot.shouldCapture
-      this.setData({
+      const detectionPatch = buildChangedDataPatch(this.data, {
         frameState: frameStateFromTracking(trackingSnapshot),
         frameMessage: frameMessage(
           trackingSnapshot,
@@ -322,9 +287,15 @@ Component({
         countdown: autoCaptureSnapshot.countdown,
         shutterProgress: Number(shutterProgress.toFixed(1)),
         trackingHeld: trackingSnapshot.held,
-      }, () => {
-        if (shouldCapture) this.capturePhoto()
       })
+      const captureIfReady = () => {
+        if (shouldCapture) this.capturePhoto()
+      }
+      if (Object.keys(detectionPatch).length > 0) {
+        this.setData(detectionPatch, captureIfReady)
+      } else {
+        captureIfReady()
+      }
     },
     onCaptureModePressStart(event: CaptureModeEvent) {
       const mode = event.currentTarget.dataset.mode
@@ -362,8 +333,6 @@ Component({
         return
       }
       captureRunning = true
-      captureDeviceGamma = latestDeviceGamma
-      captureDeviceOrientation = wx.getSystemInfoSync().deviceOrientation
       cancelAutoCapture()
       stopFrameListener()
       this.setData({
@@ -384,8 +353,6 @@ Component({
         },
         fail: () => {
           captureRunning = false
-          captureDeviceGamma = null
-          captureDeviceOrientation = 'portrait'
           this.setData({ captureProcessing: false })
           wx.showToast({ title: '拍摄失败，请重试', icon: 'none' })
           this.startFrameDetection()
@@ -414,8 +381,6 @@ Component({
         captureProcessing: false,
       })
       captureRunning = false
-      captureDeviceGamma = null
-      captureDeviceOrientation = 'portrait'
     },
     getPhotoOrientationCanvas(): Promise<PhotoOrientationCanvas> {
       return new Promise((resolve, reject) => {
@@ -454,31 +419,11 @@ Component({
         }, this)
       })
     },
-    async normalizePhotoOrientation(originalPath: string): Promise<string> {
-      const image = await getImageInfo(originalPath)
-      const fallbackRotation = getLandscapeFallbackRotation(
-        captureDeviceGamma,
-        captureDeviceOrientation,
-      )
-      const plan = getPhotoOrientationPlan(
-        image.orientation,
-        image.width,
-        image.height,
-        fallbackRotation,
-      )
-
-      console.info('[document-camera] 照片方向信息', {
-        orientation: image.orientation,
-        width: image.width,
-        height: image.height,
-        captureDeviceGamma,
-        captureDeviceOrientation,
-        fallbackRotation,
-        plan,
-      })
-
-      if (!plan.requiresNormalization) return originalPath
-
+    async renderPhotoWithPlan(
+      sourcePath: string,
+      image: WechatMiniprogram.GetImageInfoSuccessCallbackResult,
+      plan: PhotoOrientationPlan,
+    ): Promise<string> {
       this.setData({
         orientationCanvasWidth: plan.outputWidth,
         orientationCanvasHeight: plan.outputHeight,
@@ -491,7 +436,7 @@ Component({
       const context = canvas.getContext('2d')
       if (!context) throw new Error('无法创建照片方向校正上下文')
 
-      const canvasImage = await loadCanvasImage(canvas, originalPath)
+      const canvasImage = await loadCanvasImage(canvas, sourcePath)
       context.clearRect(0, 0, plan.outputWidth, plan.outputHeight)
       context.save()
       context.transform(...plan.matrix)
@@ -499,32 +444,83 @@ Component({
       context.restore()
       await waitForNextTick()
 
-      const normalizedPath = await this.exportOrientationCanvas(
+      const renderedPath = await this.exportOrientationCanvas(
         canvas,
         plan.outputWidth,
         plan.outputHeight,
       )
-      const normalizedImage = await getImageInfo(normalizedPath)
+      const renderedImage = await getImageInfo(renderedPath)
       const expectedPortrait = plan.outputHeight > plan.outputWidth
-      const actualPortrait = normalizedImage.height > normalizedImage.width
+      const actualPortrait = renderedImage.height > renderedImage.width
 
+      if (expectedPortrait !== actualPortrait) {
+        throw new Error(`照片导出方向未生效：${renderedImage.width}x${renderedImage.height}`)
+      }
+      return renderedPath
+    },
+    async normalizePhotoOrientation(originalPath: string): Promise<string> {
+      const image = await getImageInfo(originalPath)
+      const plan = getPhotoOrientationPlan(
+        image.orientation,
+        image.width,
+        image.height,
+      )
+
+      console.info('[document-camera] 照片方向信息', {
+        orientation: image.orientation,
+        width: image.width,
+        height: image.height,
+        plan,
+      })
+
+      if (!plan.requiresNormalization) return originalPath
+      const normalizedPath = await this.renderPhotoWithPlan(originalPath, image, plan)
+      const normalizedImage = await getImageInfo(normalizedPath)
       console.info('[document-camera] 照片方向校正完成', {
         normalizedPath,
         width: normalizedImage.width,
         height: normalizedImage.height,
         orientation: normalizedImage.orientation,
       })
-
-      if (expectedPortrait !== actualPortrait) {
-        throw new Error(`照片导出方向未生效：${normalizedImage.width}x${normalizedImage.height}`)
-      }
       return normalizedPath
+    },
+    async rotatePreview(event: ManualRotationEvent) {
+      if (this.data.captureProcessing) return
+      const direction = event.currentTarget.dataset.direction
+      const sourcePath = this.data.previewPath
+      if (
+        !sourcePath
+        || (direction !== 'clockwise' && direction !== 'counterclockwise')
+      ) return
+
+      this.setData({
+        captureProcessing: true,
+        previewMessage: '正在手动旋转照片…',
+      })
+      try {
+        const image = await getImageInfo(sourcePath)
+        const rotatedPath = await this.renderPhotoWithPlan(
+          sourcePath,
+          image,
+          getManualRotationPlan(image.width, image.height, direction),
+        )
+        this.setData({
+          previewPath: rotatedPath,
+          previewMessage: '已手动旋转照片，可继续调整',
+          captureProcessing: false,
+        })
+      } catch (error) {
+        console.error('[document-camera] 手动旋转照片失败', error)
+        this.setData({
+          previewMessage: '手动旋转失败，已保留当前照片',
+          captureProcessing: false,
+        })
+        wx.showToast({ title: '旋转失败，请重试', icon: 'none' })
+      }
     },
     retakePhoto() {
       if (this.data.captureProcessing) return
       captureRunning = false
-      captureDeviceGamma = null
-      captureDeviceOrientation = 'portrait'
       resetDetection()
       this.setData({
         previewPath: '',
