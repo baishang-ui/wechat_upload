@@ -7,7 +7,7 @@
 - 账号登录和 Session Cookie 复用，未登录或会话失效时自动返回登录页。
 - 拍照或从相册批量添加检验报告，最多 10 个未完成任务。
 - 识别任务按加入顺序逐张处理，识别期间仍可继续添加图片。
-- 上传前自动压缩图片，并限制识别图片不超过 600 KB。
+- 图片按原始文件上传，客户端不再设置图片大小上限或强制压缩。
 - 当前临时直接调用可配置的视觉模型接口处理 JPEG、PNG 图片；模型令牌只从微信本地存储读取，不硬编码进仓库。
 - 将 OCR 结果归一化为可编辑的十样本检验表格。
 - 结合模型置信度与确定性格式检查，显示红色“重点核对”和黄色“建议核对”提示。
@@ -93,7 +93,7 @@ miniprogram/
   services/
     auth-service.ts               登录、当前用户和退出
     server-client.ts              JSON 请求、文件上传、Cookie 和错误映射
-    inspection-service.ts         图片压缩和识别结果归一化
+    inspection-service.ts         图片上传准备和识别结果归一化
     quality-inspection-service.ts 采购任务、独立报告、草稿和历史接口
     history-service.ts            本地存储及持久图片管理
     export-service.ts             JSON 文件生成和微信文件分享
@@ -126,7 +126,7 @@ npm install
 
 ## 服务配置
 
-业务服务和大模型识别配置统一位于：
+业务服务配置位于：
 
 ```text
 miniprogram/config/server.ts
@@ -135,19 +135,18 @@ miniprogram/config/server.ts
 当前配置：
 
 ```ts
-export const BUSINESS_SERVER_BASE_URL = 'http://localhost:7875'
-export const MODEL_API_URL = 'http://www.binictools.cn:8865/api/llm/v1/chat/completions'
-export const MODEL_NAME = 'qwen35'
-export const MODEL_TOKEN_STORAGE_KEY = 'llmApiToken'
+export const DATA_SERVER_BASE_URL = 'https://www.binictools.cn:7876'
+export const RECOGNITION_API_URL = 'https://www.binictools.cn:7876/api/miniprogram/quality-inspections/recognize'
 ```
 
-- `BUSINESS_SERVER_BASE_URL` 用于登录、待检任务、质检记录、草稿和普通图片上传。
-- `MODEL_API_URL` 与 `MODEL_NAME` 只用于当前阶段的直接模型识别。
-- 如果模型服务需要 Bearer Token，可将令牌写入微信本地存储的 `llmApiToken` 键；不要把真实令牌硬编码进仓库。
+- `DATA_SERVER_BASE_URL` 用于登录、待检任务、质检记录、草稿和业务图片等数据读写。
+- `RECOGNITION_API_URL` 是完整的检验报告识别接口地址，可独立切换识别服务。
+- 识别请求通过业务后端代理：`POST /api/miniprogram/quality-inspections/recognize`，小程序使用 `wx.uploadFile` 上传压缩后的报告图片。
+- 小程序不保存模型地址或模型令牌；模型服务地址、模型名称和凭据只由业务后端管理。
 
 同一文件还定义请求超时、上传/识别超时、Session Cookie 存储键和演示模式。
 
-> `localhost` 只适用于微信开发者工具模拟器访问本机服务。真机中的 `localhost` 指向手机自身，真机联调应将业务地址改为手机可访问的局域网地址或 HTTPS 域名。当前模型地址也是 HTTP；仅关闭开发者工具域名校验不能保证真机预览可用，真机需要合法 HTTPS 模型地址或后续上线的 HTTPS 识别代理。
+> 当前线上业务地址使用 HTTPS，可供真机和体验版访问。微信公众平台仍需将 `https://www.binictools.cn:7876` 配置为 request 与 uploadFile 合法域名。
 
 ## 在微信开发者工具中运行
 
@@ -225,15 +224,9 @@ export const MODEL_TOKEN_STORAGE_KEY = 'llmApiToken'
 - 失败任务不会阻塞后续排队任务。
 - 跳过正在处理的任务时，会在当前异步工作结束后丢弃其结果。
 
-### 图片压缩
+### 图片上传与方向调整
 
-识别前先读取文件大小。超过 600 KB 时按以下质量依次压缩：
-
-```text
-70 -> 50 -> 35 -> 20
-```
-
-每次压缩后重新检查大小；仍超过 600 KB 时提示用户靠近报告重新拍摄。后端识别代理接受有效的 JPEG 或 PNG 文件，并再次校验图片类型、内容和大小。
+相册和自定义相机会先保留原始图片；上传到线上前，5 MB 以内的图片保持原样，超过 5 MB 的图片会按质量档位自动压缩到 5 MB 以下。预览页仍仅按可靠的 EXIF 信息转正，并提供“向左旋转”和“向右旋转”按钮供人工修正方向。
 
 ### 准确度审核
 
@@ -329,7 +322,7 @@ npm test
 npm run typecheck
 ```
 
-测试覆盖领域数据归一化、历史迁移、图片压缩、识别队列、置信度审核、认证、Cookie、接口路径、同步流程、JSON 导出、UI 结构和 README 内容契约。测试文件位于 `tests/`，通过 Node.js 内置测试运行器和 `tsx` 执行。
+测试覆盖领域数据归一化、历史迁移、图片上传与旋转、识别队列、置信度审核、认证、Cookie、接口路径、同步流程、JSON 导出、UI 结构和 README 内容契约。测试文件位于 `tests/`，通过 Node.js 内置测试运行器和 `tsx` 执行。
 
 ## 常见问题
 
@@ -345,9 +338,9 @@ Session 已失效或未登录。客户端会清除 `smartSalesSession:v1`，重�
 
 独立报告的 `client_record_id` 已存在，但本次创建字段与服务端已有内容不一致。不要复用其他记录的本地 UUID；检查本地记录是否被异常覆盖。
 
-### `413 Request Entity Too Large` 或“图片不能超过 600 KB”
+### `413 Request Entity Too Large`
 
-靠近报告重新拍摄，减少无关背景；确认压缩后的图片不超过 600 KB。
+客户端不再限制图片大小；如果服务端或网关仍返回 `413`，需要调整对应服务的上传体积配置。
 
 ### `422 Unprocessable Entity`
 
@@ -355,7 +348,7 @@ Session 已失效或未登录。客户端会清除 `smartSalesSession:v1`，重�
 
 ### 请求超时或网络连接失败
 
-确认业务后端和模型服务正在运行，`BUSINESS_SERVER_BASE_URL` 与 `MODEL_API_URL` 均可访问，防火墙允许对应端口，并检查普通请求 30 秒、上传与识别请求 120 秒的超时设置。
+确认数据服务和识别代理正在运行，`DATA_SERVER_BASE_URL` 与 `RECOGNITION_API_URL` 均可访问，防火墙允许对应 HTTPS 端口，并检查普通请求 30 秒、上传与识别请求 120 秒的超时设置。
 
 ### 模拟器正常，真机无法访问 `localhost`
 
@@ -371,13 +364,13 @@ Session 已失效或未登录。客户端会清除 `smartSalesSession:v1`，重�
 
 ## 正式发布检查
 
-- 将 `BUSINESS_SERVER_BASE_URL` 设置为正式 HTTPS 地址。
-- 将 `MODEL_API_URL` 改为合法 HTTPS 地址，或切换至后端识别代理后删除小程序侧模型配置。
+- 将 `DATA_SERVER_BASE_URL` 和 `RECOGNITION_API_URL` 分别设置为对应的正式 HTTPS 地址。
+- 确认 `POST /api/miniprogram/quality-inspections/recognize` 由业务后端代理模型识别，小程序侧不包含模型配置或凭据。
 - 在微信公众平台按实际请求类型配置 request 和 uploadFile 合法域名。
 - 确认证书链、TLS 版本和域名备案符合微信要求。
-- 模型令牌不得硬编码进仓库；识别代理上线后应将模型地址和凭据全部迁回业务后端。
+- 模型地址和模型令牌不得进入小程序代码或本地存储，统一保留在业务后端。
 - 验证账号权限、Session 生命周期和退出登录行为。
-- 使用真机验证拍照、相册、图片压缩、上传、文件分享和安全区布局。
+- 使用真机验证拍照、相册原图、手动旋转、上传、文件分享和安全区布局。
 - 分别验证采购任务报告、独立报告、失败重试和服务器历史合并。
 - 检查 `401`、`403`、`409`、`413`、`422` 和超时提示。
 - 发布前运行 `npm test` 与 `npm run typecheck`。
