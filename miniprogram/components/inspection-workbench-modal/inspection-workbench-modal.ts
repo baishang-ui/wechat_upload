@@ -135,14 +135,31 @@ Component({
 
     async loadWorkbench() {
       if (!this.data.visible || !this.data.taskId || !this.data.itemId || this.data.loading) return
+      const requestedTaskId = this.data.taskId
+      const requestedItemId = this.data.itemId
       this.setData({ loading: true, loadError: '', savedMessage: '', recognitionError: '' })
       try {
-        const detail = await getInspectionItemDetail(this.data.taskId, this.data.itemId)
+        const detail = await getInspectionItemDetail(requestedTaskId, requestedItemId)
+        if (
+          !this.data.visible
+          || requestedTaskId !== this.data.taskId
+          || requestedItemId !== this.data.itemId
+        ) {
+          if (this.data.visible && this.data.taskId && this.data.itemId) {
+            this.setData({ loading: false })
+            void this.loadWorkbench()
+          }
+          return
+        }
         const task = detail.task
         const item = detail.item
         if (!task || !item) throw new Error('线上任务中未找到该产品')
+        let template = item.inspection_template
+        if (!template) {
+          template = buildOnlineInspectionTemplate(detail)
+        }
         const workbench = buildInspectionWorkbench({
-          template: item.inspection_template || buildOnlineInspectionTemplate(detail),
+          template,
           draft: item.inspection_draft,
         })
         const result = item.inspection_draft?.ai_workbench_result || {}
@@ -167,7 +184,13 @@ Component({
           loading: false,
         })
       } catch (error) {
-        this.setData({ loading: false, loadError: errorMessage(error, '产品检验表加载失败') })
+        if (
+          this.data.visible
+          && requestedTaskId === this.data.taskId
+          && requestedItemId === this.data.itemId
+        ) {
+          this.setData({ loading: false, loadError: errorMessage(error, '产品检验表加载失败') })
+        }
       }
     },
 
@@ -210,7 +233,7 @@ Component({
         count: 9,
         mediaType: ['image'],
         sourceType: ['camera', 'album'],
-        sizeType: ['compressed'],
+        sizeType: ['original'],
         success: ({ tempFiles }) => {
           const localPaths = tempFiles.map((file) => file.tempFilePath).filter(Boolean)
           void this.appendAndUploadPhotos(rowKey, localPaths)
@@ -296,7 +319,7 @@ Component({
         count: 1,
         mediaType: ['image'],
         sourceType: ['album'],
-        sizeType: ['compressed'],
+        sizeType: ['original'],
         success: ({ tempFiles }) => {
           const imagePath = tempFiles[0]?.tempFilePath
           if (imagePath) void this.recognizeQualitySheet(imagePath)

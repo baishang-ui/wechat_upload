@@ -25,6 +25,7 @@ test('inspection workbench exposes online table, unlimited photos, OCR review an
   const wxml = source('miniprogram/pages/inspection-workbench/inspection-workbench.wxml')
   const scss = source('miniprogram/pages/inspection-workbench/inspection-workbench.scss')
   const page = source('miniprogram/pages/inspection-workbench/inspection-workbench.ts')
+  const modal = source('miniprogram/components/inspection-workbench-modal/inspection-workbench-modal.ts')
 
   assert.match(wxml, /class="workbench-source"/)
   assert.match(wxml, /class="inspection-table-scroll"/)
@@ -40,8 +41,55 @@ test('inspection workbench exposes online table, unlimited photos, OCR review an
   assert.match(page, /workbenchToDraft/)
   assert.match(page, /buildRenderColumns\(workbench\.columns\)/)
   assert.match(page, /getInspectionItemDetail/)
-  assert.match(page, /buildOnlineInspectionTemplate/)
+  assert.doesNotMatch(page, /listProductQualityTemplates/)
+  assert.match(page, /buildOnlineInspectionTemplate\(detail\)/)
+  assert.doesNotMatch(modal, /listProductQualityTemplates/)
+  assert.match(modal, /buildOnlineInspectionTemplate\(detail\)/)
   assert.match(wxml, /wx:for="{{renderColumns}}"/)
   assert.ok(scss.includes("@import '../../styles/design-tokens';"))
   assert.ok(scss.includes('.inspection-table-scroll'))
+})
+
+
+test('online report structure is rebuilt even when an older draft already contains rows', () => {
+  const page = source('miniprogram/pages/inspection-workbench/inspection-workbench.ts')
+  const modal = source('miniprogram/components/inspection-workbench-modal/inspection-workbench-modal.ts')
+
+  for (const implementation of [page, modal]) {
+    assert.doesNotMatch(implementation, /draftRecords\.length === 0/)
+    assert.match(implementation, /if \(!template\)/)
+    assert.match(implementation, /buildOnlineInspectionTemplate\(detail\)/)
+    assert.match(implementation, /draft: item\.inspection_draft/)
+  }
+})
+
+
+test('recognized reports automatically attach to a pending order and expose a direct workbench jump', () => {
+  const page = source('miniprogram/pages/index/index.ts')
+  const wxml = source('miniprogram/pages/index/index.wxml')
+
+  assert.match(page, /autoWriteRecognizedInspectionToPendingItem/)
+  assert.match(page, /autoWriteQueueRecognition/)
+  assert.match(page, /jumpToMatchedInspection/)
+  assert.match(page, /sourceType:\s*'purchase_order'/)
+  assert.match(wxml, /进入待检产品/)
+  assert.match(wxml, /bindtap="jumpToMatchedInspection"/)
+})
+
+test('history records show the reason when an order cannot be found and syncing is skipped', () => {
+  const page = source('miniprogram/pages/index/index.ts')
+  const wxml = source('miniprogram/pages/index/index.wxml')
+
+  assert.match(page, /listTasks:\s*listInspectionTasks/)
+  assert.match(page, /result\.syncError\s*\|\|/)
+  assert.match(wxml, /item\.syncError && \(item\.syncStatus === 'failed' \|\| item\.syncStatus === 'local'\)/)
+})
+
+test('legacy workbench page discards stale item detail responses', () => {
+  const page = source('miniprogram/pages/inspection-workbench/inspection-workbench.ts')
+
+  assert.match(page, /const requestedTaskId = this\.data\.taskId/)
+  assert.match(page, /const requestedItemId = this\.data\.itemId/)
+  assert.match(page, /requestedTaskId !== this\.data\.taskId/)
+  assert.match(page, /requestedItemId !== this\.data\.itemId/)
 })

@@ -252,13 +252,22 @@ Page({
 
   async loadWorkbench() {
     if (!this.data.taskId || !this.data.itemId) return
+    const requestedTaskId = this.data.taskId
+    const requestedItemId = this.data.itemId
     this.setData({ loading: true, loadError: '', savedMessage: '' })
     try {
-      const detail = await getInspectionItemDetail(this.data.taskId, this.data.itemId)
+      const detail = await getInspectionItemDetail(requestedTaskId, requestedItemId)
+      if (
+        requestedTaskId !== this.data.taskId
+        || requestedItemId !== this.data.itemId
+      ) return
       const task = detail.task
       const item = detail.item
       if (!task || !item) throw new Error('线上任务中未找到该产品')
-      const template = item.inspection_template || buildOnlineInspectionTemplate(detail)
+      let template = item.inspection_template
+      if (!template) {
+        template = buildOnlineInspectionTemplate(detail)
+      }
       const workbench = buildInspectionWorkbench({
         template,
         draft: item.inspection_draft,
@@ -283,10 +292,15 @@ Page({
         loading: false,
       })
     } catch (error) {
-      this.setData({
-        loading: false,
-        loadError: errorMessage(error, '产品检验表加载失败'),
-      })
+      if (
+        requestedTaskId === this.data.taskId
+        && requestedItemId === this.data.itemId
+      ) {
+        this.setData({
+          loading: false,
+          loadError: errorMessage(error, '产品检验表加载失败'),
+        })
+      }
     }
   },
 
@@ -332,7 +346,7 @@ Page({
       count: 9,
       mediaType: ['image'],
       sourceType: ['camera', 'album'],
-      sizeType: ['compressed'],
+      sizeType: ['original'],
       success: ({ tempFiles }) => {
         const localPaths = tempFiles.map((file) => file.tempFilePath).filter(Boolean)
         void this.appendAndUploadPhotos(rowKey, localPaths)
@@ -458,7 +472,7 @@ Page({
       count: 1,
       mediaType: ['image'],
       sourceType: ['album'],
-      sizeType: ['compressed'],
+      sizeType: ['original'],
       success: ({ tempFiles }) => {
         const imagePath = tempFiles[0]?.tempFilePath
         if (imagePath) void this.recognizeQualitySheet(imagePath)

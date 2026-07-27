@@ -112,3 +112,13 @@ test('workbench drawer is mounted only when opened and initializes on attachment
   assert.match(ts, /lifetimes:\s*\{[\s\S]*attached\(\)/)
   assert.match(ts, /void this\.loadWorkbench\(\)/)
 })
+
+test('workbench drawer discards stale item detail responses before they can overwrite a newer selection', () => {
+  const ts = source('miniprogram/components/inspection-workbench-modal/inspection-workbench-modal.ts')
+
+  assert.match(ts, /const requestedTaskId = this\.data\.taskId/)
+  assert.match(ts, /const requestedItemId = this\.data\.itemId/)
+  assert.match(ts, /requestedTaskId !== this\.data\.taskId/)
+  assert.match(ts, /requestedItemId !== this\.data\.itemId/)
+  assert.match(ts, /!this\.data\.visible/)
+})
