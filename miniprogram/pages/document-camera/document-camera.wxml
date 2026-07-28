@@ -1,3 +1,4 @@
+<top-toast />
 <view class="document-camera-page">
   <canvas
     type="2d"

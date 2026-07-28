@@ -1,7 +1,7 @@
 {
   "usingComponents": {
     "navigation-bar": "/components/navigation-bar/navigation-bar",
-    "inspection-workbench-modal": "/components/inspection-workbench-modal/inspection-workbench-modal"
-  },
-  "disableScroll": true
+    "inspection-workbench-modal": "/components/inspection-workbench-modal/inspection-workbench-modal",
+    "history-editor-modal": "/components/history-editor-modal/history-editor-modal"
+  }
 }

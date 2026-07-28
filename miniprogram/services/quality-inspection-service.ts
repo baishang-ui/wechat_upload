@@ -500,8 +500,6 @@ export interface HistoryViewItem {
   updatedLabel: string
   inspectionDate: string
   imagePath: string
-  rawContent: string
-  record: InspectionRecord | null
   productLabel: string
   customer: string
   supplier: string
@@ -588,8 +586,6 @@ export function mergeInspectionHistory(
       updatedLabel: formatHistoryTime(item.updatedAt),
       inspectionDate: item.record.inspectionDate,
       imagePath: item.imagePath,
-      rawContent: item.rawContent,
-      record: item.record,
       productLabel: PRODUCT_OPTIONS.find(
         (option) => option.value === item.record.productType,
       )?.label ?? '检验报告',
@@ -611,8 +607,6 @@ export function mergeInspectionHistory(
     updatedLabel: formatHistoryTime(remoteTimestamp(item)),
     inspectionDate: asString(item.latest_inspection_date),
     imagePath: asString(item.thumbnail_image),
-    rawContent: '',
-    record: null,
     productLabel: asString(item.material_name || item.material_code) || '检验报告',
     customer: asString(item.customer_name || item.contract_no || item.task_no),
     supplier: asString(item.supplier_name),

@@ -79,8 +79,9 @@ test('recognized reports automatically attach to a pending order and expose a di
 test('history records show the reason when an order cannot be found and syncing is skipped', () => {
   const page = source('miniprogram/pages/index/index.ts')
   const wxml = source('miniprogram/pages/index/index.wxml')
+  const historySyncService = source('miniprogram/services/inspection-history-sync-service.ts')
 
-  assert.match(page, /listTasks:\s*listInspectionTasks/)
+  assert.match(historySyncService, /listTasks:\s*listInspectionTasks/)
   assert.match(page, /result\.syncError\s*\|\|/)
   assert.match(wxml, /item\.syncError && \(item\.syncStatus === 'failed' \|\| item\.syncStatus === 'local'\)/)
 })

@@ -1,3 +1,4 @@
+import { showTopToast } from '../../services/top-toast-service'
 import {
   addLocalPhotos,
   buildInspectionWorkbench,
@@ -372,7 +373,7 @@ Page({
       },
       fail: (error) => {
         if (!error.errMsg?.includes('cancel')) {
-          wx.showToast({ title: '选择照片失败，请重试', icon: 'none' })
+          showTopToast({ title: '选择照片失败，请重试', icon: 'none' })
         }
       },
     })
@@ -480,7 +481,7 @@ Page({
         },
       },
       fail: () => {
-        wx.showToast({ title: '无法打开相机，请稍后重试', icon: 'none' })
+        showTopToast({ title: '无法打开相机，请稍后重试', icon: 'none' })
       },
     })
   },
@@ -498,7 +499,7 @@ Page({
       },
       fail: (error) => {
         if (!error.errMsg?.includes('cancel')) {
-          wx.showToast({ title: '选择质检单失败，请重试', icon: 'none' })
+          showTopToast({ title: '选择质检单失败，请重试', icon: 'none' })
         }
       },
     })
@@ -521,7 +522,7 @@ Page({
         )
         reportImages = [...reportImages, uploadedReport.url]
       } catch {
-        wx.showToast({ title: '识别完成，质检单图片未写入草稿', icon: 'none' })
+        showTopToast({ title: '识别完成，质检单图片未写入草稿', icon: 'none' })
       }
       const rawContent = [this.data.rawContent, result.rawContent]
         .filter(Boolean)
@@ -536,7 +537,7 @@ Page({
         reportImages,
         reportPreviewPaths: [...this.data.reportPreviewPaths, preparedPath],
       })
-      wx.showToast({
+      showTopToast({
         title: merged.unmatched.length > 0 ? '识别完成，请核对未匹配条目' : '识别结果已回填',
         icon: 'none',
       })
@@ -564,7 +565,7 @@ Page({
     const pendingPhotos = workbench.rows.flatMap((row) => row.images)
       .filter((photo) => photo.status !== 'uploaded')
     if (pendingPhotos.length > 0) {
-      wx.showToast({ title: '请先重试或删除未完成上传的照片', icon: 'none' })
+      showTopToast({ title: '请先重试或删除未完成上传的照片', icon: 'none' })
       return
     }
     this.setData({ saving: true, savedMessage: '' })
@@ -586,12 +587,12 @@ Page({
       })
       await saveInspectionDraft(this.data.taskId, this.data.itemId, payload)
       this.setData({ savedMessage: '草稿已保存' })
-      wx.showToast({ title: '草稿已保存', icon: 'success' })
+      showTopToast({ title: '草稿已保存', icon: 'success' })
     } catch (error) {
-      wx.showModal({
-        title: '保存失败',
-        content: errorMessage(error, '草稿保存失败，请重试'),
-        showCancel: false,
+      showTopToast({
+        message: errorMessage(error, '草稿保存失败，请重试'),
+        type: 'error',
+        duration: 3600,
       })
     } finally {
       this.setData({ saving: false })

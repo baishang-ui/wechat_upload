@@ -6,6 +6,7 @@
   loading="{{loading}}"
   bindheightchange="onNavigationHeightChange"
 ></navigation-bar>
+<top-toast />
 
 <view class="workbench-page" style="padding-top: calc({{navigationBarHeight}}px + 24rpx);">
   <view wx:if="{{loading}}" class="state-card">

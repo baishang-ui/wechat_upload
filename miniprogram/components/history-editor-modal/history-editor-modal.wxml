@@ -1,0 +1,180 @@
+<view class="history-modal-layer {{drawerMounted ? 'is-mounted' : ''}} {{closing ? 'is-closing' : ''}}" aria-hidden="{{!drawerMounted}}">
+  <view wx:if="{{drawerMounted}}" class="history-modal-mask" bindtap="requestClose" catchtouchmove="noop"></view>
+  <view class="history-modal-panel" catchtap="noop">
+    <view wx:if="{{drawerMounted}}" class="modal-grabber"></view>
+    <view wx:if="{{drawerMounted}}" class="history-modal-header">
+      <view class="history-modal-heading">
+        <view class="history-modal-eyebrow">{{origin === 'remote' ? '云端质检记录' : '本地质检记录'}} · {{displayId || recordId || '未编号'}}</view>
+        <view class="history-modal-title">质检记录详情</view>
+      </view>
+      <view class="history-close" bindtap="requestClose" aria-label="关闭" role="button" hover-class="history-close--pressed" hover-stay-time="120">×</view>
+    </view>
+
+    <view class="shared-inline-editor {{activeEditorVisible ? 'is-active' : ''}} {{activeEditMultiline ? 'is-multiline' : ''}}">
+      <view class="shared-inline-editor-label">{{activeEditLabel}}</view>
+      <view class="shared-inline-editor-control">
+        <textarea
+          wx:if="{{drawerMounted && activeEditorVisible}}"
+          class="shared-inline-editor-input"
+          value="{{activeEditValue}}"
+          focus="{{activeEditorFocused}}"
+          hold-keyboard="{{true}}"
+          adjust-position="{{false}}"
+          show-confirm-bar="{{false}}"
+          disable-default-padding
+          maxlength="-1"
+          confirm-type="done"
+          bindinput="onSharedEditorInput"
+          bindblur="onSharedEditorBlur"
+          bindconfirm="confirmSharedEditor"
+        ></textarea>
+        <view class="shared-inline-editor-done" role="button" bindtap="confirmSharedEditor">完成</view>
+      </view>
+    </view>
+
+    <scroll-view wx:if="{{drawerMounted}}" class="history-modal-body" scroll-y enhanced show-scrollbar="{{false}}">
+      <view wx:if="{{loading}}" class="modal-state-card">
+        <view class="modal-state-title">正在加载质检记录</view>
+        <view class="modal-state-description">正在读取检验信息和已有数据，请稍候。</view>
+      </view>
+
+      <view wx:elif="{{loadError}}" class="modal-state-card modal-state-card--error">
+        <view class="modal-state-title">无法打开质检记录</view>
+        <view class="modal-state-description">{{loadError}}</view>
+        <button class="modal-state-button" bindtap="retryLoad">重新加载</button>
+      </view>
+
+      <block wx:else>
+        <view class="record-summary-card">
+          <view class="record-summary-main">
+            <view class="record-product">{{productLabels[productIndex] || '未选择产品类型'}}</view>
+            <view class="record-model">{{record.model || '暂无型号/规格'}}</view>
+          </view>
+          <view wx:if="{{imagePath}}" class="image-action" role="button" bindtap="previewImage">查看原图</view>
+        </view>
+
+        <view class="editor-card">
+          <view class="section-heading">
+            <view>
+              <view class="section-title">报告信息</view>
+              <view class="section-description">可直接修改以下报告信息。</view>
+            </view>
+          </view>
+          <view class="detail-field detail-field--wide">
+            <text class="field-label">产品类型</text>
+            <view class="product-selector">
+              <view wx:for="{{productLabels}}" wx:key="*this" class="product-option {{productIndex === index ? 'is-active' : ''}}" data-product-index="{{index}}" bindtap="selectProductType">{{item}}</view>
+            </view>
+          </view>
+          <view class="detail-grid">
+            <view class="detail-field">
+              <text class="field-label">客户 *</text>
+              <view class="inline-edit-value {{activeEditKind === 'record' && activeEditField === 'customer' ? 'is-active' : ''}}" data-field="customer" data-label="客户" bindtap="beginRecordEdit" role="button">{{record.customer || '—'}}</view>
+            </view>
+            <view class="detail-field">
+              <text class="field-label">供应商 *</text>
+              <view class="inline-edit-value {{activeEditKind === 'record' && activeEditField === 'supplier' ? 'is-active' : ''}}" data-field="supplier" data-label="供应商" bindtap="beginRecordEdit" role="button">{{record.supplier || '—'}}</view>
+            </view>
+            <view class="detail-field">
+              <text class="field-label">商标</text>
+              <view class="inline-edit-value {{activeEditKind === 'record' && activeEditField === 'trademark' ? 'is-active' : ''}}" data-field="trademark" data-label="商标" bindtap="beginRecordEdit" role="button">{{record.trademark || '—'}}</view>
+            </view>
+            <view class="detail-field">
+              <text class="field-label">采购合同号</text>
+              <view class="inline-edit-value {{activeEditKind === 'record' && activeEditField === 'orderNumber' ? 'is-active' : ''}}" data-field="orderNumber" data-label="采购合同号" bindtap="beginRecordEdit" role="button">{{record.orderNumber || '—'}}</view>
+            </view>
+            <view class="detail-field">
+              <text class="field-label">型号/规格 *</text>
+              <view class="inline-edit-value {{activeEditKind === 'record' && activeEditField === 'model' ? 'is-active' : ''}}" data-field="model" data-label="型号/规格" bindtap="beginRecordEdit" role="button">{{record.model || '—'}}</view>
+            </view>
+            <view class="detail-field">
+              <text class="field-label">到货数量</text>
+              <view class="inline-edit-value {{activeEditKind === 'record' && activeEditField === 'arrivalQuantity' ? 'is-active' : ''}}" data-field="arrivalQuantity" data-label="到货数量" bindtap="beginRecordEdit" role="button">{{record.arrivalQuantity || '—'}}</view>
+            </view>
+            <view class="detail-field detail-field--wide">
+              <text class="field-label">检验日期 *</text>
+              <view class="inline-edit-value {{activeEditKind === 'record' && activeEditField === 'inspectionDate' ? 'is-active' : ''}}" data-field="inspectionDate" data-label="检验日期" bindtap="beginRecordEdit" role="button">{{record.inspectionDate || '—'}}</view>
+            </view>
+          </view>
+        </view>
+
+        <view class="editor-card">
+          <view class="section-heading">
+            <view>
+              <view class="section-title">检验数据</view>
+              <view class="section-description">点击项目展开填写，一次只展开一个检验项目。</view>
+            </view>
+          </view>
+
+          <view class="inspection-list">
+            <view wx:for="{{rowItems}}" wx:key="rowIndex" wx:for-item="rowItem" class="inspection-item-card {{expandedRowIndex === rowItem.rowIndex ? 'is-expanded' : ''}}">
+              <view class="inspection-item-summary" data-row-index="{{rowItem.rowIndex}}" bindtap="toggleRowExpanded">
+                <view class="inspection-item-title-wrap">
+                  <view class="inspection-item-title">{{rowItem.row.item || '未命名检验项目'}}</view>
+                  <view class="inspection-item-standard">{{rowItem.row.requirement || '暂无标准要求'}}</view>
+                </view>
+                <view class="inspection-item-toggle">{{expandedRowIndex === rowItem.rowIndex ? '收起' : '填写'}}</view>
+              </view>
+              <view wx:if="{{expandedRowIndex === rowItem.rowIndex}}" class="inspection-item-details">
+                <view class="row-field-grid">
+                  <view class="row-field">
+                    <text class="field-label">检验项目</text>
+                    <view class="inline-edit-value {{activeEditKind === 'row' && activeEditRowIndex === rowItem.rowIndex && activeEditField === 'item' ? 'is-active' : ''}}" data-row-index="{{rowItem.rowIndex}}" data-field="item" data-label="检验项目" bindtap="beginRowFieldEdit" role="button">{{rowItem.row.item || '—'}}</view>
+                  </view>
+                  <view class="row-field">
+                    <text class="field-label">标准要求</text>
+                    <view class="inline-edit-value {{activeEditKind === 'row' && activeEditRowIndex === rowItem.rowIndex && activeEditField === 'requirement' ? 'is-active' : ''}}" data-row-index="{{rowItem.rowIndex}}" data-field="requirement" data-label="标准要求" bindtap="beginRowFieldEdit" role="button">{{rowItem.row.requirement || '—'}}</view>
+                  </view>
+                  <view class="row-field row-field--wide">
+                    <text class="field-label">规格</text>
+                    <view class="inline-edit-value {{activeEditKind === 'row' && activeEditRowIndex === rowItem.rowIndex && activeEditField === 'specification' ? 'is-active' : ''}}" data-row-index="{{rowItem.rowIndex}}" data-field="specification" data-label="规格" bindtap="beginRowFieldEdit" role="button">{{rowItem.row.specification || '—'}}</view>
+                  </view>
+                </view>
+                <view class="measurement-grid">
+                  <view wx:for="{{rowItem.row.measurements}}" wx:key="index" wx:for-item="measurement" wx:for-index="measurementIndex" class="measurement-cell {{activeEditKind === 'measurement' && activeEditRowIndex === rowItem.rowIndex && activeEditMeasurementIndex === measurementIndex ? 'is-active' : ''}}" data-row-index="{{rowItem.rowIndex}}" data-measurement-index="{{measurementIndex}}" bindtap="beginMeasurementEdit" role="button">
+                    <text class="measurement-label">样本 {{measurementIndex + 1}}</text>
+                    <text class="measurement-value">{{measurement || '—'}}</text>
+                  </view>
+                </view>
+              </view>
+            </view>
+          </view>
+
+          <view class="judgement-section">
+            <view class="detail-label">样本判定</view>
+            <view class="judgement-grid">
+              <view wx:for="{{record.sampleJudgements}}" wx:key="index" wx:for-item="judgement" wx:for-index="sampleIndex" class="judgement-toggle {{judgement === 'OK' ? 'is-ok' : 'is-ng'}} is-editable" data-sample-index="{{sampleIndex}}" bindtap="toggleJudgement" role="switch" aria-checked="{{judgement === 'OK'}}">
+                <text>{{sampleIndex + 1}}</text><text>{{judgement === 'OK' ? 'OK' : 'NG'}}</text>
+              </view>
+            </view>
+          </view>
+        </view>
+
+        <view class="editor-card">
+          <view class="section-title">补充信息</view>
+          <view class="detail-grid supplemental-grid">
+            <view class="detail-field detail-field--wide notes-field">
+              <text class="field-label">备注</text>
+              <view class="inline-edit-value notes-value {{activeEditKind === 'record' && activeEditField === 'notes' ? 'is-active' : ''}}" data-field="notes" data-label="备注" bindtap="beginRecordEdit" role="button">{{record.notes || '—'}}</view>
+            </view>
+            <view class="detail-field">
+              <text class="field-label">审核人</text>
+              <view class="inline-edit-value {{activeEditKind === 'record' && activeEditField === 'reviewer' ? 'is-active' : ''}}" data-field="reviewer" data-label="审核人" bindtap="beginRecordEdit" role="button">{{record.reviewer || '—'}}</view>
+            </view>
+            <view class="detail-field">
+              <text class="field-label">检验员</text>
+              <view class="inline-edit-value {{activeEditKind === 'record' && activeEditField === 'inspector' ? 'is-active' : ''}}" data-field="inspector" data-label="检验员" bindtap="beginRecordEdit" role="button">{{record.inspector || '—'}}</view>
+            </view>
+          </view>
+        </view>
+        <view class="modal-body-spacer"></view>
+      </block>
+    </scroll-view>
+
+    <view wx:if="{{drawerMounted && !loading && !loadError}}" class="history-modal-actions">
+      <view class="export-button {{exporting || saving ? 'is-disabled' : ''}}" role="button" aria-disabled="{{exporting || saving}}" bindtap="exportRecord">{{exporting ? '导出中…' : '导出 JSON'}}</view>
+      <view class="save-button {{saving || exporting ? 'is-disabled' : ''}}" role="button" aria-disabled="{{saving || exporting}}" bindtap="saveRecord">{{saving ? '保存中…' : '保存修改'}}</view>
+    </view>
+
+  </view>
+</view>

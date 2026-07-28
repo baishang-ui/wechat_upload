@@ -998,3 +998,17 @@ test('pending task refresh policy caches normal tab visits for thirty seconds', 
   assert.equal(shouldQueueInspectionTaskRefresh(true, false, true, false), false)
   assert.equal(shouldQueueInspectionTaskRefresh(false, true, true, false), false)
 })
+
+test('merged history list omits full records and raw recognition text from page data', () => {
+  const { mergeInspectionHistory } = require('../miniprogram/services/quality-inspection-service') as typeof import('../miniprogram/services/quality-inspection-service')
+  const local = {
+    ...createSyncRecord(),
+    rawContent: 'x'.repeat(1024 * 1024),
+    syncStatus: 'failed' as const,
+  }
+
+  const [summary] = mergeInspectionHistory([local], [])
+
+  assert.equal(Object.hasOwn(summary, 'rawContent'), false)
+  assert.equal(Object.hasOwn(summary, 'record'), false)
+})

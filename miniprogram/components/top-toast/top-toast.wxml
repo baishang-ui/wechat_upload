@@ -1,0 +1,29 @@
+<view
+  wx:if="{{items.length}}"
+  class="top-toast-stack"
+  style="top: {{topOffset}}px; height: {{stackHeight}}rpx;"
+  role="status"
+  aria-live="polite"
+>
+  <view
+    wx:for="{{items}}"
+    wx:key="key"
+    class="top-toast-slot top-toast-slot--{{item.mode}}"
+    style="transform: translate3d(0, {{item.offset}}rpx, 0) scale({{item.scale}}); z-index: {{item.zIndex}};"
+  >
+    <view
+      class="top-toast top-toast--{{item.type}} top-toast--{{item.phase}}"
+      data-id="{{item.id}}"
+      catchtap="dismissToast"
+    >
+      <view class="top-toast__shadow"></view>
+      <view class="top-toast__surface">
+        <view class="top-toast__icon">{{item.icon}}</view>
+        <view class="top-toast__content">
+          <view class="top-toast__title">{{item.title}}</view>
+          <view class="top-toast__message">{{item.message}}</view>
+        </view>
+      </view>
+    </view>
+  </view>
+</view>

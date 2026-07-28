@@ -11,6 +11,7 @@ test('server config separates data and recognition service addresses', () => {
   const serverConfig = source('miniprogram/config/server.ts')
   const indexPage = source('miniprogram/pages/index/index.ts')
   const indexWxml = source('miniprogram/pages/index/index.wxml')
+  const historySyncService = source('miniprogram/services/inspection-history-sync-service.ts')
 
   assert.match(
     serverConfig,
@@ -27,7 +28,7 @@ test('server config separates data and recognition service addresses', () => {
     /if \(!DEMO_MODE\) \{\s*getCurrentUser\(\)/,
   )
   assert.match(
-    indexPage,
+    historySyncService,
     /onUnauthorized:\s*\(\) => \{\s*if \(!DEMO_MODE\) wx\.reLaunch\(/,
   )
   assert.match(indexWxml, /class="floating-tab[^\n]*data-tab="tasks"/)

@@ -1,3 +1,4 @@
+import { showTopToast } from '../../services/top-toast-service'
 import { StoredInspectionRecord } from '../../domain/inspection-history'
 import {
   appendRecognitionQueue,
@@ -29,9 +30,7 @@ import {
   InspectionRowField,
   MEASUREMENT_COUNT,
   PRODUCT_OPTIONS,
-  updateMeasurement,
   updateRecordField,
-  updateRowField,
   updateSampleJudgement,
   validateRecord,
 } from '../../domain/inspection-record'
@@ -39,7 +38,6 @@ import {
   deleteInspectionHistoriesByServerRecord,
   deleteInspectionHistory,
   loadInspectionHistory,
-  saveHistorySyncState,
   saveInspectionHistory,
 } from '../../services/history-service'
 import {
@@ -47,6 +45,7 @@ import {
   submitInspection,
 } from '../../services/inspection-service'
 import { exportInspectionJson } from '../../services/export-service'
+import { syncInspectionHistoryRecord } from '../../services/inspection-history-sync-service'
 import {
   AuthUser,
   getCurrentUser,
@@ -57,21 +56,17 @@ import { ServerClientError } from '../../services/server-client'
 import {
   applyInspectionDateToTaskItems,
   autoWriteRecognizedInspectionToPendingItem,
-  createStandaloneInspection,
   deleteRemoteInspectionRecord,
   getInspectionTask,
   HistoryViewItem,
-  inspectionImageToDataUrl,
   listInspectionHistory,
   listInspectionTasks,
   mergeInspectionHistory,
   QualityInspectionTaskDto,
-  saveInspectionDraft,
   shouldQueueInspectionHistoryRefresh,
   shouldQueueInspectionTaskRefresh,
   shouldRefreshInspectionHistory,
   shouldRefreshInspectionTasks,
-  syncStoredInspection,
   taskItemToInspectionRecord,
 } from '../../services/quality-inspection-service'
 
@@ -79,16 +74,8 @@ interface NavigationHeightChangeEvent {
   detail: { height: number }
 }
 
-interface HistoryEditorInput {
-  localId: string
-  displayId: string
-  origin: 'local' | 'remote'
-  sourceType: 'purchase_order' | 'standalone'
-  taskId: number | null
-  itemId: number | null
-  imagePath: string
-  rawContent: string
-  record: InspectionRecord
+interface HistoryEditorSavedPayload {
+  record: StoredInspectionRecord
 }
 
 type WorkspaceTab = 'scan' | 'tasks' | 'history' | 'account'
@@ -169,22 +156,13 @@ Component({
     historyRefreshQueued: false,
     historyError: '',
     historyRequestId: 0,
-    historyOpeningId: '',
     historyDeletingId: '',
-    historyModalVisible: false,
-    historyModalClosing: false,
-    historyEditId: '',
-    historyEditDisplayId: '',
-    historyEditOrigin: 'local' as 'local' | 'remote',
-    historyEditSourceType: 'standalone' as 'purchase_order' | 'standalone',
-    historyEditTaskId: 0,
-    historyEditItemId: 0,
-    historyEditImagePath: '',
-    historyEditRawContent: '',
-    historyEditProductIndex: 0,
-    historyEditRecord: createMockRecord(),
-    historySaving: false,
-    historyExporting: false,
+    historyEditorVisible: false,
+    historyEditorOrigin: 'local' as 'local' | 'remote',
+    historyEditorId: '',
+    historyEditorSourceType: 'standalone' as 'purchase_order' | 'standalone',
+    historyEditorTaskId: 0,
+    historyEditorItemId: 0,
     pressedTab: '' as WorkspaceTab | '',
     currentUser: null as AuthUser | null,
     accountInitial: '账',
@@ -214,7 +192,7 @@ Component({
               accountLoading: false,
               accountError: error.message || '账户信息加载失败',
             })
-            wx.showToast({ title: error.message || '会话检查失败', icon: 'none' })
+            showTopToast({ title: error.message || '会话检查失败', icon: 'none' })
           })
       }
     },
@@ -434,7 +412,7 @@ Component({
         })
         .catch((error: Error) => {
           if (this.data.taskRequestId !== requestId) return
-          wx.showToast({ title: error.message || '待检任务加载失败', icon: 'none' })
+          showTopToast({ title: error.message || '待检任务加载失败', icon: 'none' })
         })
         .finally(() => {
           if (this.data.taskRequestId !== requestId) return
@@ -492,7 +470,7 @@ Component({
         })
         .catch((error: Error) => {
           if (this.data.taskOpeningId !== taskId) return
-          wx.showToast({ title: error.message || '任务详情加载失败', icon: 'none' })
+          showTopToast({ title: error.message || '任务详情加载失败', icon: 'none' })
         })
         .finally(() => {
           if (this.data.taskOpeningId === taskId) this.setData({ taskOpeningId: 0 })
@@ -522,26 +500,36 @@ Component({
     onWorkbenchSaved() {
       void this.loadTasks(true, true)
     },
+    onHistoryEditorSaved(result: StoredInspectionRecord) {
+      if (
+        result.syncStatus === 'synced'
+        && result.taskId
+        && result.itemId
+      ) {
+        this.setData({
+          taskItems: applyInspectionDateToTaskItems(
+            this.data.taskItems,
+            result.taskId,
+            result.itemId,
+            result.record.inspectionDate,
+          ),
+        })
+      }
+      void this.refreshHistory(true)
+      showTopToast({
+        title: result.syncStatus === 'synced'
+          ? '记录已更新并同步'
+          : result.syncError || '已本地保存，未同步',
+        icon: 'none',
+      })
+    },
+    onHistoryEditorModalSaved(
+      event: WechatMiniprogram.CustomEvent<HistoryEditorSavedPayload>,
+    ) {
+      this.onHistoryEditorSaved(event.detail.record)
+    },
     syncHistoryRecord(record: StoredInspectionRecord): Promise<StoredInspectionRecord> {
-      return syncStoredInspection(record, {
-        listTasks: listInspectionTasks,
-        createStandalone: createStandaloneInspection,
-        saveDraft: saveInspectionDraft,
-        imageToDataUrl: inspectionImageToDataUrl,
-        loadExistingImages: async (taskId, itemId) => {
-          const task = await getInspectionTask(taskId)
-          const item = task.items?.find((candidate) => candidate.id === itemId)
-          return (item?.inspection_draft?.ai_workbench_images || [])
-            .filter((image) => typeof image === 'string')
-            .slice(0, 1)
-        },
-        updateState: async (nextRecord) => (
-          saveHistorySyncState(nextRecord) || nextRecord
-        ),
-        onUnauthorized: () => {
-          if (!DEMO_MODE) wx.reLaunch({ url: '/pages/login/login' })
-        },
-      }).then((synced) => {
+      return syncInspectionHistoryRecord(record).then((synced) => {
         if (
           synced.syncStatus === 'synced'
           && synced.taskId
@@ -573,7 +561,7 @@ Component({
       this.syncHistoryRecord(stored)
         .then((result) => this.refreshHistory(true).then(() => result))
         .then((result) => {
-          wx.showToast({
+          showTopToast({
             title: result.syncStatus === 'synced'
               ? '同步成功'
               : result.syncError || '同步失败，请重试',
@@ -589,17 +577,21 @@ Component({
         record: this.data.record,
       })
         .then(() => {
-          wx.showToast({ title: 'JSON已生成', icon: 'none' })
+          showTopToast({ title: 'JSON已生成', icon: 'none' })
         })
         .catch((error: Error) => {
-          wx.showModal({ title: '导出失败', content: error.message, showCancel: false })
+          showTopToast({
+            message: error.message || '导出失败，请重试',
+            type: 'error',
+            duration: 3600,
+          })
         })
         .finally(() => this.setData({ exporting: false }))
     },
     takePhoto() {
       const remaining = MAX_RECOGNITION_QUEUE_SIZE - this.data.recognitionQueueStats.total
       if (remaining <= 0) {
-        wx.showToast({ title: '识别队列最多保留 10 张图片', icon: 'none' })
+        showTopToast({ title: '识别队列最多保留 10 张图片', icon: 'none' })
         return
       }
       wx.navigateTo({
@@ -610,7 +602,7 @@ Component({
           },
         },
         fail: () => {
-          wx.showToast({ title: '无法打开相机，请稍后重试', icon: 'none' })
+          showTopToast({ title: '无法打开相机，请稍后重试', icon: 'none' })
         },
       })
     },
@@ -620,7 +612,7 @@ Component({
     chooseImage(sourceType: Array<'album' | 'camera'>) {
       const remaining = MAX_RECOGNITION_QUEUE_SIZE - this.data.recognitionQueueStats.total
       if (remaining <= 0) {
-        wx.showToast({ title: '识别队列最多保留 10 张图片', icon: 'none' })
+        showTopToast({ title: '识别队列最多保留 10 张图片', icon: 'none' })
         return
       }
       wx.chooseMedia({
@@ -907,198 +899,38 @@ Component({
       wx.previewImage({
         current: this.data.imagePath,
         urls: [this.data.imagePath],
-        fail: () => wx.showToast({ title: '本地图片已失效', icon: 'none' }),
-      })
-    },
-    showHistoryEditor(input: HistoryEditorInput) {
-      const productIndex = PRODUCT_OPTIONS.findIndex(
-        (option) => option.value === input.record.productType,
-      )
-      this.setData({
-        historyModalVisible: true,
-        historyModalClosing: false,
-        historyEditId: input.localId,
-        historyEditDisplayId: input.displayId,
-        historyEditOrigin: input.origin,
-        historyEditSourceType: input.sourceType,
-        historyEditTaskId: input.taskId || 0,
-        historyEditItemId: input.itemId || 0,
-        historyEditImagePath: input.imagePath,
-        historyEditRawContent: input.rawContent,
-        historyEditRecord: input.record,
-        historyEditProductIndex: Math.max(productIndex, 0),
+        fail: () => showTopToast({ title: '本地图片已失效', icon: 'none' }),
       })
     },
     openHistory(event: WechatMiniprogram.TouchEvent) {
       const id = String(event.currentTarget.dataset.id || '')
       const selected = this.data.historyRecords.find((item) => item.id === id)
-      if (!selected || this.data.historyOpeningId) return
-      if (selected.origin === 'local') {
-        const stored = loadInspectionHistory().find((item) => item.id === id)
-        if (!stored) {
-          this.refreshHistory(true)
-          return
-        }
-        this.showHistoryEditor({
-          localId: stored.id,
-          displayId: stored.id,
-          origin: 'local',
-          sourceType: stored.sourceType,
-          taskId: stored.taskId,
-          itemId: stored.itemId,
-          imagePath: stored.imagePath,
-          rawContent: stored.rawContent,
-          record: stored.record,
-        })
+      if (!selected || this.data.historyEditorVisible) return
+      if (selected.origin === 'local' && !loadInspectionHistory().some((item) => item.id === id)) {
+        void this.refreshHistory(true)
         return
       }
-      if (!selected.taskId || !selected.itemId) return
-      this.setData({ historyOpeningId: selected.id })
-      getInspectionTask(selected.taskId)
-        .then((task) => {
-          const item = task.items?.find((candidate) => candidate.id === selected.itemId)
-          if (!item) throw new Error('服务器记录明细不存在')
-          const cached = loadInspectionHistory().find((record) => (
-            record.taskId === selected.taskId && record.itemId === selected.itemId
-          ))
-          this.showHistoryEditor({
-            localId: cached?.id || '',
-            displayId: task.task_no || `云端记录 ${selected.taskId}/${selected.itemId}`,
-            origin: 'remote',
-            sourceType: task.source_type || selected.sourceType,
-            taskId: selected.taskId,
-            itemId: selected.itemId,
-            imagePath: cached?.imagePath || '',
-            rawContent: cached?.rawContent || '',
-            record: taskItemToInspectionRecord(task, item),
-          })
-        })
-        .catch((error: Error) => {
-          wx.showToast({ title: error.message || '服务器记录加载失败', icon: 'none' })
-        })
-        .finally(() => this.setData({ historyOpeningId: '' }))
+      if (selected.origin === 'remote' && (!selected.taskId || !selected.itemId)) return
+      this.setData({
+        historyEditorVisible: true,
+        historyEditorOrigin: selected.origin,
+        historyEditorId: selected.id,
+        historyEditorSourceType: selected.sourceType,
+        historyEditorTaskId: selected.taskId || 0,
+        historyEditorItemId: selected.itemId || 0,
+      })
+    },
+    closeHistoryEditorModal() {
+      this.setData({
+        historyEditorVisible: false,
+        historyEditorOrigin: 'local',
+        historyEditorId: '',
+        historyEditorSourceType: 'standalone',
+        historyEditorTaskId: 0,
+        historyEditorItemId: 0,
+      })
     },
     noop() {},
-    closeHistoryModal() {
-      if (this.data.historySaving) return
-      this.hideHistoryModal()
-    },
-    hideHistoryModal() {
-      if (!this.data.historyModalVisible || this.data.historyModalClosing) return
-      this.setData({ historyModalClosing: true })
-      setTimeout(() => {
-        this.setData({
-          historyModalVisible: false,
-          historyModalClosing: false,
-          historyEditId: '',
-          historyEditDisplayId: '',
-          historyEditOrigin: 'local',
-          historyEditSourceType: 'standalone',
-          historyEditTaskId: 0,
-          historyEditItemId: 0,
-          historyEditImagePath: '',
-          historyEditRawContent: '',
-          historyEditProductIndex: 0,
-          historyEditRecord: createMockRecord(),
-        })
-      }, 300)
-    },
-    previewHistoryImage() {
-      const imagePath = this.data.historyEditImagePath
-      if (!imagePath) return
-      wx.previewImage({
-        current: imagePath,
-        urls: [imagePath],
-        fail: () => wx.showToast({ title: '本地图片已失效', icon: 'none' }),
-      })
-    },
-    onHistoryProductChange(event: WechatMiniprogram.CustomEvent<{ value: string }>) {
-      const productIndex = Number(event.detail.value)
-      const productType = PRODUCT_OPTIONS[productIndex].value
-      this.setData({
-        historyEditProductIndex: productIndex,
-        historyEditRecord: updateRecordField(this.data.historyEditRecord, 'productType', productType),
-      })
-    },
-    onHistoryRecordInput(event: WechatMiniprogram.Input) {
-      const field = event.currentTarget.dataset.field as keyof InspectionRecord
-      this.setData({
-        historyEditRecord: updateRecordField(this.data.historyEditRecord, field, event.detail.value),
-      })
-    },
-    onHistoryRowInput(event: WechatMiniprogram.Input) {
-      const rowIndex = Number(event.currentTarget.dataset.rowIndex)
-      const field = event.currentTarget.dataset.field as InspectionRowField
-      this.setData({
-        historyEditRecord: updateRowField(this.data.historyEditRecord, rowIndex, field, event.detail.value),
-      })
-    },
-    onHistoryMeasurementInput(event: WechatMiniprogram.Input) {
-      const rowIndex = Number(event.currentTarget.dataset.rowIndex)
-      const measurementIndex = Number(event.currentTarget.dataset.measurementIndex)
-      this.setData({
-        historyEditRecord: updateMeasurement(
-          this.data.historyEditRecord,
-          rowIndex,
-          measurementIndex,
-          event.detail.value,
-        ),
-      })
-    },
-    onHistoryJudgementChange(event: WechatMiniprogram.CustomEvent<{ value: boolean }>) {
-      const sampleIndex = Number(event.currentTarget.dataset.sampleIndex)
-      const judgement = event.detail.value ? 'OK' : 'NG'
-      this.setData({
-        historyEditRecord: updateSampleJudgement(this.data.historyEditRecord, sampleIndex, judgement),
-      })
-    },
-    exportHistoryRecord() {
-      if (this.data.historyExporting) return
-      this.setData({ historyExporting: true })
-      exportInspectionJson({
-        recordId: this.data.historyEditId || this.data.historyEditDisplayId,
-        record: this.data.historyEditRecord,
-      })
-        .then(() => {
-          wx.showToast({ title: 'JSON已生成', icon: 'none' })
-        })
-        .catch((error: Error) => {
-          wx.showModal({ title: '导出失败', content: error.message, showCancel: false })
-        })
-        .finally(() => this.setData({ historyExporting: false }))
-    },
-    saveHistoryEdit() {
-      if (this.data.historySaving) return
-      const missing = validateRecord(this.data.historyEditRecord)
-      if (missing.length > 0) {
-        wx.showToast({ title: `请完善${missing[0]}`, icon: 'none' })
-        return
-      }
-      this.setData({ historySaving: true })
-      saveInspectionHistory({
-        imagePath: this.data.historyEditImagePath,
-        rawContent: this.data.historyEditRawContent,
-        record: this.data.historyEditRecord,
-        sourceType: this.data.historyEditSourceType,
-        taskId: this.data.historyEditTaskId || null,
-        itemId: this.data.historyEditItemId || null,
-      }, this.data.historyEditId)
-        .then((stored) => this.syncHistoryRecord(stored))
-        .then((result) => this.refreshHistory(true).then(() => result))
-        .then((result) => {
-          this.hideHistoryModal()
-          wx.showToast({
-            title: result.syncStatus === 'synced'
-              ? '记录已更新并同步'
-              : result.syncError || '已本地保存，未同步',
-            icon: 'none',
-          })
-        })
-        .catch((error: Error) => {
-          wx.showModal({ title: '更新失败', content: error.message, showCancel: false })
-        })
-        .finally(() => this.setData({ historySaving: false }))
-    },
     deleteHistory(event: WechatMiniprogram.TouchEvent) {
       if (this.data.historyDeletingId) return
       const id = String(event.currentTarget.dataset.id || '')
@@ -1129,20 +961,14 @@ Component({
           deleting
             .then(() => this.refreshHistory(true))
             .then(() => {
-              const editingSameRecord = this.data.historyEditId === id || (
-                isRemote
-                && this.data.historyEditTaskId === selected.taskId
-                && this.data.historyEditItemId === selected.itemId
-              )
-              if (editingSameRecord) this.hideHistoryModal()
               if (isRemote && selected.sourceType === 'purchase_order') this.loadTasks(true)
-              wx.showToast({ title: '已删除', icon: 'success' })
+              showTopToast({ title: '已删除', icon: 'success' })
             })
             .catch((error: Error) => {
-              wx.showModal({
-                title: '删除失败',
-                content: error.message || '请稍后重试',
-                showCancel: false,
+              showTopToast({
+                message: error.message || '删除失败，请稍后重试',
+                type: 'error',
+                duration: 3600,
               })
             })
             .finally(() => this.setData({ historyDeletingId: '' }))
@@ -1159,32 +985,38 @@ Component({
     },
     onRecordInput(event: WechatMiniprogram.Input) {
       const field = event.currentTarget.dataset.field as keyof InspectionRecord
+      const value = event.detail.value
       this.setData({
-        record: updateRecordField(this.data.record, field, event.detail.value),
+        [`record.${String(field)}`]: value,
         reviewHints: markReviewHintReviewed(this.data.reviewHints, `record.${String(field)}`),
       })
+      return value
     },
     onRowInput(event: WechatMiniprogram.Input) {
       const rowIndex = Number(event.currentTarget.dataset.rowIndex)
       const field = event.currentTarget.dataset.field as InspectionRowField
+      const value = event.detail.value
       this.setData({
-        record: updateRowField(this.data.record, rowIndex, field, event.detail.value),
+        [`record.rows[${rowIndex}].${field}`]: value,
         reviewHints: markReviewHintReviewed(
           this.data.reviewHints,
           `rows.${rowIndex}.${field}`,
         ),
       })
+      return value
     },
     onMeasurementInput(event: WechatMiniprogram.Input) {
       const rowIndex = Number(event.currentTarget.dataset.rowIndex)
       const measurementIndex = Number(event.currentTarget.dataset.measurementIndex)
+      const value = event.detail.value
       this.setData({
-        record: updateMeasurement(this.data.record, rowIndex, measurementIndex, event.detail.value),
+        [`record.rows[${rowIndex}].measurements[${measurementIndex}]`]: value,
         reviewHints: markReviewHintReviewed(
           this.data.reviewHints,
           `rows.${rowIndex}.measurements.${measurementIndex}`,
         ),
       })
+      return value
     },
     onJudgementChange(event: WechatMiniprogram.CustomEvent<{ value: boolean }>) {
       const sampleIndex = Number(event.currentTarget.dataset.sampleIndex)
@@ -1201,7 +1033,7 @@ Component({
       if (this.data.submitting) return
       const missing = validateRecord(this.data.record)
       if (missing.length > 0) {
-        wx.showToast({ title: `请完善${missing[0]}`, icon: 'none' })
+        showTopToast({ title: `请完善${missing[0]}`, icon: 'none' })
         return
       }
       if (hasUnreviewedDanger(this.data.reviewHints)) {
@@ -1244,7 +1076,7 @@ Component({
           })
           this.refreshHistory(true)
           if (stored.syncStatus !== 'synced' && stored.syncError) {
-            wx.showToast({
+            showTopToast({
               title: stored.syncError,
               icon: 'none',
               duration: 2800,
@@ -1252,7 +1084,11 @@ Component({
           }
         })
         .catch((error: Error) => {
-          wx.showModal({ title: '保存失败', content: error.message, showCancel: false })
+          showTopToast({
+            message: error.message || '保存失败，请重试',
+            type: 'error',
+            duration: 3600,
+          })
         })
         .finally(() => this.setData({ submitting: false }))
     },

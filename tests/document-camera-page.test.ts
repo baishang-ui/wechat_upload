@@ -100,7 +100,7 @@ test('photo orientation processing is immediately visible and never fails silent
 
   assert.match(cameraWxml, /<canvas[\s\S]*type="2d"[\s\S]*id="photo-orientation-canvas"/)
   assert.match(cameraTs, /success:\s*\(\{ tempImagePath \}\) => \{[\s\S]*previewPath:\s*tempImagePath[\s\S]*previewMessage:\s*'正在读取照片方向并校正…'[\s\S]*preparePreview\(tempImagePath\)/)
-  assert.match(cameraTs, /catch \(error\) \{[\s\S]*console\.error\('\[document-camera\] 照片方向校正失败'[\s\S]*wx\.showToast\(\{[\s\S]*title:\s*'照片转正失败，已保留原图'/)
+  assert.match(cameraTs, /catch \(error\) \{[\s\S]*console\.error\('\[document-camera\] 照片方向校正失败'[\s\S]*showTopToast\(\{[\s\S]*title:\s*'照片转正失败，已保留原图'/)
   assert.match(cameraTs, /createSelectorQuery\(\)[\s\S]*select\('#photo-orientation-canvas'\)[\s\S]*fields\(\{ node:\s*true, size:\s*true \}/)
   assert.match(cameraTs, /canvas\.createImage\(\)/)
   assert.match(cameraTs, /canvasToTempFilePath\(\{[\s\S]*canvas,/)

@@ -42,7 +42,9 @@ test('recognized report fields and matching messages identify the purchase contr
   const wxml = source('miniprogram/pages/index/index.wxml')
 
   assert.match(wxml, /class="field-label">采购合同号<\/text><input value="\{\{record\.orderNumber\}\}"/)
-  assert.match(wxml, /class="field-label">采购合同号<\/text><input value="\{\{historyEditRecord\.orderNumber\}\}"/)
+  const historyEditor = source('miniprogram/components/history-editor-modal/history-editor-modal.wxml')
+  assert.match(historyEditor, /class="field-label">采购合同号<\/text>/)
+  assert.match(historyEditor, /data-field="orderNumber"/)
   assert.match(page, /missing_order_number': stage = '识别完成，未识别到合同号'/)
   assert.match(page, /order_ambiguous': stage = '识别完成，合同号对应多个质检订单，请手动选择'/)
   assert.match(page, /item_not_found': stage = '识别完成，质检订单中没有待检产品'/)
@@ -354,6 +356,64 @@ test('recognition work stops scheduling UI work after the workspace is detached'
   assert.match(startQueueRecognition, /\.finally\(\(\) => \{[\s\S]*if \(attachedWorkspaceComponents\.has\(this\)\) this\.runRecognitionQueue\(\)/)
 })
 
+test('review inputs update only their bound leaf and preserve the native cursor viewport', () => {
+  const page = source('miniprogram/pages/index/index.ts')
+  const onRecordInput = page.match(/onRecordInput\(event: WechatMiniprogram\.Input\) \{([\s\S]*?)\n    \},\n    onRowInput/)?.[1] || ''
+  const onRowInput = page.match(/onRowInput\(event: WechatMiniprogram\.Input\) \{([\s\S]*?)\n    \},\n    onMeasurementInput/)?.[1] || ''
+  const onMeasurementInput = page.match(/onMeasurementInput\(event: WechatMiniprogram\.Input\) \{([\s\S]*?)\n    \},\n    onJudgementChange/)?.[1] || ''
+
+  assert.match(onRecordInput, /\[`record\.\$\{String\(field\)\}`\]: value/)
+  assert.match(onRowInput, /\[`record\.rows\[\$\{rowIndex\}\]\.\$\{field\}`\]: value/)
+  assert.match(onMeasurementInput, /\[`record\.rows\[\$\{rowIndex\}\]\.measurements\[\$\{measurementIndex\}\]`\]: value/)
+
+  for (const handler of [onRecordInput, onRowInput, onMeasurementInput]) {
+    assert.doesNotMatch(handler, /record:\s*update(?:RecordField|RowField|Measurement)\(/)
+    assert.match(handler, /return value/)
+  }
+})
+
+test('review text inputs keep identical text metrics before and after focus', () => {
+  const scss = source('miniprogram/pages/index/index.scss')
+  const wxml = source('miniprogram/pages/index/index.wxml')
+  const pageConfig = source('miniprogram/pages/index/index.json')
+  const reviewEditor = wxml.match(/<view wx:if="\{\{activeTab === 'scan' && screen === 'review'\}\}" class="review-native-page">([\s\S]*?)<scroll-view\s+wx:else/)?.[1] || ''
+  const reviewInputs = reviewEditor.match(/<(?:input|textarea)\b[^>]*>/g) || []
+  const reviewEditorCards = reviewEditor.match(/<view class="card [^"]*review-editor-card[^"]*">/g) || []
+  const fieldInput = scss.match(/\.field input\s*\{([^}]*)\}/)?.[1] || ''
+  const tableInput = scss.match(/\.table-cell input\s*\{([^}]*)\}/)?.[1] || ''
+  const field = scss.match(/\.field\s*\{([^}]*)\}/)?.[1] || ''
+  const tableCell = scss.match(/\.table-cell\s*\{([^}]*)\}/)?.[1] || ''
+  const reviewEditorCard = scss.match(/\.review-editor-card\s*\{([^}]*)\}/)?.[1] || ''
+  const reviewEditorFade = scss.match(/@keyframes review-editor-fade\s*\{([\s\S]*?)\n\}/)?.[1] || ''
+
+  assert.ok(reviewInputs.length > 0)
+  for (const input of reviewInputs) assert.match(input, /\sadjust-position="\{\{false\}\}"/)
+  for (const input of reviewInputs) assert.doesNotMatch(input, /always-embed=/)
+  assert.equal(reviewEditorCards.length, 3)
+  assert.match(
+    wxml,
+    /<view wx:if="\{\{activeTab === 'scan' && screen === 'review'\}\}" class="review-native-page">/,
+  )
+  assert.match(wxml, /<scroll-view\s+wx:else\s+class="page-scroll"\s+scroll-y\s+enhanced/)
+  assert.doesNotMatch(reviewEditor, /class="page-scroll"/)
+  assert.doesNotMatch(pageConfig, /"disableScroll":\s*true/)
+  assert.match(reviewEditor, /<scroll-view class="table-scroll" scroll-x show-scrollbar="\{\{false\}\}">/)
+  assert.doesNotMatch(reviewEditor, /<scroll-view class="table-scroll"[^>]*\senhanced(?:=|\s|>)/)
+  assert.match(reviewEditorCard, /animation-name:\s*review-editor-fade;/)
+  assert.doesNotMatch(reviewEditorFade, /transform:/)
+
+  assert.match(fieldInput, /height:\s*48rpx;/)
+  assert.match(fieldInput, /line-height:\s*48rpx;/)
+  assert.match(fieldInput, /padding:\s*0;/)
+  assert.match(fieldInput, /box-sizing:\s*border-box;/)
+  assert.match(tableInput, /height:\s*48rpx;/)
+  assert.match(tableInput, /line-height:\s*48rpx;/)
+  assert.match(tableInput, /padding:\s*0;/)
+  assert.match(tableInput, /box-sizing:\s*border-box;/)
+  assert.match(field, /overflow:\s*hidden;/)
+  assert.match(tableCell, /overflow:\s*hidden;/)
+})
+
 test('review actions keep return, export, and save controls in one balanced row', () => {
   const wxml = source('miniprogram/pages/index/index.wxml')
   const scss = source('miniprogram/pages/index/index.scss')
@@ -410,16 +470,110 @@ test('quality orders use the same all-source and all-status default scope as the
 test('sample judgements use binary switches with on as OK and off as NG', () => {
   const page = source('miniprogram/pages/index/index.ts')
   const wxml = source('miniprogram/pages/index/index.wxml')
+  const historyEditor = source('miniprogram/components/history-editor-modal/history-editor-modal.ts')
+  const historyEditorWxml = source('miniprogram/components/history-editor-modal/history-editor-modal.wxml')
   const scss = source('miniprogram/pages/index/index.scss')
   const onJudgementChange = page.match(/onJudgementChange\(event: WechatMiniprogram\.CustomEvent<\{ value: boolean \}>\) \{([\s\S]*?)\n    \},\n    submitRecord/)?.[1] || ''
-  const onHistoryJudgementChange = page.match(/onHistoryJudgementChange\(event: WechatMiniprogram\.CustomEvent<\{ value: boolean \}>\) \{([\s\S]*?)\n    \},\n    exportHistoryRecord/)?.[1] || ''
+  const toggleHistoryJudgement = historyEditor.match(/toggleJudgement\(event: WechatMiniprogram\.TouchEvent\) \{([\s\S]*?)\n    \},\n\n    exportRecord/)?.[1] || ''
 
-  assert.equal((wxml.match(/<switch\b/g) || []).length, 2)
+  assert.equal((wxml.match(/<switch\b/g) || []).length, 1)
   assert.match(wxml, /<switch[^>]*checked="\{\{judgement === 'OK'\}\}"[^>]*bindchange="onJudgementChange"/)
-  assert.match(wxml, /<switch[^>]*checked="\{\{judgement === 'OK'\}\}"[^>]*bindchange="onHistoryJudgementChange"/)
-  assert.doesNotMatch(wxml, /<picker[^>]*bindchange="on(?:History)?JudgementChange"/)
+  assert.match(historyEditorWxml, /class="judgement-toggle[\s\S]*bindtap="toggleJudgement"/)
+  assert.doesNotMatch(historyEditorWxml, /<(?:picker|switch)\b/)
   assert.match(onJudgementChange, /event\.detail\.value \? 'OK' : 'NG'/)
-  assert.match(onHistoryJudgementChange, /event\.detail\.value \? 'OK' : 'NG'/)
+  assert.match(toggleHistoryJudgement, /current === 'OK' \? 'NG' : 'OK'/)
   assert.match(scss, /\.judgement-switch-control/)
   assert.match(scss, /\.judgement-switch/)
+})
+
+test('history records mount the detail drawer from the workspace', () => {
+  const page = source('miniprogram/pages/index/index.ts')
+  const wxml = source('miniprogram/pages/index/index.wxml')
+  const pageConfig = source('miniprogram/pages/index/index.json')
+  const historyEditorTag = wxml.match(/<history-editor-modal[\s\S]*?\/>/)?.[0] || ''
+  const openHistory = page.match(/openHistory\(event: WechatMiniprogram\.TouchEvent\) \{([\s\S]*?)\n    \},\n    closeHistoryEditorModal/)?.[1] || ''
+  const closeHistory = page.match(/closeHistoryEditorModal\(\) \{([\s\S]*?)\n    \},\n    noop/)?.[1] || ''
+
+  assert.match(pageConfig, /"history-editor-modal":\s*"\/components\/history-editor-modal\/history-editor-modal"/)
+  assert.match(historyEditorTag, /visible="\{\{historyEditorVisible\}\}"/)
+  assert.match(historyEditorTag, /bindclose="closeHistoryEditorModal"/)
+  assert.match(historyEditorTag, /bindsaved="onHistoryEditorModalSaved"/)
+  assert.match(historyEditorTag, /wx:if="\{\{historyEditorVisible\}\}"/)
+  assert.match(page, /historyEditorVisible:\s*false/)
+  assert.match(openHistory, /historyEditorVisible:\s*true/)
+  assert.match(openHistory, /historyEditorOrigin:\s*selected\.origin/)
+  assert.match(openHistory, /historyEditorId:\s*selected\.id/)
+  assert.doesNotMatch(openHistory, /wx\.navigateTo|wx\.showModal/)
+  assert.match(closeHistory, /historyEditorVisible:\s*false/)
+  assert.match(closeHistory, /historyEditorId:\s*''/)
+  assert.match(closeHistory, /historyEditorTaskId:\s*0/)
+  assert.match(page, /onHistoryEditorModalSaved\([\s\S]*?this\.onHistoryEditorSaved\(event\.detail\.record\)/)
+})
+
+test('history editor keeps one native input bridge while unloading drawer content after animation', () => {
+  const app = source('miniprogram/app.json')
+  const page = source('miniprogram/components/history-editor-modal/history-editor-modal.ts')
+  const wxml = source('miniprogram/components/history-editor-modal/history-editor-modal.wxml')
+  const scss = source('miniprogram/components/history-editor-modal/history-editor-modal.scss')
+  const finishClose = page.match(/finishClose\(\) \{([\s\S]*?)\n    \},\n\n    previewImage/)?.[1] || ''
+  const releaseDrawerContent = page.match(/releaseDrawerContent\((?:[\s\S]*?)\) \{([\s\S]*?)\n    \},\n\n    previewImage/)?.[1] || ''
+  const activateSharedEditor = page.match(/activateSharedEditor\((?:[\s\S]*?)\n    \) \{([\s\S]*?)\n    \},\n\n    onSharedEditorInput/)?.[1] || ''
+  const nativeEditors = wxml.match(/<(?:input|textarea)\b/g) || []
+  const textareaOffset = wxml.indexOf('<textarea')
+  const drawerBodyOffset = wxml.indexOf('<scroll-view wx:if="{{drawerMounted}}"')
+
+  assert.doesNotMatch(app, /"pages\/history-editor\/history-editor"/)
+  assert.doesNotMatch(app, /"pages\/history-field-editor\/history-field-editor"/)
+  assert.doesNotMatch(wxml, /scroll-x|inspection-table|always-embed/)
+  assert.match(wxml, /wx:for="\{\{rowItems\}\}"/)
+  assert.doesNotMatch(wxml, /wx:for="\{\{record\.rows\}\}"/)
+  assert.doesNotMatch(wxml, /row-pagination|goPreviousRowPage|goNextRowPage/)
+  assert.doesNotMatch(page, /buildHistoryEditorRowPage|pageRows|pageTotal/)
+  assert.equal(nativeEditors.length, 1)
+  assert.match(
+    wxml,
+    /<textarea\s+wx:if="\{\{drawerMounted && activeEditorVisible\}\}"\s+class="shared-inline-editor-input"/,
+  )
+  assert.match(wxml, /bindinput="onSharedEditorInput"/)
+  assert.match(wxml, /hold-keyboard="\{\{true\}\}"/)
+  assert.doesNotMatch(wxml, /\sdisabled="\{\{!drawerMounted/)
+  assert.doesNotMatch(wxml, /fixed=/)
+  assert.match(wxml, /^<view class="history-modal-layer \{\{drawerMounted \? 'is-mounted' : ''\}\}/)
+  assert.match(wxml, /<view class="history-modal-panel"[\s\S]*class="shared-inline-editor/)
+  assert.ok(textareaOffset > 0 && drawerBodyOffset > textareaOffset)
+  assert.match(wxml, /<scroll-view wx:if="\{\{drawerMounted\}\}" class="history-modal-body"/)
+  assert.match(wxml, /data-field="customer" data-label="客户" bindtap="beginRecordEdit"/)
+  assert.match(wxml, /data-field="item" data-label="检验项目" bindtap="beginRowFieldEdit"/)
+  assert.match(wxml, /data-measurement-index="\{\{measurementIndex\}\}" bindtap="beginMeasurementEdit"/)
+  assert.doesNotMatch(wxml, /bindinput="(?:onRecordInput|onRowFieldInput|onMeasurementInput)"/)
+  assert.match(wxml, /expandedRowIndex === rowItem\.rowIndex/)
+  assert.doesNotMatch(wxml, /startEditing|编辑记录|wx:if="\{\{editing\}\}"/)
+  assert.doesNotMatch(page, /editable:\s*true|wx\.showModal|wx\.showActionSheet|wx\.navigateTo/)
+  assert.match(page, /onSharedEditorInput[\s\S]*historyEditorDraftValues\.set/)
+  assert.match(page, /commitActiveEditor[\s\S]*updateRowField/)
+  assert.match(page, /commitActiveEditor[\s\S]*updateMeasurement/)
+  assert.match(page, /detached\(\) \{[\s\S]*clearHistoryEditorCloseTimer\(this\)/)
+  assert.match(page, /detached\(\) \{[\s\S]*historyEditorDraftValues\.delete\(this\)/)
+  assert.match(page, /detached\(\) \{[\s\S]*historyEditorRawContents\.delete\(this\)/)
+  assert.match(page, /detached\(\) \{[\s\S]*historyEditorRows\.delete\(this\)/)
+  assert.match(page, /drawerMounted:\s*false/)
+  assert.match(page, /observers:\s*\{[\s\S]*'visible, origin, recordId, sourceType, taskId, itemId'/)
+  assert.match(page, /openDrawer\(\)[\s\S]*drawerMounted:\s*true/)
+  assert.match(activateSharedEditor, /commitActiveEditor\(activate,\s*true\)/)
+  assert.match(finishClose, /closing:\s*true/)
+  assert.match(finishClose, /expandedRowIndex:\s*-1/)
+  assert.match(finishClose, /activeEditorFocused:\s*false/)
+  assert.match(finishClose, /wx\.hideKeyboard\(\)/)
+  assert.match(finishClose, /scheduleHistoryEditorClose\(this/)
+  assert.match(finishClose, /releaseDrawerContent/)
+  assert.match(releaseDrawerContent, /drawerMounted:\s*false/)
+  assert.match(releaseDrawerContent, /rowItems:\s*\[\]/)
+  assert.match(releaseDrawerContent, /record:\s*withoutInspectionRows\(createMockRecord\(\)\)/)
+  assert.match(releaseDrawerContent, /historyEditorRawContents\.delete\(this\)/)
+  assert.match(releaseDrawerContent, /historyEditorRows\.delete\(this\)/)
+  assert.match(releaseDrawerContent, /triggerEvent\('close'/)
+  assert.match(scss, /height:\s*88vh;/)
+  assert.doesNotMatch(scss, /backdrop-filter/)
+  assert.match(scss, /@keyframes history-modal-sheet-up/)
+  assert.match(scss, /@keyframes history-modal-sheet-down/)
 })

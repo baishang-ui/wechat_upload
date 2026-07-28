@@ -1,4 +1,5 @@
 <navigation-bar title="账号登录" back="{{false}}" color="#17233d" background="rgba(246, 249, 252, .48)" bindheightchange="onNavigationHeightChange"></navigation-bar>
+<top-toast />
 
 <view class="login-page" style="padding-top: calc({{navigationBarHeight}}px + 72rpx);">
   <view class="login-shell">

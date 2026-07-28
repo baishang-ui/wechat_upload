@@ -1,3 +1,4 @@
+import { showTopToast } from '../../services/top-toast-service'
 import {
   addLocalPhotos,
   buildInspectionWorkbench,
@@ -251,7 +252,7 @@ Component({
           void this.appendAndUploadPhotos(rowKey, localPaths)
         },
         fail: (error) => {
-          if (!error.errMsg?.includes('cancel')) wx.showToast({ title: '选择照片失败，请重试', icon: 'none' })
+          if (!error.errMsg?.includes('cancel')) showTopToast({ title: '选择照片失败，请重试', icon: 'none' })
         },
       })
     },
@@ -321,7 +322,7 @@ Component({
         events: { documentPhotoConfirmed: ({ tempFilePath }: { tempFilePath?: string }) => {
           if (tempFilePath) void this.recognizeQualitySheet(tempFilePath)
         } },
-        fail: () => wx.showToast({ title: '无法打开相机，请稍后重试', icon: 'none' }),
+        fail: () => showTopToast({ title: '无法打开相机，请稍后重试', icon: 'none' }),
       })
     },
 
@@ -337,7 +338,7 @@ Component({
           if (imagePath) void this.recognizeQualitySheet(imagePath)
         },
         fail: (error) => {
-          if (!error.errMsg?.includes('cancel')) wx.showToast({ title: '选择质检单失败，请重试', icon: 'none' })
+          if (!error.errMsg?.includes('cancel')) showTopToast({ title: '选择质检单失败，请重试', icon: 'none' })
         },
       })
     },
@@ -359,7 +360,7 @@ Component({
           )
           reportImages = [...reportImages, uploadedReport.url]
         } catch {
-          wx.showToast({ title: '识别完成，质检单图片未写入草稿', icon: 'none' })
+          showTopToast({ title: '识别完成，质检单图片未写入草稿', icon: 'none' })
         }
         const unmatched = [...this.data.unmatched, ...merged.unmatched]
         const next = { ...workbench, rows: merged.rows }
@@ -372,7 +373,7 @@ Component({
           dirty: true,
         })
         this.syncCurrentPageAfterRecognition(next.rows, unmatched)
-        wx.showToast({ title: merged.unmatched.length ? '识别完成，请核对未匹配条目' : '识别结果已回填', icon: 'none' })
+        showTopToast({ title: merged.unmatched.length ? '识别完成，请核对未匹配条目' : '识别结果已回填', icon: 'none' })
       } catch (error) {
         this.setData({ recognitionError: errorMessage(error, '质检单识别失败') })
       } finally {
@@ -473,7 +474,7 @@ Component({
       if (!workbench || !task || !item || this.data.saving || this.data.loading || this.data.recognizing) return
       const pendingPhotos = workbench.rows.flatMap((row) => row.images).filter((photo) => photo.status !== 'uploaded')
       if (pendingPhotos.length) {
-        wx.showToast({ title: '请先重试或删除未完成上传的照片', icon: 'none' })
+        showTopToast({ title: '请先重试或删除未完成上传的照片', icon: 'none' })
         return
       }
       this.setData({ saving: true, savedMessage: '' })
@@ -492,11 +493,15 @@ Component({
           reportImages: this.data.reportImages,
         }))
         this.setData({ savedMessage: '草稿已保存', dirty: false })
-        wx.showToast({ title: '草稿已保存', icon: 'success' })
+        showTopToast({ title: '草稿已保存', icon: 'success' })
         this.triggerEvent('saved', { taskId: this.data.taskId, itemId: this.data.itemId })
         if (shouldClose) this.finishClose()
       } catch (error) {
-        wx.showModal({ title: '保存失败', content: errorMessage(error, '草稿保存失败，请重试'), showCancel: false })
+        showTopToast({
+          message: errorMessage(error, '草稿保存失败，请重试'),
+          type: 'error',
+          duration: 3600,
+        })
       } finally {
         this.setData({ saving: false })
       }

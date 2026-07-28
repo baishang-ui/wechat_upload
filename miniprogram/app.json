@@ -25,5 +25,8 @@
     "request": 120000
   },
   "sitemapLocation": "sitemap.json",
-  "lazyCodeLoading": "requiredComponents"
+  "lazyCodeLoading": "requiredComponents",
+  "usingComponents": {
+    "top-toast": "/components/top-toast/top-toast"
+  }
 }

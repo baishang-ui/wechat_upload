@@ -1,3 +1,4 @@
+import { showTopToast } from '../../services/top-toast-service'
 import {
   AutoCaptureSnapshot,
   createAutoCaptureSnapshot,
@@ -308,7 +309,7 @@ Component({
       const mode = event.currentTarget.dataset.mode
       if (mode !== 'auto' && mode !== 'manual') return
       if (mode === 'auto' && !this.data.trackingAvailable) {
-        wx.showToast({ title: '当前设备不支持自动拍摄', icon: 'none' })
+        showTopToast({ title: '当前设备不支持自动拍摄', icon: 'none' })
         return
       }
       cancelAutoCapture()
@@ -329,7 +330,7 @@ Component({
     capturePhoto() {
       if (captureRunning || this.data.captureProcessing) return
       if (!cameraContext) {
-        wx.showToast({ title: '相机正在准备，请稍后重试', icon: 'none' })
+        showTopToast({ title: '相机正在准备，请稍后重试', icon: 'none' })
         return
       }
       captureRunning = true
@@ -354,7 +355,7 @@ Component({
         fail: () => {
           captureRunning = false
           this.setData({ captureProcessing: false })
-          wx.showToast({ title: '拍摄失败，请重试', icon: 'none' })
+          showTopToast({ title: '拍摄失败，请重试', icon: 'none' })
           this.startFrameDetection()
         },
       })
@@ -370,7 +371,7 @@ Component({
       } catch (error) {
         console.error('[document-camera] 照片方向校正失败', error)
         previewMessage = '照片转正失败，已保留原始照片，请重拍或继续使用'
-        wx.showToast({
+        showTopToast({
           title: '照片转正失败，已保留原图',
           icon: 'none',
         })
@@ -515,7 +516,7 @@ Component({
           previewMessage: '手动旋转失败，已保留当前照片',
           captureProcessing: false,
         })
-        wx.showToast({ title: '旋转失败，请重试', icon: 'none' })
+        showTopToast({ title: '旋转失败，请重试', icon: 'none' })
       }
     },
     retakePhoto() {
@@ -535,7 +536,7 @@ Component({
     },
     usePhoto() {
       if (this.data.captureProcessing) {
-        wx.showToast({ title: '照片方向仍在处理中', icon: 'none' })
+        showTopToast({ title: '照片方向仍在处理中', icon: 'none' })
         return
       }
       const tempFilePath = this.data.previewPath
@@ -545,7 +546,7 @@ Component({
           tempFilePath,
         } as ConfirmedPhotoPayload)
       } catch {
-        wx.showToast({ title: '照片返回失败，请重试', icon: 'none' })
+        showTopToast({ title: '照片返回失败，请重试', icon: 'none' })
         return
       }
       wx.navigateBack()
