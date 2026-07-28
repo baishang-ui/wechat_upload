@@ -107,3 +107,18 @@ test('legacy pending workbench page uses the same binary decision switch', () =>
   assert.match(scss, /\.table-decision-switch/)
   assert.match(scss, /\.table-decision-label\.is-ng/)
 })
+
+test('full workbench draft metadata keeps the purchase contract separate from the quality order number', () => {
+  const ts = source('miniprogram/pages/inspection-workbench/inspection-workbench.ts')
+
+  assert.match(ts, /orderNumber:\s*text\(task\.contract_no\)/)
+  assert.doesNotMatch(ts, /orderNumber:\s*text\(task\.contract_no \|\| task\.task_no\)/)
+})
+
+
+test('legacy workbench also uploads recognized report images as server URLs', () => {
+  const page = source('miniprogram/pages/inspection-workbench/inspection-workbench.ts')
+
+  assert.match(page, /uploadInspectionDraftImage\(\s*this\.data\.taskId,\s*this\.data\.itemId,\s*preparedPath,\s*\)/)
+  assert.doesNotMatch(page, /inspectionImageToDataUrl\(preparedPath\)/)
+})

@@ -21,7 +21,7 @@ import { buildOnlineInspectionTemplate } from '../../domain/online-inspection-te
 import { prepareImageForUpload, recognizeInspection } from '../../services/inspection-service'
 import {
   getInspectionItemDetail,
-  inspectionImageToDataUrl,
+  uploadInspectionDraftImage,
   QualityInspectionItemDto,
   QualityInspectionTaskDto,
   saveInspectionDraft,
@@ -352,7 +352,12 @@ Component({
         const merged = mergeRecognitionRecord(this.data.workbench?.rows || workbench.rows, result.record)
         let reportImages = this.data.reportImages
         try {
-          reportImages = [...reportImages, await inspectionImageToDataUrl(preparedPath)]
+          const uploadedReport = await uploadInspectionDraftImage(
+            this.data.taskId,
+            this.data.itemId,
+            preparedPath,
+          )
+          reportImages = [...reportImages, uploadedReport.url]
         } catch {
           wx.showToast({ title: '识别完成，质检单图片未写入草稿', icon: 'none' })
         }
@@ -477,7 +482,7 @@ Component({
           metadata: {
             customer: text(task.customer_name),
             supplier: text(task.supplier_name),
-            orderNumber: text(task.contract_no || task.task_no),
+            orderNumber: text(task.contract_no),
             model: text(item.spec_desc || item.material_name),
             arrivalQuantity: item.quantity === null || item.quantity === undefined ? '' : String(item.quantity),
             inspectionDate: text(task.signed_date),

@@ -104,7 +104,7 @@
           <view class="field {{reviewHints.fields.customer.cssClass}}"><text class="field-label">客户 *</text><input value="{{record.customer}}" data-field="customer" bindinput="onRecordInput" /></view>
           <view class="field {{reviewHints.fields.supplier.cssClass}}"><text class="field-label">供应商 *</text><input value="{{record.supplier}}" data-field="supplier" bindinput="onRecordInput" /></view>
           <view class="field {{reviewHints.fields.trademark.cssClass}}"><text class="field-label">商标</text><input value="{{record.trademark}}" data-field="trademark" bindinput="onRecordInput" /></view>
-          <view class="field {{reviewHints.fields.orderNumber.cssClass}}"><text class="field-label">订单编号</text><input value="{{record.orderNumber}}" data-field="orderNumber" bindinput="onRecordInput" /></view>
+          <view class="field {{reviewHints.fields.orderNumber.cssClass}}"><text class="field-label">采购合同号</text><input value="{{record.orderNumber}}" data-field="orderNumber" bindinput="onRecordInput" /></view>
           <view class="field {{reviewHints.fields.model.cssClass}}"><text class="field-label">型号/规格 *</text><input value="{{record.model}}" data-field="model" bindinput="onRecordInput" /></view>
           <view class="field {{reviewHints.fields.arrivalQuantity.cssClass}}"><text class="field-label">到货数量</text><input value="{{record.arrivalQuantity}}" data-field="arrivalQuantity" bindinput="onRecordInput" /></view>
           <view class="field full-field {{reviewHints.fields.inspectionDate.cssClass}}"><text class="field-label">检验日期 *</text><input value="{{record.inspectionDate}}" data-field="inspectionDate" bindinput="onRecordInput" /></view>
@@ -179,8 +179,8 @@
       <view class="task-toolbar card">
         <view class="task-toolbar-heading">
           <view>
-            <view class="task-toolbar-eyebrow">PURCHASE INSPECTION</view>
-            <view class="task-toolbar-title">采购待检任务</view>
+            <view class="task-toolbar-eyebrow">QUALITY INSPECTION ORDER</view>
+            <view class="task-toolbar-title">质检订单</view>
           </view>
           <view class="task-toolbar-count {{taskRefreshing ? 'is-refreshing' : ''}}">{{taskRefreshing ? '刷新中' : taskTotal + ' 项'}}</view>
         </view>
@@ -188,7 +188,7 @@
           <input
             class="task-search-input"
             value="{{taskSearch}}"
-            placeholder="搜索采购合同、客户或供应商"
+            placeholder="搜索质检单号、采购合同、客户或供应商"
             confirm-type="search"
             bindinput="onTaskSearchInput"
             bindconfirm="confirmTaskSearch"
@@ -237,9 +237,10 @@
         <view wx:for="{{taskItems}}" wx:key="id" wx:for-item="task" class="task-card card">
           <view class="task-card-head" data-id="{{task.id}}" bindtap="openTask">
             <view class="task-card-main">
-              <view class="task-card-kicker">采购合同</view>
-              <view class="task-card-title">{{task.contract_no || task.task_no || '采购质检任务'}}</view>
+              <view class="task-card-kicker">质检订单</view>
+              <view class="task-card-title">{{task.task_no || '未编号质检订单'}}</view>
               <view class="task-card-details">
+                <view class="task-card-contract">采购合同：{{task.contract_no || '—'}}</view>
                 <view class="task-card-subtitle">{{task.customer_name || '未填写客户'}} · {{task.supplier_name || '未填写供应商'}}</view>
                 <view class="task-card-meta">{{task.signed_date || '无日期'}} · {{task.items.length || 0}} 项物料</view>
               </view>
@@ -460,7 +461,7 @@
           <view class="field"><text class="field-label">客户 *</text><input value="{{historyEditRecord.customer}}" data-field="customer" bindinput="onHistoryRecordInput" /></view>
           <view class="field"><text class="field-label">供应商 *</text><input value="{{historyEditRecord.supplier}}" data-field="supplier" bindinput="onHistoryRecordInput" /></view>
           <view class="field"><text class="field-label">商标</text><input value="{{historyEditRecord.trademark}}" data-field="trademark" bindinput="onHistoryRecordInput" /></view>
-          <view class="field"><text class="field-label">订单编号</text><input value="{{historyEditRecord.orderNumber}}" data-field="orderNumber" bindinput="onHistoryRecordInput" /></view>
+          <view class="field"><text class="field-label">采购合同号</text><input value="{{historyEditRecord.orderNumber}}" data-field="orderNumber" bindinput="onHistoryRecordInput" /></view>
           <view class="field"><text class="field-label">型号/规格 *</text><input value="{{historyEditRecord.model}}" data-field="model" bindinput="onHistoryRecordInput" /></view>
           <view class="field"><text class="field-label">到货数量</text><input value="{{historyEditRecord.arrivalQuantity}}" data-field="arrivalQuantity" bindinput="onHistoryRecordInput" /></view>
           <view class="field full-field"><text class="field-label">检验日期 *</text><input value="{{historyEditRecord.inspectionDate}}" data-field="inspectionDate" bindinput="onHistoryRecordInput" /></view>

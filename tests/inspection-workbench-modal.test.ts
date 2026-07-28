@@ -82,6 +82,9 @@ test('inspection workbench keeps actions readable and content orderly on narrow 
   assert.match(scss, /\.workbench-close\s*\{[\s\S]*?display:\s*flex[\s\S]*?border-radius:\s*50%/)
   assert.match(scss, /\.page-button\s*\{[\s\S]*?flex:\s*1/)
   assert.match(scss, /\.save-button\s*\{[\s\S]*?width:\s*100%/)
+  assert.match(wxml, /现场照片[\s\S]*?<view class="photo-add-button site-photo-add-button"/)
+  assert.doesNotMatch(wxml, /现场照片[\s\S]*?<button class="photo-add-button"/)
+  assert.match(scss, /\.site-photo-add-button\s*\{[^}]*width:\s*136rpx;[^}]*min-width:\s*136rpx;[^}]*max-width:\s*136rpx;[^}]*height:\s*136rpx;[^}]*min-height:\s*136rpx;[^}]*max-height:\s*136rpx;/)
   assert.match(scss, /@media \(max-width:\s*360px\)[\s\S]*?\.recognition-actions[\s\S]*?flex-direction:\s*column/)
   assert.match(scss, /@media \(max-width:\s*360px\)[\s\S]*?\.measurement-grid[\s\S]*?grid-template-columns:\s*1fr/)
   assert.match(scss, /@media \(max-width:\s*360px\)[\s\S]*?\.workbench-photo-grid[\s\S]*?grid-template-columns:\s*repeat\(2, minmax\(0, 1fr\)\)/)
@@ -135,4 +138,21 @@ test('pending workbench drawer uses a decision switch with on as OK and off as N
   assert.match(handler, /updateWorkbenchRowField\(this\.data\.workbench\.rows, rowKey, 'decision', decision\)/)
   assert.match(scss, /\.decision-switch-control/)
   assert.match(scss, /\.decision-switch-label\.is-ng/)
+})
+
+test('workbench draft metadata keeps the purchase contract separate from the quality order number', () => {
+  const ts = source('miniprogram/components/inspection-workbench-modal/inspection-workbench-modal.ts')
+
+  assert.match(ts, /orderNumber:\s*text\(task\.contract_no\)/)
+  assert.doesNotMatch(ts, /orderNumber:\s*text\(task\.contract_no \|\| task\.task_no\)/)
+})
+
+
+test('recognized quality sheets are uploaded before draft save instead of embedding base64 in the item remark', () => {
+  const modal = source('miniprogram/components/inspection-workbench-modal/inspection-workbench-modal.ts')
+
+  assert.match(modal, /uploadInspectionDraftImage\(\s*this\.data\.taskId,\s*this\.data\.itemId,\s*preparedPath,\s*\)/)
+  assert.doesNotMatch(modal, /inspectionImageToDataUrl\(preparedPath\)/)
+  assert.match(modal, /reportImages:\s*this\.data\.reportImages/)
+  assert.match(modal, /saveInspectionDraft\(this\.data\.taskId, this\.data\.itemId/)
 })

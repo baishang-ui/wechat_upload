@@ -155,14 +155,22 @@ function workbenchRowMatchesProject(row: InspectionWorkbenchRow, project: string
 function matchDraftRecords(
   sourceRows: InspectionTemplateRowDto[],
   draftRecords: InspectionDraftRecordLike[],
-): Map<string, InspectionDraftRecordLike> {
-  const result = new Map<string, InspectionDraftRecordLike>()
+): Map<InspectionTemplateRowDto, InspectionDraftRecordLike> {
+  const result = new Map<InspectionTemplateRowDto, InspectionDraftRecordLike>()
   const used = new Set<InspectionDraftRecordLike>()
-  const byKey = new Map(draftRecords.map((row) => [row.row_key, row]))
   sourceRows.forEach((row) => {
-    const exact = byKey.get(row.row_key)
-    if (exact && !used.has(exact)) {
-      result.set(row.row_key, exact)
+    const exactMatches = draftRecords.filter((draft) => (
+      !used.has(draft)
+      && Boolean(row.row_key)
+      && draft.row_key === row.row_key
+      && templateRowMatchesProject(row, draft.project)
+    ))
+    const exactSameGroup = exactMatches.filter((draft) => (
+      semanticGroup(draft.group_title) === semanticGroup(row.group_title)
+    ))
+    const exact = exactSameGroup[0] || exactMatches[0]
+    if (exact) {
+      result.set(row, exact)
       used.add(exact)
       return
     }
@@ -170,9 +178,28 @@ function matchDraftRecords(
     const sameGroup = available.filter((draft) => semanticGroup(draft.group_title) === semanticGroup(row.group_title))
     const matches = sameGroup.length > 0 ? sameGroup : available
     if (matches.length === 1) {
-      result.set(row.row_key, matches[0])
+      result.set(row, matches[0])
       used.add(matches[0])
     }
+  })
+  return result
+}
+
+function uniqueWorkbenchRowKeys(rows: InspectionTemplateRowDto[]): Map<InspectionTemplateRowDto, string> {
+  const result = new Map<InspectionTemplateRowDto, string>()
+  const used = new Set<string>()
+  rows.forEach((row, index) => {
+    const sourceKey = row.row_key.trim()
+    const fallbackKey = `template-row:${row.display_order}:${semanticGroup(row.group_title)}:${normalizedProject(row.project)}`
+    const baseKey = sourceKey || fallbackKey || `template-row:${index}`
+    let rowKey = baseKey
+    let duplicateIndex = 2
+    while (used.has(rowKey)) {
+      rowKey = `${baseKey}:duplicate-${duplicateIndex}`
+      duplicateIndex += 1
+    }
+    used.add(rowKey)
+    result.set(row, rowKey)
   })
   return result
 }
@@ -200,12 +227,14 @@ export function buildInspectionWorkbench(options: {
     }))
   const orderedRows = [...sourceRows].sort((left, right) => left.display_order - right.display_order)
   const matchedDrafts = matchDraftRecords(orderedRows, draftRecords)
+  const workbenchRowKeys = uniqueWorkbenchRowKeys(orderedRows)
   const rows = orderedRows
     .map((row) => {
-      const saved = matchedDrafts.get(row.row_key)
+      const saved = matchedDrafts.get(row)
       const photoRequired = fallbackPhotoRequired(row)
+      const rowKey = workbenchRowKeys.get(row) || row.row_key
       return {
-        rowKey: row.row_key,
+        rowKey,
         groupTitle: row.group_title,
         displayOrder: row.display_order,
         project: row.project,
@@ -218,7 +247,7 @@ export function buildInspectionWorkbench(options: {
         photoRequired,
         inputMode: row.input_mode || (photoRequired ? 'manual_photo' : 'manual'),
         images: (saved?.images || []).map((remoteUrl, index) => ({
-          id: `remote-${row.row_key}-${index}`,
+          id: `remote-${rowKey}-${index}`,
           localPath: '',
           remoteUrl,
           status: 'uploaded' as const,

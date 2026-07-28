@@ -812,3 +812,230 @@ test('workbench binary decisions default to NG and preserve saved OK values', ()
   })
   assert.equal(restored.rows.find((row) => row.rowKey === template.rows[0].row_key)?.decision, 'OK')
 })
+
+test('duplicate database row keys keep page blade length decision isolated from product appearance', () => {
+  const template = createTemplate()
+  template.rows = [
+    {
+      row_key: 'legacy-shared-row',
+      group_title: '产品外观',
+      display_order: 0,
+      project: '产品外观',
+      method: '目视',
+      standard: '无破损',
+      measurement_standards: {},
+      note: '',
+    },
+    {
+      row_key: 'legacy-shared-row',
+      group_title: '产品尺寸',
+      display_order: 1,
+      project: '页片长度',
+      method: '卡尺',
+      standard: '18 mm',
+      measurement_standards: { 识别别名: '页片长度|叶片长度' },
+      note: '',
+    },
+    {
+      row_key: 'page-blade-width',
+      group_title: '产品尺寸',
+      display_order: 2,
+      project: '页片宽度',
+      method: '卡尺',
+      standard: '16 mm',
+      measurement_standards: { 识别别名: '页片宽度|叶片宽度' },
+      note: '',
+    },
+  ]
+
+  const workbench = buildInspectionWorkbench({ template })
+  const appearance = workbench.rows.find((row) => row.project === '产品外观')
+  const length = workbench.rows.find((row) => row.project === '页片长度')
+  assert.ok(appearance)
+  assert.ok(length)
+  assert.notEqual(appearance.rowKey, length.rowKey)
+
+  const draftOptions = {
+    metadata: {
+      customer: '',
+      supplier: '',
+      orderNumber: '',
+      model: '',
+      arrivalQuantity: '',
+      inspectionDate: '',
+    },
+    rawContent: '',
+    unmatched: [],
+    reportImages: [],
+  }
+  const lengthRows = updateWorkbenchRowField(workbench.rows, length.rowKey, 'decision', 'OK')
+  const lengthDraft = workbenchToDraft({ ...workbench, rows: lengthRows }, draftOptions)
+  const afterLength = new Map(lengthDraft.inspection_records.map((row) => [row.project, row]))
+
+  assert.equal(afterLength.get('产品外观')?.decision, 'NG')
+  assert.equal(afterLength.get('页片长度')?.decision, 'OK')
+  assert.equal(afterLength.get('页片长度')?.row_key, length.rowKey)
+  assert.equal(afterLength.get('页片宽度')?.decision, 'NG')
+
+  const width = lengthRows.find((row) => row.project === '页片宽度')
+  assert.ok(width)
+  const widthRows = updateWorkbenchRowField(lengthRows, width.rowKey, 'decision', 'OK')
+  const widthDraft = workbenchToDraft({ ...workbench, rows: widthRows }, draftOptions)
+  const afterWidth = new Map(widthDraft.inspection_records.map((row) => [row.project, row]))
+
+  assert.equal(afterWidth.get('产品外观')?.decision, 'NG')
+  assert.equal(afterWidth.get('页片长度')?.decision, 'OK')
+  assert.equal(afterWidth.get('页片宽度')?.decision, 'OK')
+  assert.equal(afterWidth.get('页片宽度')?.row_key, width.rowKey)
+})
+
+test('database flap-disc template keeps length width and appearance row keys aligned end to end', () => {
+  const template = {
+    template_id: 'flap-disc-form',
+    version: '1',
+    columns: [
+      { key: 'project', title: '检验项目', display_order: 0, visible: true, width: 180 },
+      { key: 'decision', title: '判定', display_order: 1, visible: true, width: 100 },
+    ],
+    rows: [
+      {
+        row_key: 'page-blade-size',
+        group_title: '产品尺寸',
+        display_order: 0,
+        project: '页片长度',
+        method: '卡尺',
+        standard: '18 mm',
+        measurement_standards: { 识别别名: '页片长度|叶片长度' },
+        note: '',
+        photo_required: false,
+        input_mode: 'manual' as const,
+      },
+      {
+        row_key: 'page-blade-size:duplicate-2',
+        group_title: '产品尺寸',
+        display_order: 1,
+        project: '页片宽度',
+        method: '卡尺',
+        standard: '16 mm',
+        measurement_standards: { 识别别名: '页片宽度|叶片宽度' },
+        note: '',
+        photo_required: false,
+        input_mode: 'manual' as const,
+      },
+      {
+        row_key: 'appearance',
+        group_title: '产品外观',
+        display_order: 2,
+        project: '产品外观',
+        method: '目视',
+        standard: '无缺片、断片、翘片',
+        measurement_standards: { 识别别名: '产品外观|外观' },
+        note: '',
+        photo_required: true,
+        input_mode: 'manual_photo' as const,
+      },
+    ],
+  }
+
+  const importedDraft = {
+    inspection_records: [
+      {
+        row_key: 'imported-Sheet1-2',
+        group_title: '产品尺寸',
+        project: '页片长度',
+        method: '卡尺',
+        standard: '18 mm',
+        decision: 'NG',
+        sample_data: ['17.4'],
+        measurement_standards: {},
+        note: '',
+        ai_result: {},
+        images: [],
+      },
+      {
+        row_key: 'imported-Sheet1-3',
+        group_title: '产品尺寸',
+        project: '页片宽度',
+        method: '卡尺',
+        standard: '16 mm',
+        decision: 'NG',
+        sample_data: ['15.8'],
+        measurement_standards: {},
+        note: '',
+        ai_result: {},
+        images: [],
+      },
+      {
+        row_key: 'imported-Sheet1-4',
+        group_title: '产品外观',
+        project: '产品外观',
+        method: '目视',
+        standard: '无缺片、断片、翘片',
+        decision: 'NG',
+        sample_data: [],
+        measurement_standards: {},
+        note: '',
+        ai_result: {},
+        images: [],
+      },
+    ],
+    ai_workbench_result: {},
+    ai_workbench_images: [],
+  }
+  const workbench = buildInspectionWorkbench({ template, draft: importedDraft })
+  assert.deepEqual(
+    workbench.rows.map((row) => [row.rowKey, row.project]),
+    [
+      ['page-blade-size', '页片长度'],
+      ['page-blade-size:duplicate-2', '页片宽度'],
+      ['appearance', '产品外观'],
+    ],
+  )
+
+  const lengthRows = updateWorkbenchRowField(
+    workbench.rows,
+    'page-blade-size',
+    'decision',
+    'OK',
+  )
+  const draft = workbenchToDraft(
+    { ...workbench, rows: lengthRows },
+    {
+      metadata: {
+        customer: '',
+        supplier: '',
+        orderNumber: '',
+        model: '',
+        arrivalQuantity: '',
+        inspectionDate: '',
+      },
+      rawContent: '',
+      unmatched: [],
+      reportImages: [],
+    },
+  )
+  const byKey = new Map(draft.inspection_records.map((row) => [row.row_key, row]))
+
+  assert.equal(byKey.get('page-blade-size')?.project, '页片长度')
+  assert.equal(byKey.get('page-blade-size')?.decision, 'OK')
+  assert.equal(byKey.get('page-blade-size:duplicate-2')?.project, '页片宽度')
+  assert.equal(byKey.get('page-blade-size:duplicate-2')?.decision, 'NG')
+  assert.equal(byKey.get('appearance')?.project, '产品外观')
+  assert.equal(byKey.get('appearance')?.decision, 'NG')
+
+  const restored = buildInspectionWorkbench({
+    template,
+    draft: {
+      inspection_records: draft.inspection_records,
+      ai_workbench_result: draft.ai_workbench_result,
+      ai_workbench_images: draft.ai_workbench_images,
+    },
+  })
+  const restoredByProject = new Map(restored.rows.map((row) => [row.project, row]))
+  assert.equal(restoredByProject.get('页片长度')?.rowKey, 'page-blade-size')
+  assert.equal(restoredByProject.get('页片长度')?.decision, 'OK')
+  assert.equal(restoredByProject.get('页片宽度')?.rowKey, 'page-blade-size:duplicate-2')
+  assert.equal(restoredByProject.get('页片宽度')?.decision, 'NG')
+  assert.equal(restoredByProject.get('产品外观')?.rowKey, 'appearance')
+  assert.equal(restoredByProject.get('产品外观')?.decision, 'NG')
+})

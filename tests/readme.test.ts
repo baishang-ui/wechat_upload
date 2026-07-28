@@ -32,3 +32,9 @@ test('README documents backend-proxied recognition without client model credenti
   assert.doesNotMatch(readme, /上传功能尚未实现/)
   assert.doesNotMatch(readme, /增加服务器端检验记录保存接口/)
 })
+
+test('README explains quality-order-first pending matching', () => {
+  assert.match(readme, /待检列表以质检订单为主/)
+  assert.match(readme, /识别出的合同号只与质检订单的采购合同号匹配/)
+  assert.match(readme, /同一采购合同存在多个质检订单时，继续结合产品和规格唯一匹配/)
+})

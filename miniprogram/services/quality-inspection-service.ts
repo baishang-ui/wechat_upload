@@ -265,11 +265,65 @@ function normalizeProductIdentity(value: unknown): string {
     .replace(/[^a-z0-9\u4e00-\u9fff]/g, '')
 }
 
+function canonicalSpecificationToken(token: string): string {
+  const grit = token.match(/^p(\d+(?:\.\d+)?)$/)
+  if (grit) return `p${Number(grit[1])}`
+  return /^\d+(?:\.\d+)?$/.test(token) ? String(Number(token)) : token
+}
+
+function specificationTokens(value: unknown): string[] {
+  const tokens = asString(value)
+    .toLowerCase()
+    .replace(/(?:粒度|目数|砂号|grit|mesh)\s*[:：#-]?\s*(?:p\s*)?(\d+(?:\.\d+)?)/g, ' p$1 ')
+    .replace(/#\s*(\d+(?:\.\d+)?)/g, ' p$1 ')
+    .replace(/(\d+(?:\.\d+)?)\s*[#目]/g, ' p$1 ')
+    .replace(/\bp\s+(\d+(?:\.\d+)?)/g, 'p$1')
+    .replace(/[×＊*x]/g, ' ')
+    .replace(/(\d+(?:\.\d+)?)\s*(?:毫米|mm)\b/g, '$1')
+    .match(/[a-z]*\d+(?:\.\d+)?[a-z]*(?:-[a-z0-9.]+)*/g) || []
+  return [...new Set(tokens.map(canonicalSpecificationToken))]
+}
+
+function recognizedSpecificationEvidence(record: InspectionRecord): string {
+  const evidence = [record.model]
+  for (const row of record.rows) {
+    const rowContext = [row.groupTitle, row.item, row.requirement, row.specification]
+      .filter(Boolean)
+      .join(' ')
+    evidence.push(rowContext, ...row.measurements)
+    if (/(?:粒度|目数|砂号|grit|mesh)/i.test(rowContext)) {
+      for (const measurement of row.measurements) {
+        const plainGrit = asString(measurement).match(/^(?:p\s*)?(\d+(?:\.\d+)?)\s*(?:[#目])?$/i)
+        if (plainGrit) evidence.push(`P${Number(plainGrit[1])}`)
+      }
+    }
+  }
+  return evidence.filter(Boolean).join(' ')
+}
+
+function specificationMatchScore(recognizedModel: unknown, specification: unknown): number {
+  const recognizedTokens = specificationTokens(recognizedModel)
+  const specificationTokenSet = new Set(specificationTokens(specification))
+  if (recognizedTokens.length === 0 || specificationTokenSet.size === 0) return 0
+
+  const matchedTokens = recognizedTokens.filter((token) => specificationTokenSet.has(token))
+  if (matchedTokens.length === 0) return 0
+  const tokenScore = matchedTokens.reduce((score, token) => (
+    score + (/^[a-z]/.test(token) ? 40 : 20)
+  ), 0)
+  return tokenScore + (
+    matchedTokens.length === recognizedTokens.length
+      ? 100
+      : Math.round((matchedTokens.length / recognizedTokens.length) * 20)
+  )
+}
+
 function recognizedProductMatchScore(
   record: InspectionRecord,
   item: QualityInspectionItemDto,
 ): number {
   const recognized = normalizeProductIdentity(record.model)
+  const recognizedSpecification = recognizedSpecificationEvidence(record)
   const productLabel = PRODUCT_OPTIONS.find((option) => option.value === record.productType)?.label || ''
   const recognizedLabel = normalizeProductIdentity(productLabel)
   const fields = [item.material_code, item.material_name, item.spec_desc]
@@ -285,6 +339,7 @@ function recognizedProductMatchScore(
       score += 30
     }
   }
+  score += specificationMatchScore(recognizedSpecification, item.spec_desc)
   return score
 }
 
@@ -296,13 +351,28 @@ export function matchRecognizedInspectionToPendingItem(
   if (!orderIdentity) return { status: 'missing_order_number' }
 
   const matchedTasks = tasks.filter((task) => {
-    if (task.status && task.status !== 'pending') return false
+    if (task.status && task.status !== 'pending' && task.status !== 'processing') return false
     if (task.source_type && task.source_type !== 'purchase_order') return false
-    return [task.contract_no, task.task_no, task.source_review_no]
-      .some((value) => normalizeOrderIdentity(value) === orderIdentity)
+    return normalizeOrderIdentity(task.contract_no) === orderIdentity
   })
   if (matchedTasks.length === 0) return { status: 'order_not_found' }
-  if (matchedTasks.length > 1) return { status: 'order_ambiguous' }
+  if (matchedTasks.length > 1) {
+    const scored = matchedTasks
+      .flatMap((task) => (task.items || []).map((item) => ({
+        task,
+        item,
+        score: recognizedProductMatchScore(record, item),
+      })))
+      .sort((left, right) => right.score - left.score)
+    if (
+      scored.length === 0
+      || scored[0].score <= 0
+      || (scored[1] && scored[0].score === scored[1].score)
+    ) {
+      return { status: 'order_ambiguous' }
+    }
+    return { status: 'matched', task: scored[0].task, item: scored[0].item }
+  }
 
   const task = matchedTasks[0]
   const items = task.items || []
@@ -345,7 +415,6 @@ export async function autoWriteRecognizedInspectionToPendingItem(
     page: 1,
     pageSize: 200,
     search: orderNumber,
-    status: 'pending',
     sourceType: 'purchase_order',
   })
   const matched = matchRecognizedInspectionToPendingItem(record, data.items)
@@ -755,15 +824,15 @@ function unmatchedInspectionSyncReason(
 ): string {
   switch (status) {
     case 'missing_order_number':
-      return '未识别到订单号，质检记录未同步'
+      return '未识别到合同号，质检记录未同步'
     case 'order_not_found':
-      return `未查到订单 ${orderNumber || '对应订单'}，质检记录未同步`
+      return `未查到采购合同号 ${orderNumber || '对应合同号'} 的待检质检订单`
     case 'order_ambiguous':
-      return `查到多个订单 ${orderNumber || ''}，无法自动同步质检记录`.replace(/\s+，/, '，')
+      return `采购合同号 ${orderNumber || ''} 对应多个质检订单，无法唯一匹配`.replace(/\s+对应/, ' 对应')
     case 'item_not_found':
-      return '订单中没有待检产品，质检记录未同步'
+      return '质检订单中没有待检产品，质检记录未同步'
     case 'item_ambiguous':
-      return '订单内产品无法唯一匹配，质检记录未同步'
+      return '质检订单内产品无法唯一匹配，质检记录未同步'
   }
 }
 
@@ -790,7 +859,6 @@ export async function syncStoredInspection(
           page: 1,
           pageSize: 200,
           search: orderNumber,
-          status: 'pending',
           sourceType: 'purchase_order',
         })
         matched = matchRecognizedInspectionToPendingItem(current.record, data.items)
@@ -952,6 +1020,30 @@ function normalizeUploadedImageUrl(value: string): string {
     return `${protocol}${imageUrl}`
   }
   return `${DATA_SERVER_BASE_URL.replace(/\/$/, '')}/${imageUrl.replace(/^\/+/, '')}`
+}
+
+export async function uploadInspectionDraftImage(
+  taskId: number,
+  itemId: number,
+  preparedFilePath: string,
+  upload: QualityUpload = serverUpload,
+): Promise<InspectionRowImageUploadResult> {
+  const uploaded = await upload<GenericImageUploadResult>({
+    path: '/inquiries/api/upload-image',
+    filePath: preparedFilePath,
+    name: 'file',
+    formData: {
+      task_id: String(taskId),
+      item_id: String(itemId),
+      row_key: 'quality-sheet',
+    },
+  })
+  const url = normalizeUploadedImageUrl(uploaded.image_url || '')
+  if (!url) throw new Error('服务器未返回质检单图片地址，请重试')
+  return {
+    id: String(uploaded.image_path || url),
+    url,
+  }
 }
 
 export async function uploadInspectionRowImage(

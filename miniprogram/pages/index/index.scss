@@ -1942,6 +1942,7 @@ page {
   margin-top: 14rpx;
 }
 
+.task-card-contract,
 .task-card-subtitle,
 .task-card-meta,
 .task-item-meta {
@@ -1950,8 +1951,16 @@ page {
   line-height: 1.55;
 }
 
+.task-card-contract {
+  color: $ui-text-primary;
+}
+
+.task-card-subtitle,
 .task-card-meta {
   margin-top: 4rpx;
+}
+
+.task-card-meta {
   font-size: 22rpx;
 }
 

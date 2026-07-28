@@ -30,6 +30,22 @@ test('pending inspection page exposes unified toolbar, state and task metadata c
   assert.match(wxml, /class="task-state-icon/)
   assert.match(wxml, /class="task-card-kicker"/)
   assert.match(wxml, /class="task-card-details"/)
+  assert.match(wxml, /class="task-toolbar-title">质检订单<\/view>/)
+  assert.match(wxml, /placeholder="搜索质检单号、采购合同、客户或供应商"/)
+  assert.match(wxml, /class="task-card-kicker">质检订单<\/view>/)
+  assert.match(wxml, /class="task-card-title">\{\{task\.task_no \|\| '未编号质检订单'\}\}<\/view>/)
+  assert.match(wxml, /class="task-card-contract">采购合同：\{\{task\.contract_no \|\| '—'\}\}<\/view>/)
+})
+
+test('recognized report fields and matching messages identify the purchase contract explicitly', () => {
+  const page = source('miniprogram/pages/index/index.ts')
+  const wxml = source('miniprogram/pages/index/index.wxml')
+
+  assert.match(wxml, /class="field-label">采购合同号<\/text><input value="\{\{record\.orderNumber\}\}"/)
+  assert.match(wxml, /class="field-label">采购合同号<\/text><input value="\{\{historyEditRecord\.orderNumber\}\}"/)
+  assert.match(page, /missing_order_number': stage = '识别完成，未识别到合同号'/)
+  assert.match(page, /order_ambiguous': stage = '识别完成，合同号对应多个质检订单，请手动选择'/)
+  assert.match(page, /item_not_found': stage = '识别完成，质检订单中没有待检产品'/)
 })
 
 test('scan workspace exposes recognition queue and confidence review states', () => {
@@ -357,19 +373,26 @@ test('review actions keep return, export, and save controls in one balanced row'
   assert.match(buttons, /white-space:\s*nowrap;/)
 })
 
-test('pending task refresh preserves cached cards and queues forced reloads', () => {
+test('quality orders use the same all-source and all-status default scope as the web workbench', () => {
   const page = source('miniprogram/pages/index/index.ts')
   const activateTab = page.match(/activateTab\(activeTab: WorkspaceTab\) \{([\s\S]*?)\n    \},\n    switchTab/)?.[1] || ''
   const loadTasks = page.match(/loadTasks\(reset = false, force = false\): Promise<void> \{([\s\S]*?)\n    \},\n    loadMoreTasks/)?.[1] || ''
   const openTask = page.match(/openTask\(event: WechatMiniprogram\.TouchEvent\) \{([\s\S]*?)\n    \},\n    selectTaskItem/)?.[1] || ''
+  const pageShow = page.match(/pageLifetimes:\s*\{[\s\S]*?show\(\) \{([\s\S]*?)\n    \},?[\s\S]*?\n  \},\n  methods:/)?.[1] || ''
 
   assert.match(page, /taskAppliedSearch:\s*''/)
+  assert.match(page, /taskStatus:\s*'all'/)
   assert.match(page, /taskLoadedAt:\s*0/)
   assert.match(page, /taskRefreshQueued:\s*false/)
   assert.match(page, /taskRequestId:\s*0/)
   assert.match(page, /taskOpeningId:\s*0/)
-  assert.match(activateTab, /activeTab === 'tasks' && previousTab !== 'tasks'/)
+  assert.match(activateTab, /activeTab === 'tasks' && previousTab !== 'tasks'[\s\S]*?loadTasks\(true, true\)/)
+  assert.match(pageShow, /activeTab === 'tasks'/)
+  assert.match(pageShow, /loadTasks\(true, true\)/)
   assert.match(loadTasks, /const search = this\.data\.taskAppliedSearch\.trim\(\)/)
+  assert.match(loadTasks, /status:\s*status === 'all' \? undefined : status/)
+  assert.match(loadTasks, /sourceType:\s*'all'/)
+  assert.doesNotMatch(loadTasks, /sourceType:\s*'purchase_order'/)
   assert.match(loadTasks, /shouldRefreshInspectionTasks/)
   assert.match(loadTasks, /shouldQueueInspectionTaskRefresh/)
   assert.match(loadTasks, /const preserveTaskItems = resetList && !queryChanged/)
@@ -379,6 +402,7 @@ test('pending task refresh preserves cached cards and queues forced reloads', ()
   assert.match(loadTasks, /taskRefreshQueued/)
   assert.match(page, /confirmTaskSearch\(\)[\s\S]*?taskAppliedSearch[\s\S]*?loadTasks\(true, true\)/)
   assert.match(page, /changeTaskStatus[\s\S]*?loadTasks\(true, true\)/)
+  assert.match(openTask, /getInspectionTask\(taskId\)/)
   assert.doesNotMatch(openTask, /taskLoading:\s*true/)
   assert.match(openTask, /taskOpeningId/)
 })

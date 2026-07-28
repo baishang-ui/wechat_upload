@@ -133,7 +133,7 @@ Component({
     taskTotal: 0,
     taskSearch: '',
     taskAppliedSearch: '',
-    taskStatus: 'pending',
+    taskStatus: 'all',
     taskLoading: false,
     taskRefreshing: false,
     taskLoadedAt: 0,
@@ -222,6 +222,11 @@ Component({
       attachedWorkspaceComponents.delete(this)
       clearRecognitionStageTimers(this)
       this.stopAllRecognitionProgress()
+    },
+  },
+  pageLifetimes: {
+    show() {
+      if (this.data.activeTab === 'tasks') void this.loadTasks(true, true)
     },
   },
   methods: {
@@ -339,7 +344,7 @@ Component({
           : {}),
       })
       if (activeTab === 'history' && previousTab !== 'history') this.refreshHistory()
-      if (activeTab === 'tasks' && previousTab !== 'tasks') this.loadTasks(true)
+      if (activeTab === 'tasks' && previousTab !== 'tasks') this.loadTasks(true, true)
     },
     switchTab(event: WechatMiniprogram.TouchEvent) {
       this.activateTab(event.currentTarget.dataset.tab as WorkspaceTab)
@@ -403,7 +408,7 @@ Component({
         pageSize: 20,
         search: search || undefined,
         status: status === 'all' ? undefined : status,
-        sourceType: 'purchase_order',
+        sourceType: 'all',
       })
         .then((data) => {
           if (this.data.taskRequestId !== requestId) return
@@ -798,11 +803,11 @@ Component({
         }
         let stage = '识别完成，请手动选择待检产品'
         switch (matched.status) {
-          case 'missing_order_number': stage = '识别完成，未识别到订单号'; break
-          case 'order_not_found': stage = '识别完成，未匹配到待检订单'; break
-          case 'order_ambiguous': stage = '识别完成，匹配到多个待检订单，请手动选择'; break
-          case 'item_not_found': stage = '识别完成，订单中没有待检产品'; break
-          case 'item_ambiguous': stage = '识别完成，订单内产品无法唯一匹配，请手动选择'; break
+          case 'missing_order_number': stage = '识别完成，未识别到合同号'; break
+          case 'order_not_found': stage = '识别完成，未匹配到合同号对应的质检订单'; break
+          case 'order_ambiguous': stage = '识别完成，合同号对应多个质检订单，请手动选择'; break
+          case 'item_not_found': stage = '识别完成，质检订单中没有待检产品'; break
+          case 'item_ambiguous': stage = '识别完成，质检订单内产品无法唯一匹配，请手动选择'; break
         }
         this.applyRecognitionQueue(updateQueueItem(this.data.recognitionQueue, id, { stage }))
       } catch (error) {

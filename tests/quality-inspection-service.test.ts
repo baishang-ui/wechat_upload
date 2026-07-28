@@ -16,6 +16,7 @@ import {
   matchRecognizedInspectionToPendingItem,
   recognizeInspectionFile,
   saveInspectionDraft,
+  uploadInspectionDraftImage,
   uploadInspectionRowImage,
   QualityInspectionDraftPayload,
 } from '../miniprogram/services/quality-inspection-service'
@@ -77,6 +78,169 @@ test('recognized order number and model match one pending database product', () 
   assert.equal(result.status, 'matched')
   assert.equal(result.task?.id, 18)
   assert.equal(result.item?.id, 82)
+})
+
+test('recognized product matches the order item by specification tokens regardless of field order', () => {
+  const record = createCompleteRecord()
+  record.orderNumber = 'PO-SPEC-1'
+  record.model = 'P80 / 115 × 22.23 mm / T29'
+  const result = matchRecognizedInspectionToPendingItem(record, [{
+    id: 181,
+    contract_no: 'PO-SPEC-1',
+    status: 'pending',
+    items: [
+      { id: 811, material_name: '锆刚玉百叶轮', spec_desc: '115 × 22.23mm，P60，T29' },
+      { id: 812, material_name: '锆刚玉百叶轮', spec_desc: '115 × 22.23mm，P80，T29' },
+    ],
+  }])
+
+  assert.equal(result.status, 'matched')
+  assert.equal(result.task?.id, 181)
+  assert.equal(result.item?.id, 812)
+})
+
+test('recognized measurement dimensions select the order item when header and specification cells are empty', () => {
+  const record = createCompleteRecord()
+  record.orderNumber = 'PO-SPEC-MEASURED'
+  record.productType = 'velcro_disc'
+  record.model = ''
+  record.rows = [
+    { ...record.rows[0], id: 'length', requirement: '', specification: '', measurements: ['115', '115.2'] },
+    { ...record.rows[0], id: 'width', requirement: '', specification: '', measurements: ['22.23', '22.20'] },
+    { ...record.rows[0], id: 'grit', requirement: '', specification: '', measurements: ['80#', 'P80'] },
+  ]
+  const result = matchRecognizedInspectionToPendingItem(record, [{
+    id: 183,
+    contract_no: 'PO-SPEC-MEASURED',
+    status: 'pending',
+    items: [
+      { id: 831, material_name: '拉绒片', spec_desc: '115 × 22.23mm，P60' },
+      { id: 832, material_name: '拉绒片', spec_desc: '115 × 22.23mm，P80' },
+    ],
+  }])
+
+  assert.equal(result.status, 'matched')
+  assert.equal(result.item?.id, 832)
+})
+
+test('plain grit measurements use the grit row label to uniquely match the order specification', () => {
+  const record = createCompleteRecord()
+  record.orderNumber = 'PO-SPEC-PLAIN-GRIT'
+  record.productType = 'velcro_disc'
+  record.model = ''
+  record.rows = [
+    { ...record.rows[0], id: 'length', item: '页片长度', requirement: '', specification: '', measurements: ['114.8', '115.2'] },
+    { ...record.rows[0], id: 'width', item: '页片宽度', requirement: '', specification: '', measurements: ['22.20', '22.26'] },
+    { ...record.rows[0], id: 'grit', item: '粒度', requirement: '', specification: '', measurements: ['80', '80'] },
+  ]
+  const result = matchRecognizedInspectionToPendingItem(record, [{
+    id: 184,
+    contract_no: 'PO-SPEC-PLAIN-GRIT',
+    status: 'pending',
+    items: [
+      { id: 841, material_name: '拉绒片', spec_desc: '115 × 22.23mm，P60' },
+      { id: 842, material_name: '拉绒片', spec_desc: '115 × 22.23mm，P80' },
+    ],
+  }])
+
+  assert.equal(result.status, 'matched')
+  assert.equal(result.item?.id, 842)
+})
+
+test('recognized row specifications select the order item when the header model is empty', () => {
+  const record = createCompleteRecord()
+  record.orderNumber = 'PO-SPEC-2'
+  record.productType = 'flap_disc'
+  record.model = ''
+  record.rows = [
+    { ...record.rows[0], id: 'diameter', specification: '外径 115 ± 2 mm' },
+    { ...record.rows[0], id: 'bore', specification: '孔径 22.23 ± 0.3 mm' },
+    { ...record.rows[0], id: 'grit', specification: '粒度 80#' },
+  ]
+  const result = matchRecognizedInspectionToPendingItem(record, [{
+    id: 182,
+    contract_no: 'PO-SPEC-2',
+    status: 'pending',
+    items: [
+      { id: 821, material_name: '锆刚玉百叶轮', spec_desc: '115 × 22.23mm，P60，T29' },
+      { id: 822, material_name: '锆刚玉百叶轮', spec_desc: '115 × 22.23mm，P80，T29' },
+    ],
+  }])
+
+  assert.equal(result.status, 'matched')
+  assert.equal(result.task?.id, 182)
+  assert.equal(result.item?.id, 822)
+})
+
+test('recognized contract number matches the quality inspection order contract instead of its task number', () => {
+  const record = createCompleteRecord()
+  record.orderNumber = 'PO-5'
+  record.model = '100x20mm'
+  const result = matchRecognizedInspectionToPendingItem(record, [
+    {
+      id: 21,
+      task_no: 'PO-5',
+      contract_no: 'PO-OTHER',
+      status: 'pending',
+      items: [{ id: 103, material_name: '钢丝刷', spec_desc: '100x20mm' }],
+    },
+    {
+      id: 22,
+      task_no: 'QI-22',
+      contract_no: 'PO-5',
+      status: 'pending',
+      items: [{ id: 104, material_name: '钢丝刷', spec_desc: '100x20mm' }],
+    },
+  ])
+
+  assert.equal(result.status, 'matched')
+  assert.equal(result.task?.id, 22)
+  assert.equal(result.item?.id, 104)
+})
+
+test('recognized contract and product select one quality inspection order when a contract has multiple orders', () => {
+  const record = createCompleteRecord()
+  record.orderNumber = 'PO-6'
+  record.model = '钢丝刷 100x20mm'
+  const result = matchRecognizedInspectionToPendingItem(record, [
+    {
+      id: 23,
+      task_no: 'QI-23',
+      contract_no: 'PO-6',
+      status: 'pending',
+      items: [{ id: 105, material_name: '树脂砂轮', spec_desc: '100x6x16mm' }],
+    },
+    {
+      id: 24,
+      task_no: 'QI-24',
+      contract_no: 'PO-6',
+      status: 'pending',
+      items: [{ id: 106, material_name: '钢丝刷', spec_desc: '100x20mm' }],
+    },
+  ])
+
+  assert.equal(result.status, 'matched')
+  assert.equal(result.task?.id, 24)
+  assert.equal(result.item?.id, 106)
+})
+
+test('recognized product can match an unfinished item after the quality task enters processing', () => {
+  const record = createCompleteRecord()
+  record.orderNumber = 'PO-PROCESSING'
+  record.model = 'P80 / 115 × 22.23 mm'
+  const result = matchRecognizedInspectionToPendingItem(record, [{
+    id: 185,
+    contract_no: 'PO-PROCESSING',
+    status: 'processing',
+    source_type: 'purchase_order',
+    items: [
+      { id: 851, material_name: '拉绒片', spec_desc: '115 × 22.23mm，P60' },
+      { id: 852, material_name: '拉绒片', spec_desc: '115 × 22.23mm，P80' },
+    ],
+  }])
+
+  assert.equal(result.status, 'matched')
+  assert.equal(result.item?.id, 852)
 })
 
 test('recognized order with multiple indistinguishable products stays ambiguous', () => {
@@ -146,7 +310,6 @@ test('recognized report is automatically written to the matched pending product 
     page: 1,
     pageSize: 200,
     search: 'PO-3',
-    status: 'pending',
     sourceType: 'purchase_order',
   })
   assert.equal(result.status, 'matched')
@@ -420,9 +583,11 @@ function createSyncRecord(sourceType: 'standalone' | 'purchase_order' = 'standal
 test('standalone sync matches the corresponding pending order instead of creating a server task', async () => {
   const { syncStoredInspection } = require('../miniprogram/services/quality-inspection-service') as typeof import('../miniprogram/services/quality-inspection-service')
   const calls: string[] = []
+  let listQuery: Record<string, unknown> | null = null
   let savedPayload: QualityInspectionDraftPayload | null = null
   const result = await syncStoredInspection(createSyncRecord(), {
     listTasks: async (query) => {
+      listQuery = query
       calls.push(`list:${query.search}`)
       return {
         items: [{
@@ -450,6 +615,12 @@ test('standalone sync matches the corresponding pending order instead of creatin
     imageToDataUrl: async () => 'data:image/jpeg;base64,YQ==',
   })
   assert.deepEqual(calls, ['list:PO-1', 'draft:20:21'])
+  assert.deepEqual(listQuery, {
+    page: 1,
+    pageSize: 200,
+    search: 'PO-1',
+    sourceType: 'purchase_order',
+  })
   assert.equal(result.syncStatus, 'synced')
   assert.equal(result.sourceType, 'purchase_order')
   assert.equal(result.taskId, 20)
@@ -478,7 +649,7 @@ test('unmatched standalone inspection remains local and never creates a server t
   })
   assert.deepEqual(calls, ['list'])
   assert.equal(result.syncStatus, 'local')
-  assert.equal(result.syncError, '未查到订单 PO-1，质检记录未同步')
+  assert.equal(result.syncError, '未查到采购合同号 PO-1 的待检质检订单')
   assert.equal(result.sourceType, 'standalone')
   assert.equal(result.taskId, null)
   assert.equal(result.itemId, null)
@@ -733,6 +904,31 @@ test('inspection history refresh policy caches normal visits for thirty seconds'
   assert.equal(shouldQueueInspectionHistoryRefresh(false, true, false), false)
 })
 
+
+test('uploadInspectionDraftImage stores the recognized report as a server URL', async () => {
+  const calls: Array<Record<string, unknown>> = []
+  const result = await uploadInspectionDraftImage(
+    10,
+    11,
+    '/tmp/quality-sheet.jpg',
+    async <T>(options: Record<string, unknown>): Promise<T> => {
+      calls.push(options)
+      return {
+        image_url: '/uploads/quality-sheet.jpg',
+        image_path: '/srv/uploads/quality-sheet.jpg',
+      } as T
+    },
+  )
+
+  assert.equal(calls[0].path, '/inquiries/api/upload-image')
+  assert.equal(calls[0].filePath, '/tmp/quality-sheet.jpg')
+  assert.deepEqual(calls[0].formData, {
+    task_id: '10',
+    item_id: '11',
+    row_key: 'quality-sheet',
+  })
+  assert.equal(result.url, 'https://www.binictools.cn:7876/uploads/quality-sheet.jpg')
+})
 
 test('uploadInspectionRowImage sends the row context with the multipart file', async () => {
   const calls: Array<Record<string, unknown>> = []
