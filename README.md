@@ -13,6 +13,7 @@
 - 结合模型置信度与确定性格式检查，显示红色“重点核对”和黄色“建议核对”提示。
 - 支持钢丝刷、拉绒片、树脂砂轮、百叶轮、网格砂和金刚石锯片等报告类型。
 - 读取待检质检订单，以质检单号展示任务，同时保留采购合同、客户、供应商和产品信息，并将审核后的检验草稿回写数据库。
+- 待检工作台将质检单原图和现场验货图片分开保存；现场验货图片只上传到线上验货识别区域，由线上工作台自动识别。
 - 独立报告使用稳定客户端 UUID 幂等创建，网络失败后可安全重试。
 - 合并本地记录与服务器历史记录，支持重新打开、编辑、同步和失败重试。
 - 将检验结果导出为 `inspection-table/v1` JSON 文件并通过微信文件分享。
@@ -42,7 +43,10 @@
 3. 展开质检订单并选择具体待检产品，客户、供应商、物料、规格、数量和日期等线上信息会预填到检验工作台。
 4. 图片识别出的合同号只与质检订单的采购合同号匹配，不会拿质检单号或来源审核号冒充合同号。
 5. 同一采购合同存在多个质检订单时，继续结合产品和规格唯一匹配；无法唯一确定时保留本地记录并提示人工处理。
-6. 识别并审核报告后，结果保存到对应质检订单和产品明细的质检草稿中。
+6. 质检单原图保存到 `record_source_images`，用于尺寸、安全性能等质检单识别与来源追溯。
+7. 现场验货图片上传后保存到 `ai_workbench_images`，同时写入 `visual_recognition_request.status = pending`。
+8. 小程序不调用验货图片 AI 识别接口，也不在本地分类；线上 React 验货工作台恢复待处理图片后自动触发识别。
+9. 识别并审核报告后，结果保存到对应质检订单和产品明细的质检草稿中。
 
 ### 4. 识别记录
 
@@ -62,10 +66,14 @@ flowchart LR
   API --> AUTH["登录与 Session"]
   API --> QI["采购单与质检接口"]
   QI --> DB["业务数据库"]
+  QI --> WEB["线上验货工作台"]
+  WEB --> MODEL["视觉模型服务"]
   MP -. "临时直连" .-> MODEL["视觉模型服务"]
 ```
 
 业务接口与大模型识别地址已分开配置。由于线上识别代理尚未提供，当前小程序临时直接调用视觉模型服务；识别代理上线后应恢复由 HTTPS 业务后端代理模型调用，避免长期在小程序侧保存模型访问配置。
+
+待检工作台中的现场验货图片采用不同链路：小程序只负责选择、压缩、上传和保存，不提交验货 AI 识别；线上 React 工作台读取 `ai_workbench_images` 和待处理标记后自动调用验货识别。质检单识别原图始终单独保存在 `record_source_images`，不得与现场验货图片混用。
 
 ## 技术栈
 
@@ -211,6 +219,7 @@ export const RECOGNITION_API_URL = 'https://www.binictools.cn:7876/api/miniprogr
 | `GET /customer-orders/api/purchase-orders/quality-inspections/{taskId}` | 读取任务及明细详情 |
 | `POST /customer-orders/api/quality-inspections/standalone` | 幂等创建独立质检任务和明细 |
 | `POST /customer-orders/api/purchase-orders/quality-inspections/{taskId}/items/{itemId}/draft` | 保存质检草稿和报告图片 |
+| `POST /inquiries/api/upload-image` | 上传质检单原图、现场验货图片或检验条目照片，返回线上图片 URL |
 | `GET /customer-orders/api/purchase-orders/quality-inspections/history-records` | 读取采购与独立报告的服务器历史记录 |
 
 质检订单列表会固定请求采购来源，并在每次进入待检页或页面恢复显示时强制刷新线上数据；历史记录接口使用 `source_type=all` 合并采购报告与独立报告。
@@ -246,8 +255,10 @@ export const RECOGNITION_API_URL = 'https://www.binictools.cn:7876/api/miniprogr
 
 1. 用户选择质检订单和待检产品明细。
 2. 小程序从线上详情接口读取最新任务、产品、模板和已有草稿，预填检验工作台。
-3. 识别、审核并本地保存；识别合同号按采购合同号关联质检订单。
-4. 小程序直接向所选 `taskId`、`itemId` 保存质检草稿。
+3. 质检单图片经小程序现有质检单识别链路回填表格，原图保存到 `record_source_images`。
+4. 现场验货图片上传到线上后写入 `ai_workbench_images`，小程序保存 `visual_recognition_request` 待处理标记，但不提交验货识别。
+5. 线上 React 验货工作台读取待处理图片并自动识别，将图片分类和判定结果回写草稿。
+6. 小程序直接向所选 `taskId`、`itemId` 保存质检草稿；识别合同号按采购合同号关联质检订单。
 
 ### 独立报告
 

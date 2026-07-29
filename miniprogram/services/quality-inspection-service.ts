@@ -87,6 +87,7 @@ export interface QualityInspectionDraftPayload {
   records?: QualityInspectionDraftRecord[]
   ai_workbench_result: Record<string, unknown>
   ai_workbench_images: string[]
+  record_source_images?: string[]
   record_merge_mode: QualityInspectionRecordMergeMode
   saved_at?: string
 }
@@ -112,12 +113,24 @@ export interface QualityInspectionProductPairDto {
 
 export interface QualityInspectionMasterProductDto {
   category?: string | null
+  category_name?: string | null
+  master_category_name?: string | null
+  product_category?: string | null
+  category_label?: string | null
   subcategory?: string | null
+  subcategory_name?: string | null
+  master_subcategory_name?: string | null
+  product_subcategory?: string | null
+  subcategory_label?: string | null
   name?: string | null
   master_code?: string | null
   spec_pairs?: QualityInspectionProductPairDto[]
   attribute_pairs?: QualityInspectionProductPairDto[]
   grade_pairs?: QualityInspectionProductPairDto[]
+  image_paths?: string[]
+  packaging_images?: string[]
+  technical_spec_sheet_paths?: string[]
+  tray_image_paths?: string[]
   [key: string]: unknown
 }
 
@@ -155,12 +168,15 @@ export function listProductQualityTemplates(
 }
 
 export interface QualityInspectionCustomerProductDto {
+  customer_name?: string | null
   brand_type?: string | null
   product_trademark?: string | null
   trademark_method?: string | null
   packaging_method?: string | null
   extra_info_text?: string | null
   extra_info_attachments?: unknown[]
+  spec_description?: string | null
+  customer_images?: string[]
   [key: string]: unknown
 }
 
@@ -1034,6 +1050,30 @@ export async function uploadInspectionDraftImage(
   })
   const url = normalizeUploadedImageUrl(uploaded.image_url || '')
   if (!url) throw new Error('服务器未返回质检单图片地址，请重试')
+  return {
+    id: String(uploaded.image_path || url),
+    url,
+  }
+}
+
+export async function uploadInspectionWorkbenchImage(
+  taskId: number,
+  itemId: number,
+  preparedFilePath: string,
+  upload: QualityUpload = serverUpload,
+): Promise<InspectionRowImageUploadResult> {
+  const uploaded = await upload<GenericImageUploadResult>({
+    path: '/inquiries/api/upload-image',
+    filePath: preparedFilePath,
+    name: 'file',
+    formData: {
+      task_id: String(taskId),
+      item_id: String(itemId),
+      row_key: 'ai-workbench',
+    },
+  })
+  const url = normalizeUploadedImageUrl(uploaded.image_url || '')
+  if (!url) throw new Error('服务器未返回验货图片地址，请重试')
   return {
     id: String(uploaded.image_path || url),
     url,

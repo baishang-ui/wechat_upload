@@ -251,7 +251,8 @@ test('workbenchToDraft preserves online rows and only serializes uploaded photo 
     },
     rawContent: 'OCR RAW',
     unmatched,
-    reportImages: ['data:image/jpeg;base64,YQ=='],
+    qualitySheetImages: ['https://files.example.com/quality-sheet.jpg'],
+    inspectionImages: ['https://files.example.com/inspection.jpg'],
   })
 
   assert.equal(draft.record_merge_mode, 'workbench')
@@ -263,7 +264,8 @@ test('workbenchToDraft preserves online rows and only serializes uploaded photo 
   assert.equal(draft.ai_workbench_result.template_id, 'tpl-steel-brush')
   assert.equal(draft.ai_workbench_result.template_version, '3')
   assert.deepEqual(draft.ai_workbench_result.unmatched_recognition_rows, unmatched)
-  assert.deepEqual(draft.ai_workbench_images, ['data:image/jpeg;base64,YQ=='])
+  assert.deepEqual(draft.record_source_images, ['https://files.example.com/quality-sheet.jpg'])
+  assert.deepEqual(draft.ai_workbench_images, ['https://files.example.com/inspection.jpg'])
 })
 
 
@@ -446,6 +448,21 @@ test('online item detail follows the Web report matcher instead of a separate da
   ])
 })
 
+test('online report matcher accepts renamed master category fields', () => {
+  const template = buildOnlineInspectionTemplate({
+    task: { id: 12, task_no: 'QI-12' },
+    item: { id: 34, material_name: '钢丝刷' },
+    master_product: {
+      category_name: 'WB',
+      subcategory_label: '曲丝钢丝刷',
+      name: '钢丝刷',
+    },
+    customer_product: {},
+  })
+
+  assert.equal(template.template_id, 'online-report:wire_brush')
+})
+
 test('online item detail falls back to the same generic report used by the online Web workbench', () => {
   const template = buildOnlineInspectionTemplate({
     task: { id: 12, task_no: 'QI-12' },
@@ -462,14 +479,65 @@ test('online item detail falls back to the same generic report used by the onlin
 
   assert.equal(template.template_id, 'online-report:generic')
   assert.deepEqual(template.rows.map((row) => row.project), [
-    '产品外观',
-    '包装方式',
+    '产品本体（正面/反面）',
     '关键尺寸',
     '产品安全性',
     '产品性能',
   ])
   assert.equal(template.rows[0].input_mode, 'manual_photo')
-  assert.equal(template.rows[2].input_mode, 'ocr_measurement')
+  assert.equal(template.rows[1].input_mode, 'ocr_measurement')
+})
+
+test('online formal report uses the same appearance and packaging rows as the Web workbench', () => {
+  const template = buildOnlineInspectionTemplate({
+    task: { id: 13, task_no: 'QI-13' },
+    item: { id: 35, material_name: '未配置模板产品' },
+    master_product: {
+      category: 'NEW',
+      subcategory: '全新品类',
+    },
+    customer_product: {
+      packaging_method: '彩盒',
+      extra_info_text: [
+        '最小包装：彩盒，每盒1片',
+        '内盒：每盒10片',
+        '外箱：每箱20盒',
+        '外箱标签：按客户图稿',
+      ].join('；'),
+    },
+  })
+
+  const appearance = template.rows.find((row) => row.group_title === '产品外观')
+  assert.equal(template.title, '通用来料检验记录单')
+  assert.equal(appearance?.project, '产品本体（正面/反面）')
+  assert.equal(appearance?.method, '实拍与客户设计稿对比')
+  assert.equal(
+    appearance?.standard,
+    '正面、反面分别拍照；核对产品结构、客户设计稿、商标文字、图案、印刷位置及颜色；同时检查无裂纹、破损、变形、褶皱、孔环偏移、网片缺失、偏色和漏印刷',
+  )
+  assert.deepEqual(
+    template.rows
+      .filter((row) => row.group_title === '产品包装')
+      .map((row) => row.project),
+    ['最小包装', '内盒', '外箱'],
+  )
+  assert.ok(template.rows
+    .filter((row) => row.group_title === '产品包装')
+    .every((row) => row.method === '实拍与客户资料对比'))
+  assert.match(
+    template.rows.find((row) => row.project === '最小包装')?.standard || '',
+    /核对最小包装形式和数量/,
+  )
+  assert.match(
+    template.rows.find((row) => row.project === '内盒')?.standard || '',
+    /核对内盒包装数量/,
+  )
+  assert.match(
+    template.rows.find((row) => row.project === '外箱')?.standard || '',
+    /外箱正唛、侧唛/,
+  )
+  assert.equal(template.rows.some((row) => row.project === '包装方式'), false)
+  assert.equal(template.rows.some((row) => row.project === '外箱标签'), false)
 })
 
 
@@ -497,7 +565,7 @@ test('online web report matcher selects the velcro sanding disc table from a sta
   assert.equal(template.template_id, 'online-report:velcro_sanding_disc')
   assert.equal(template.version, 'online-web/QualityInspectionWorkbench/formal-v1')
   assert.deepEqual(template.rows.map((row) => row.project), [
-    '产品外观',
+    '产品本体（正面/反面）',
     '长度',
     '宽度',
     '直径',
@@ -608,7 +676,7 @@ test('online Web resin report adds master QC rows before deduplicating template 
   assert.equal(template.template_id, 'online-report:resin_cutting_disc')
   assert.deepEqual(template.rows
     .filter((row) => row.group_title === '产品外观')
-    .map((row) => row.project), ['产品外观'])
+    .map((row) => row.project), ['产品本体（正面/反面）'])
   assert.equal(template.rows.filter((row) => row.project === '外径').length, 1)
   assert.equal(template.rows.find((row) => row.project === '外径')?.standard, '115 mm')
   assert.equal(template.rows.find((row) => row.project === '孔径')?.standard, '22.23 mm')
@@ -734,7 +802,7 @@ test('recognition maps product appearance and page-blade shorthand into formal r
     { id: 'api-row-3', groupTitle: '产品尺寸', item: '页片宽(㎜)', value: '16.0' },
   ]))
 
-  assert.equal(result.rows.find((row) => row.project === '产品外观')?.measurements[0], '✓')
+  assert.equal(result.rows.find((row) => row.project === '产品本体（正面/反面）')?.measurements[0], '✓')
   assert.equal(result.rows.find((row) => row.project === '页片长度')?.measurements[0], '18.0')
   assert.equal(result.rows.find((row) => row.project === '页片宽度')?.measurements[0], '16.0')
   assert.equal(result.unmatched.length, 0)
@@ -866,7 +934,8 @@ test('duplicate database row keys keep page blade length decision isolated from 
     },
     rawContent: '',
     unmatched: [],
-    reportImages: [],
+    qualitySheetImages: [],
+    inspectionImages: [],
   }
   const lengthRows = updateWorkbenchRowField(workbench.rows, length.rowKey, 'decision', 'OK')
   const lengthDraft = workbenchToDraft({ ...workbench, rows: lengthRows }, draftOptions)
@@ -1011,7 +1080,8 @@ test('database flap-disc template keeps length width and appearance row keys ali
       },
       rawContent: '',
       unmatched: [],
-      reportImages: [],
+      qualitySheetImages: [],
+      inspectionImages: [],
     },
   )
   const byKey = new Map(draft.inspection_records.map((row) => [row.row_key, row]))

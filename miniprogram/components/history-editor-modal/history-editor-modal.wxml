@@ -10,28 +10,6 @@
       <view class="history-close" bindtap="requestClose" aria-label="关闭" role="button" hover-class="history-close--pressed" hover-stay-time="120">×</view>
     </view>
 
-    <view class="shared-inline-editor {{activeEditorVisible ? 'is-active' : ''}} {{activeEditMultiline ? 'is-multiline' : ''}}">
-      <view class="shared-inline-editor-label">{{activeEditLabel}}</view>
-      <view class="shared-inline-editor-control">
-        <textarea
-          wx:if="{{drawerMounted && activeEditorVisible}}"
-          class="shared-inline-editor-input"
-          value="{{activeEditValue}}"
-          focus="{{activeEditorFocused}}"
-          hold-keyboard="{{true}}"
-          adjust-position="{{false}}"
-          show-confirm-bar="{{false}}"
-          disable-default-padding
-          maxlength="-1"
-          confirm-type="done"
-          bindinput="onSharedEditorInput"
-          bindblur="onSharedEditorBlur"
-          bindconfirm="confirmSharedEditor"
-        ></textarea>
-        <view class="shared-inline-editor-done" role="button" bindtap="confirmSharedEditor">完成</view>
-      </view>
-    </view>
-
     <scroll-view wx:if="{{drawerMounted}}" class="history-modal-body" scroll-y enhanced show-scrollbar="{{false}}">
       <view wx:if="{{loading}}" class="modal-state-card">
         <view class="modal-state-title">正在加载质检记录</view>
@@ -60,40 +38,47 @@
               <view class="section-description">可直接修改以下报告信息。</view>
             </view>
           </view>
-          <view class="detail-field detail-field--wide">
+          <view class="form-field detail-field detail-field--wide">
             <text class="field-label">产品类型</text>
             <view class="product-selector">
               <view wx:for="{{productLabels}}" wx:key="*this" class="product-option {{productIndex === index ? 'is-active' : ''}}" data-product-index="{{index}}" bindtap="selectProductType">{{item}}</view>
             </view>
           </view>
           <view class="detail-grid">
-            <view class="detail-field">
+            <view class="form-field detail-field">
               <text class="field-label">客户 *</text>
-              <view class="inline-edit-value {{activeEditKind === 'record' && activeEditField === 'customer' ? 'is-active' : ''}}" data-field="customer" data-label="客户" bindtap="beginRecordEdit" role="button">{{record.customer || '—'}}</view>
+              <textarea wx:if="{{activeEditKind === 'record' && activeEditField === 'customer'}}" class="inline-edit-input" style="height: {{activeEditorHeight}}rpx;" value="{{activeEditValue}}" focus="{{activeEditorFocused}}" hold-keyboard="{{true}}" adjust-position="{{false}}" show-confirm-bar="{{false}}" disable-default-padding maxlength="-1" confirm-type="done" bindinput="onInlineEditorInput" bindblur="onInlineEditorBlur" bindconfirm="confirmInlineEditor"></textarea>
+              <view wx:else id="history-editor-record-customer" class="inline-edit-value" data-field="customer" bindtap="beginRecordEdit" role="button">{{record.customer || '—'}}</view>
             </view>
-            <view class="detail-field">
+            <view class="form-field detail-field">
               <text class="field-label">供应商 *</text>
-              <view class="inline-edit-value {{activeEditKind === 'record' && activeEditField === 'supplier' ? 'is-active' : ''}}" data-field="supplier" data-label="供应商" bindtap="beginRecordEdit" role="button">{{record.supplier || '—'}}</view>
+              <textarea wx:if="{{activeEditKind === 'record' && activeEditField === 'supplier'}}" class="inline-edit-input" style="height: {{activeEditorHeight}}rpx;" value="{{activeEditValue}}" focus="{{activeEditorFocused}}" hold-keyboard="{{true}}" adjust-position="{{false}}" show-confirm-bar="{{false}}" disable-default-padding maxlength="-1" confirm-type="done" bindinput="onInlineEditorInput" bindblur="onInlineEditorBlur" bindconfirm="confirmInlineEditor"></textarea>
+              <view wx:else id="history-editor-record-supplier" class="inline-edit-value" data-field="supplier" bindtap="beginRecordEdit" role="button">{{record.supplier || '—'}}</view>
             </view>
-            <view class="detail-field">
+            <view class="form-field detail-field">
               <text class="field-label">商标</text>
-              <view class="inline-edit-value {{activeEditKind === 'record' && activeEditField === 'trademark' ? 'is-active' : ''}}" data-field="trademark" data-label="商标" bindtap="beginRecordEdit" role="button">{{record.trademark || '—'}}</view>
+              <textarea wx:if="{{activeEditKind === 'record' && activeEditField === 'trademark'}}" class="inline-edit-input" style="height: {{activeEditorHeight}}rpx;" value="{{activeEditValue}}" focus="{{activeEditorFocused}}" hold-keyboard="{{true}}" adjust-position="{{false}}" show-confirm-bar="{{false}}" disable-default-padding maxlength="-1" confirm-type="done" bindinput="onInlineEditorInput" bindblur="onInlineEditorBlur" bindconfirm="confirmInlineEditor"></textarea>
+              <view wx:else id="history-editor-record-trademark" class="inline-edit-value" data-field="trademark" bindtap="beginRecordEdit" role="button">{{record.trademark || '—'}}</view>
             </view>
-            <view class="detail-field">
+            <view class="form-field detail-field">
               <text class="field-label">采购合同号</text>
-              <view class="inline-edit-value {{activeEditKind === 'record' && activeEditField === 'orderNumber' ? 'is-active' : ''}}" data-field="orderNumber" data-label="采购合同号" bindtap="beginRecordEdit" role="button">{{record.orderNumber || '—'}}</view>
+              <textarea wx:if="{{activeEditKind === 'record' && activeEditField === 'orderNumber'}}" class="inline-edit-input" style="height: {{activeEditorHeight}}rpx;" value="{{activeEditValue}}" focus="{{activeEditorFocused}}" hold-keyboard="{{true}}" adjust-position="{{false}}" show-confirm-bar="{{false}}" disable-default-padding maxlength="-1" confirm-type="done" bindinput="onInlineEditorInput" bindblur="onInlineEditorBlur" bindconfirm="confirmInlineEditor"></textarea>
+              <view wx:else id="history-editor-record-orderNumber" class="inline-edit-value" data-field="orderNumber" bindtap="beginRecordEdit" role="button">{{record.orderNumber || '—'}}</view>
             </view>
-            <view class="detail-field">
+            <view class="form-field detail-field">
               <text class="field-label">型号/规格 *</text>
-              <view class="inline-edit-value {{activeEditKind === 'record' && activeEditField === 'model' ? 'is-active' : ''}}" data-field="model" data-label="型号/规格" bindtap="beginRecordEdit" role="button">{{record.model || '—'}}</view>
+              <textarea wx:if="{{activeEditKind === 'record' && activeEditField === 'model'}}" class="inline-edit-input" style="height: {{activeEditorHeight}}rpx;" value="{{activeEditValue}}" focus="{{activeEditorFocused}}" hold-keyboard="{{true}}" adjust-position="{{false}}" show-confirm-bar="{{false}}" disable-default-padding maxlength="-1" confirm-type="done" bindinput="onInlineEditorInput" bindblur="onInlineEditorBlur" bindconfirm="confirmInlineEditor"></textarea>
+              <view wx:else id="history-editor-record-model" class="inline-edit-value" data-field="model" bindtap="beginRecordEdit" role="button">{{record.model || '—'}}</view>
             </view>
-            <view class="detail-field">
+            <view class="form-field detail-field">
               <text class="field-label">到货数量</text>
-              <view class="inline-edit-value {{activeEditKind === 'record' && activeEditField === 'arrivalQuantity' ? 'is-active' : ''}}" data-field="arrivalQuantity" data-label="到货数量" bindtap="beginRecordEdit" role="button">{{record.arrivalQuantity || '—'}}</view>
+              <textarea wx:if="{{activeEditKind === 'record' && activeEditField === 'arrivalQuantity'}}" class="inline-edit-input" style="height: {{activeEditorHeight}}rpx;" value="{{activeEditValue}}" focus="{{activeEditorFocused}}" hold-keyboard="{{true}}" adjust-position="{{false}}" show-confirm-bar="{{false}}" disable-default-padding maxlength="-1" confirm-type="done" bindinput="onInlineEditorInput" bindblur="onInlineEditorBlur" bindconfirm="confirmInlineEditor"></textarea>
+              <view wx:else id="history-editor-record-arrivalQuantity" class="inline-edit-value" data-field="arrivalQuantity" bindtap="beginRecordEdit" role="button">{{record.arrivalQuantity || '—'}}</view>
             </view>
-            <view class="detail-field detail-field--wide">
+            <view class="form-field detail-field detail-field--wide">
               <text class="field-label">检验日期 *</text>
-              <view class="inline-edit-value {{activeEditKind === 'record' && activeEditField === 'inspectionDate' ? 'is-active' : ''}}" data-field="inspectionDate" data-label="检验日期" bindtap="beginRecordEdit" role="button">{{record.inspectionDate || '—'}}</view>
+              <textarea wx:if="{{activeEditKind === 'record' && activeEditField === 'inspectionDate'}}" class="inline-edit-input" style="height: {{activeEditorHeight}}rpx;" value="{{activeEditValue}}" focus="{{activeEditorFocused}}" hold-keyboard="{{true}}" adjust-position="{{false}}" show-confirm-bar="{{false}}" disable-default-padding maxlength="-1" confirm-type="done" bindinput="onInlineEditorInput" bindblur="onInlineEditorBlur" bindconfirm="confirmInlineEditor"></textarea>
+              <view wx:else id="history-editor-record-inspectionDate" class="inline-edit-value" data-field="inspectionDate" bindtap="beginRecordEdit" role="button">{{record.inspectionDate || '—'}}</view>
             </view>
           </view>
         </view>
@@ -117,23 +102,30 @@
               </view>
               <view wx:if="{{expandedRowIndex === rowItem.rowIndex}}" class="inspection-item-details">
                 <view class="row-field-grid">
-                  <view class="row-field">
+                  <view class="form-field row-field">
                     <text class="field-label">检验项目</text>
-                    <view class="inline-edit-value {{activeEditKind === 'row' && activeEditRowIndex === rowItem.rowIndex && activeEditField === 'item' ? 'is-active' : ''}}" data-row-index="{{rowItem.rowIndex}}" data-field="item" data-label="检验项目" bindtap="beginRowFieldEdit" role="button">{{rowItem.row.item || '—'}}</view>
+                    <textarea wx:if="{{activeEditKind === 'row' && activeEditRowIndex === rowItem.rowIndex && activeEditField === 'item'}}" class="inline-edit-input" style="height: {{activeEditorHeight}}rpx;" value="{{activeEditValue}}" focus="{{activeEditorFocused}}" hold-keyboard="{{true}}" adjust-position="{{false}}" show-confirm-bar="{{false}}" disable-default-padding maxlength="-1" confirm-type="done" bindinput="onInlineEditorInput" bindblur="onInlineEditorBlur" bindconfirm="confirmInlineEditor"></textarea>
+                    <view wx:else id="history-editor-row-{{rowItem.rowIndex}}-item" class="inline-edit-value" data-row-index="{{rowItem.rowIndex}}" data-field="item" bindtap="beginRowFieldEdit" role="button">{{rowItem.row.item || '—'}}</view>
                   </view>
-                  <view class="row-field">
+                  <view class="form-field row-field">
                     <text class="field-label">标准要求</text>
-                    <view class="inline-edit-value {{activeEditKind === 'row' && activeEditRowIndex === rowItem.rowIndex && activeEditField === 'requirement' ? 'is-active' : ''}}" data-row-index="{{rowItem.rowIndex}}" data-field="requirement" data-label="标准要求" bindtap="beginRowFieldEdit" role="button">{{rowItem.row.requirement || '—'}}</view>
+                    <textarea wx:if="{{activeEditKind === 'row' && activeEditRowIndex === rowItem.rowIndex && activeEditField === 'requirement'}}" class="inline-edit-input" style="height: {{activeEditorHeight}}rpx;" value="{{activeEditValue}}" focus="{{activeEditorFocused}}" hold-keyboard="{{true}}" adjust-position="{{false}}" show-confirm-bar="{{false}}" disable-default-padding maxlength="-1" confirm-type="done" bindinput="onInlineEditorInput" bindblur="onInlineEditorBlur" bindconfirm="confirmInlineEditor"></textarea>
+                    <view wx:else id="history-editor-row-{{rowItem.rowIndex}}-requirement" class="inline-edit-value" data-row-index="{{rowItem.rowIndex}}" data-field="requirement" bindtap="beginRowFieldEdit" role="button">{{rowItem.row.requirement || '—'}}</view>
                   </view>
-                  <view class="row-field row-field--wide">
+                  <view class="form-field row-field row-field--wide">
                     <text class="field-label">规格</text>
-                    <view class="inline-edit-value {{activeEditKind === 'row' && activeEditRowIndex === rowItem.rowIndex && activeEditField === 'specification' ? 'is-active' : ''}}" data-row-index="{{rowItem.rowIndex}}" data-field="specification" data-label="规格" bindtap="beginRowFieldEdit" role="button">{{rowItem.row.specification || '—'}}</view>
+                    <textarea wx:if="{{activeEditKind === 'row' && activeEditRowIndex === rowItem.rowIndex && activeEditField === 'specification'}}" class="inline-edit-input" style="height: {{activeEditorHeight}}rpx;" value="{{activeEditValue}}" focus="{{activeEditorFocused}}" hold-keyboard="{{true}}" adjust-position="{{false}}" show-confirm-bar="{{false}}" disable-default-padding maxlength="-1" confirm-type="done" bindinput="onInlineEditorInput" bindblur="onInlineEditorBlur" bindconfirm="confirmInlineEditor"></textarea>
+                    <view wx:else id="history-editor-row-{{rowItem.rowIndex}}-specification" class="inline-edit-value" data-row-index="{{rowItem.rowIndex}}" data-field="specification" bindtap="beginRowFieldEdit" role="button">{{rowItem.row.specification || '—'}}</view>
                   </view>
                 </view>
+                <view class="detail-label detail-label--spaced">实测值</view>
                 <view class="measurement-grid">
-                  <view wx:for="{{rowItem.row.measurements}}" wx:key="index" wx:for-item="measurement" wx:for-index="measurementIndex" class="measurement-cell {{activeEditKind === 'measurement' && activeEditRowIndex === rowItem.rowIndex && activeEditMeasurementIndex === measurementIndex ? 'is-active' : ''}}" data-row-index="{{rowItem.rowIndex}}" data-measurement-index="{{measurementIndex}}" bindtap="beginMeasurementEdit" role="button">
-                    <text class="measurement-label">样本 {{measurementIndex + 1}}</text>
-                    <text class="measurement-value">{{measurement || '—'}}</text>
+                  <view wx:for="{{rowItem.row.measurements}}" wx:key="index" wx:for-item="measurement" wx:for-index="measurementIndex" class="measurement-field">
+                    <text class="measurement-label">{{measurementIndex + 1}}</text>
+                    <input wx:if="{{activeEditKind === 'measurement' && activeEditRowIndex === rowItem.rowIndex && activeEditMeasurementIndex === measurementIndex}}" class="measurement-input" value="{{activeEditValue}}" focus="{{activeEditorFocused}}" hold-keyboard="{{true}}" adjust-position="{{false}}" maxlength="-1" confirm-type="done" bindinput="onInlineEditorInput" bindblur="onInlineEditorBlur" bindconfirm="confirmInlineEditor" />
+                    <view wx:else class="measurement-display" data-row-index="{{rowItem.rowIndex}}" data-measurement-index="{{measurementIndex}}" bindtap="beginMeasurementEdit" role="button">
+                      <text class="measurement-value">{{measurement || '—'}}</text>
+                    </view>
                   </view>
                 </view>
               </view>
@@ -153,17 +145,20 @@
         <view class="editor-card">
           <view class="section-title">补充信息</view>
           <view class="detail-grid supplemental-grid">
-            <view class="detail-field detail-field--wide notes-field">
+            <view class="form-field detail-field detail-field--wide notes-field">
               <text class="field-label">备注</text>
-              <view class="inline-edit-value notes-value {{activeEditKind === 'record' && activeEditField === 'notes' ? 'is-active' : ''}}" data-field="notes" data-label="备注" bindtap="beginRecordEdit" role="button">{{record.notes || '—'}}</view>
+              <textarea wx:if="{{activeEditKind === 'record' && activeEditField === 'notes'}}" class="inline-edit-input" style="height: {{activeEditorHeight}}rpx;" value="{{activeEditValue}}" focus="{{activeEditorFocused}}" hold-keyboard="{{true}}" adjust-position="{{false}}" show-confirm-bar="{{false}}" disable-default-padding maxlength="-1" bindinput="onInlineEditorInput" bindblur="onInlineEditorBlur"></textarea>
+              <view wx:else id="history-editor-record-notes" class="inline-edit-value notes-value" data-field="notes" bindtap="beginRecordEdit" role="button">{{record.notes || '—'}}</view>
             </view>
-            <view class="detail-field">
+            <view class="form-field detail-field">
               <text class="field-label">审核人</text>
-              <view class="inline-edit-value {{activeEditKind === 'record' && activeEditField === 'reviewer' ? 'is-active' : ''}}" data-field="reviewer" data-label="审核人" bindtap="beginRecordEdit" role="button">{{record.reviewer || '—'}}</view>
+              <textarea wx:if="{{activeEditKind === 'record' && activeEditField === 'reviewer'}}" class="inline-edit-input" style="height: {{activeEditorHeight}}rpx;" value="{{activeEditValue}}" focus="{{activeEditorFocused}}" hold-keyboard="{{true}}" adjust-position="{{false}}" show-confirm-bar="{{false}}" disable-default-padding maxlength="-1" confirm-type="done" bindinput="onInlineEditorInput" bindblur="onInlineEditorBlur" bindconfirm="confirmInlineEditor"></textarea>
+              <view wx:else id="history-editor-record-reviewer" class="inline-edit-value" data-field="reviewer" bindtap="beginRecordEdit" role="button">{{record.reviewer || '—'}}</view>
             </view>
-            <view class="detail-field">
+            <view class="form-field detail-field">
               <text class="field-label">检验员</text>
-              <view class="inline-edit-value {{activeEditKind === 'record' && activeEditField === 'inspector' ? 'is-active' : ''}}" data-field="inspector" data-label="检验员" bindtap="beginRecordEdit" role="button">{{record.inspector || '—'}}</view>
+              <textarea wx:if="{{activeEditKind === 'record' && activeEditField === 'inspector'}}" class="inline-edit-input" style="height: {{activeEditorHeight}}rpx;" value="{{activeEditValue}}" focus="{{activeEditorFocused}}" hold-keyboard="{{true}}" adjust-position="{{false}}" show-confirm-bar="{{false}}" disable-default-padding maxlength="-1" confirm-type="done" bindinput="onInlineEditorInput" bindblur="onInlineEditorBlur" bindconfirm="confirmInlineEditor"></textarea>
+              <view wx:else id="history-editor-record-inspector" class="inline-edit-value" data-field="inspector" bindtap="beginRecordEdit" role="button">{{record.inspector || '—'}}</view>
             </view>
           </view>
         </view>

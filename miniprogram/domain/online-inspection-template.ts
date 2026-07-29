@@ -19,7 +19,15 @@ interface OnlinePairDto {
 
 interface OnlineMasterProductDto {
   category?: unknown
+  category_name?: unknown
+  master_category_name?: unknown
+  product_category?: unknown
+  category_label?: unknown
   subcategory?: unknown
+  subcategory_name?: unknown
+  master_subcategory_name?: unknown
+  product_subcategory?: unknown
+  subcategory_label?: unknown
   name?: unknown
   master_code?: unknown
   spec_pairs?: OnlinePairDto[]
@@ -70,6 +78,26 @@ const ONLINE_COLUMNS: InspectionTemplateColumnDto[] = [
 
 function text(value: unknown): string {
   return value === null || value === undefined ? '' : String(value).trim()
+}
+
+function masterCategory(master: OnlineMasterProductDto): string {
+  return [
+    master.category,
+    master.category_name,
+    master.master_category_name,
+    master.product_category,
+    master.category_label,
+  ].map(text).find(Boolean) || ''
+}
+
+function masterSubcategory(master: OnlineMasterProductDto): string {
+  return [
+    master.subcategory,
+    master.subcategory_name,
+    master.master_subcategory_name,
+    master.product_subcategory,
+    master.subcategory_label,
+  ].map(text).find(Boolean) || ''
 }
 
 interface OnlineProductInspectionTemplate {
@@ -183,12 +211,12 @@ function buildCustomerRequirementRows(customer: OnlineCustomerProductDto): Onlin
 
 function findOnlineProductTemplate(detail: OnlineInspectionDetailLike): OnlineProductInspectionTemplate {
   const master = detail.master_product || {}
-  const exactKey = SUBCATEGORY_TEMPLATE_KEYS[text(master.subcategory)]
+  const exactKey = SUBCATEGORY_TEMPLATE_KEYS[masterSubcategory(master)]
   const exact = PRODUCT_INSPECTION_TEMPLATES.find((template) => template.key === exactKey)
   if (exact) return exact
   const haystack = [
-    master.category,
-    master.subcategory,
+    masterCategory(master),
+    masterSubcategory(master),
     master.name,
     detail.item.material_name,
     detail.item.spec_desc,
@@ -361,10 +389,10 @@ function formatInspectionRpm(diameterValue: unknown, safetySpeedValue: unknown, 
 }
 
 function isResinWheelProduct(master: OnlineMasterProductDto, item: OnlineInspectionItemDto): boolean {
-  const category = text(master.category).toUpperCase()
+  const category = masterCategory(master).toUpperCase()
   const productText = [
-    master.category,
-    master.subcategory,
+    masterCategory(master),
+    masterSubcategory(master),
     master.name,
     master.master_code,
     item.material_code,
@@ -554,8 +582,13 @@ function formalReportVariant(template: OnlineProductInspectionTemplate): FormalR
   return FORMAL_REPORT_VARIANTS.generic
 }
 
-const FORMAL_APPEARANCE_STANDARD = '正反面无裂纹、破损、变形；商标无褶皱，孔环无偏移；网片无缺失；商标印刷颜色正确，无偏色、漏印刷'
-const FORMAL_PACKAGING_PATTERN = /包装|吸塑|内盒|中盒|外箱|装箱|装盒|条码|标签|标贴|唛头|托盘|缠绕膜|打包带|每盒|每箱/
+const FORMAL_APPEARANCE_STANDARD = '正面、反面分别拍照；核对产品结构、客户设计稿、商标文字、图案、印刷位置及颜色；同时检查无裂纹、破损、变形、褶皱、孔环偏移、网片缺失、偏色和漏印刷'
+const FORMAL_PACKAGING_LEVELS = ['最小包装', '内盒', '外箱'] as const
+const FORMAL_PACKAGING_CHECK_STANDARDS: Record<typeof FORMAL_PACKAGING_LEVELS[number], string> = {
+  最小包装: '核对最小包装形式和数量，并逐项比对设计稿、标贴、印刷内容及颜色是否正确',
+  内盒: '核对内盒包装数量，并逐项比对包装印刷、标贴内容及颜色是否正确',
+  外箱: '核对外箱包装数量，并逐项比对外箱正唛、侧唛、印刷和标贴是否正确',
+}
 
 function formalRowKey(templateKey: string, section: string, label: string): string {
   return `online-formal:${templateKey}:${section}:${canonicalInspectionLabel(label)}`
@@ -564,24 +597,20 @@ function formalRowKey(templateKey: string, section: string, label: string): stri
 function buildFormalPackagingRows(customer: OnlineCustomerProductDto): Array<{ label: string; standard: string; method: string; aliases: string[] }> {
   const rows: Array<{ label: string; standard: string; method: string; aliases: string[] }> = []
   const seen = new Set<string>()
-  const push = (label: string, standard: unknown, method = '核对客户产品资料') => {
-    const safeLabel = text(label)
-    const safeStandard = safeInspectionText(standard)
-    const key = `${safeLabel}-${safeStandard}`
-    if (!safeLabel || !safeStandard || seen.has(key)) return
-    seen.add(key)
-    rows.push({ label: safeLabel, standard: safeStandard, method, aliases: [safeLabel] })
-  }
-  if (text(customer.packaging_method)) {
-    push('包装方式', `客户产品资料库：包装方式：${text(customer.packaging_method)}`)
-  }
   parseRequirementPairs(customer.extra_info_text)
-    .filter((pair) => FORMAL_PACKAGING_PATTERN.test(pair.label))
-    .forEach((pair) => push(
-      pair.label,
-      `客户产品资料库：${pair.label}：${pair.value}`,
-      /数量|每盒|每箱|装箱|装盒/.test(pair.label) ? '计数' : '核对客户产品资料',
+    .filter((pair): pair is { label: typeof FORMAL_PACKAGING_LEVELS[number]; value: string } => (
+      FORMAL_PACKAGING_LEVELS.some((level) => level === pair.label)
     ))
+    .forEach((pair) => {
+      if (seen.has(pair.label)) return
+      seen.add(pair.label)
+      rows.push({
+        label: pair.label,
+        standard: `客户产品资料库：${pair.label}：${pair.value}；${FORMAL_PACKAGING_CHECK_STANDARDS[pair.label]}`,
+        method: '实拍与客户资料对比',
+        aliases: [pair.label],
+      })
+    })
   return rows
 }
 
@@ -624,9 +653,9 @@ function buildOnlineFormalRows(
 
   push({
     section: '产品外观',
-    label: '产品外观',
+    label: '产品本体（正面/反面）',
     standard: FORMAL_APPEARANCE_STANDARD,
-    method: '目视',
+    method: '实拍与客户设计稿对比',
     aliases: ['产品外观', ...variant.appearance.flatMap((row) => [row[0], ...row[2]])],
     inputMode: 'manual_photo',
   })
@@ -673,6 +702,7 @@ export function buildOnlineInspectionTemplate(
   return {
     template_id: `online-report:${online.template.key}`,
     version: 'online-web/QualityInspectionWorkbench/formal-v1',
+    title: online.template.title,
     columns: ONLINE_COLUMNS.map((column) => ({ ...column })),
     rows: buildOnlineFormalRows(detail, online.template),
   }

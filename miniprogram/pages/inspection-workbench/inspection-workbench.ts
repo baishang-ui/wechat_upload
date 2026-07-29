@@ -238,6 +238,7 @@ Page({
     rawContent: '',
     reportImages: [] as string[],
     reportPreviewPaths: [] as string[],
+    inspectionImages: [] as string[],
     unmatched: [] as UnmatchedRecognitionRow[],
     saving: false,
     savedMessage: '',
@@ -285,7 +286,9 @@ Page({
       const unmatched = Array.isArray(result.unmatched_recognition_rows)
         ? result.unmatched_recognition_rows as UnmatchedRecognitionRow[]
         : []
-      const reportImages = (item.inspection_draft?.ai_workbench_images || [])
+      const reportImages = (item.inspection_draft?.record_source_images || [])
+        .filter((image) => typeof image === 'string')
+      const inspectionImages = (item.inspection_draft?.ai_workbench_images || [])
         .filter((image) => typeof image === 'string')
       this.setData({
         task,
@@ -296,6 +299,8 @@ Page({
         groups: groupRows(workbench.rows, renderColumns),
         unmatched,
         reportImages,
+        reportPreviewPaths: reportImages,
+        inspectionImages,
         rawContent: text(result.recognition_raw_content),
         loading: false,
       })
@@ -583,7 +588,8 @@ Page({
         },
         rawContent: this.data.rawContent,
         unmatched: this.data.unmatched,
-        reportImages: this.data.reportImages,
+        qualitySheetImages: this.data.reportImages,
+        inspectionImages: this.data.inspectionImages,
       })
       await saveInspectionDraft(this.data.taskId, this.data.itemId, payload)
       this.setData({ savedMessage: '草稿已保存' })

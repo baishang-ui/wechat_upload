@@ -510,17 +510,97 @@ test('history records mount the detail drawer from the workspace', () => {
   assert.match(page, /onHistoryEditorModalSaved\([\s\S]*?this\.onHistoryEditorSaved\(event\.detail\.record\)/)
 })
 
-test('history editor keeps one native input bridge while unloading drawer content after animation', () => {
+test('history detail preserves the pending workbench drawer structure and field materials', () => {
+  const historyWxml = source('miniprogram/components/history-editor-modal/history-editor-modal.wxml')
+  const historyScss = source('miniprogram/components/history-editor-modal/history-editor-modal.scss')
+  const workbenchWxml = source('miniprogram/components/inspection-workbench-modal/inspection-workbench-modal.wxml')
+  const workbenchScss = source('miniprogram/components/inspection-workbench-modal/inspection-workbench-modal.scss')
+  const drawers = [
+    {
+      prefix: 'history',
+      wxml: historyWxml,
+      scss: historyScss,
+    },
+    {
+      prefix: 'workbench',
+      wxml: workbenchWxml,
+      scss: workbenchScss,
+    },
+  ]
+
+  for (const drawer of drawers) {
+    assert.match(drawer.scss, /@import ['"]\.\.\/\.\.\/styles\/design-tokens['"];/)
+    assert.match(drawer.scss, /height:\s*88vh;/)
+    assert.match(drawer.wxml, /class="modal-grabber"/)
+    assert.match(drawer.wxml, new RegExp(`class="${drawer.prefix}-modal-header"`))
+    assert.match(drawer.wxml, new RegExp(`class="${drawer.prefix}-close"`))
+    assert.match(
+      drawer.wxml,
+      new RegExp(`<scroll-view[^>]*class="${drawer.prefix}-modal-body"`),
+    )
+    assert.match(drawer.wxml, new RegExp(`class="${drawer.prefix}-modal-actions"`))
+    assert.match(drawer.wxml, /class="inspection-item-card /)
+    assert.match(drawer.wxml, /class="inspection-item-summary"/)
+    assert.match(drawer.wxml, /class="inspection-item-details"/)
+
+    const closeButton = drawer.scss.match(
+      new RegExp(`\\.${drawer.prefix}-close\\s*\\{([^}]*)\\}`),
+    )?.[1] || ''
+    assert.match(closeButton, /width:\s*58rpx;/)
+    assert.match(closeButton, /height:\s*58rpx;/)
+    assert.match(closeButton, /border-radius:\s*50%;/)
+  }
+
+  const historyFieldContainers = historyScss.match(
+    /\.form-field\s*\{([^}]*)\}/,
+  )?.[1] || ''
+  assert.match(historyFieldContainers, /padding:\s*13rpx 15rpx;/)
+  assert.match(historyFieldContainers, /border:\s*1rpx solid \$ui-field-border;/)
+  assert.match(historyFieldContainers, /border-radius:\s*14rpx;/)
+  assert.match(historyFieldContainers, /background:\s*#fff;/)
+
+  const historySummary = historyScss.match(/\.inspection-item-summary\s*\{([^}]*)\}/)?.[1] || ''
+  assert.match(historySummary, /min-height:\s*118rpx;/)
+  assert.match(historySummary, /padding:\s*23rpx 24rpx;/)
+
+  const historyTitleWrap = historyScss.match(/\.inspection-item-title-wrap\s*\{([^}]*)\}/)?.[1] || ''
+  assert.match(historyTitleWrap, /padding-right:\s*18rpx;/)
+
+  const historyDetails = historyScss.match(/\.inspection-item-details\s*\{([^}]*)\}/)?.[1] || ''
+  assert.match(historyDetails, /padding:\s*4rpx 24rpx 26rpx;/)
+
+  const historyMeasurements = historyScss.match(/\.measurement-grid\s*\{([^}]*)\}/)?.[1] || ''
+  assert.match(historyMeasurements, /margin-top:\s*10rpx;/)
+  assert.match(historyMeasurements, /grid-template-columns:\s*repeat\(2,\s*minmax\(0,\s*1fr\)\);/)
+  assert.match(historyMeasurements, /gap:\s*12rpx;/)
+
+  const historyMeasurementField = historyScss.match(/\.measurement-field\s*\{([^}]*)\}/)?.[1] || ''
+  assert.match(historyMeasurementField, /padding:\s*9rpx 11rpx;/)
+  assert.match(historyMeasurementField, /border-radius:\s*13rpx;/)
+  assert.match(historyMeasurementField, /background:\s*\$ui-field-background;/)
+
+  assert.match(historyWxml, /class="form-field detail-field/)
+  assert.match(historyWxml, /class="form-field row-field/)
+  assert.match(historyWxml, /class="measurement-field"/)
+  assert.doesNotMatch(historyScss, /border-bottom:\s*1rpx dashed/)
+  const historyMask = historyScss.match(/\.history-modal-mask\s*\{([^}]*)\}/)?.[1] || ''
+  assert.match(historyMask, /-webkit-backdrop-filter:\s*blur\(12rpx\);/)
+  assert.match(historyMask, /backdrop-filter:\s*blur\(12rpx\);/)
+  assert.match(
+    historyWxml,
+    /<view wx:if="\{\{drawerMounted\}\}" class="history-modal-mask"/,
+  )
+})
+
+test('history editor edits values in place while unloading drawer content after animation', () => {
   const app = source('miniprogram/app.json')
   const page = source('miniprogram/components/history-editor-modal/history-editor-modal.ts')
   const wxml = source('miniprogram/components/history-editor-modal/history-editor-modal.wxml')
   const scss = source('miniprogram/components/history-editor-modal/history-editor-modal.scss')
   const finishClose = page.match(/finishClose\(\) \{([\s\S]*?)\n    \},\n\n    previewImage/)?.[1] || ''
   const releaseDrawerContent = page.match(/releaseDrawerContent\((?:[\s\S]*?)\) \{([\s\S]*?)\n    \},\n\n    previewImage/)?.[1] || ''
-  const activateSharedEditor = page.match(/activateSharedEditor\((?:[\s\S]*?)\n    \) \{([\s\S]*?)\n    \},\n\n    onSharedEditorInput/)?.[1] || ''
-  const nativeEditors = wxml.match(/<(?:input|textarea)\b/g) || []
-  const textareaOffset = wxml.indexOf('<textarea')
-  const drawerBodyOffset = wxml.indexOf('<scroll-view wx:if="{{drawerMounted}}"')
+  const activateInlineEditor = page.match(/activateInlineEditor\((?:[\s\S]*?)\n    \) \{([\s\S]*?)\n    \},\n\n    onInlineEditorInput/)?.[1] || ''
+  const nativeEditors = wxml.match(/<(?:input|textarea)\b[^>]*>/g) || []
 
   assert.doesNotMatch(app, /"pages\/history-editor\/history-editor"/)
   assert.doesNotMatch(app, /"pages\/history-field-editor\/history-field-editor"/)
@@ -529,27 +609,60 @@ test('history editor keeps one native input bridge while unloading drawer conten
   assert.doesNotMatch(wxml, /wx:for="\{\{record\.rows\}\}"/)
   assert.doesNotMatch(wxml, /row-pagination|goPreviousRowPage|goNextRowPage/)
   assert.doesNotMatch(page, /buildHistoryEditorRowPage|pageRows|pageTotal/)
-  assert.equal(nativeEditors.length, 1)
+  assert.ok(nativeEditors.length > 1)
+  for (const editor of nativeEditors) {
+    assert.match(editor, /wx:if=/)
+    assert.match(editor, /value="\{\{activeEditValue\}\}"/)
+    assert.match(editor, /focus="\{\{activeEditorFocused\}\}"/)
+    assert.match(editor, /bindinput="onInlineEditorInput"/)
+    assert.match(editor, /bindblur="onInlineEditorBlur"/)
+    assert.doesNotMatch(editor, /always-embed=/)
+  }
+  assert.doesNotMatch(wxml, /shared-inline-editor/)
+  assert.doesNotMatch(page, /activeEditorVisible|activateSharedEditor|onSharedEditor/)
   assert.match(
     wxml,
-    /<textarea\s+wx:if="\{\{drawerMounted && activeEditorVisible\}\}"\s+class="shared-inline-editor-input"/,
+    /<textarea wx:if="\{\{activeEditKind === 'record' && activeEditField === 'customer'\}\}" class="inline-edit-input"[\s\S]*?<\/textarea>[\s\S]*?<view wx:else[^>]*class="inline-edit-value"[^>]*data-field="customer"[^>]*bindtap="beginRecordEdit"/,
   )
-  assert.match(wxml, /bindinput="onSharedEditorInput"/)
-  assert.match(wxml, /hold-keyboard="\{\{true\}\}"/)
+  assert.match(
+    wxml,
+    /<textarea wx:if="\{\{activeEditKind === 'row' && activeEditRowIndex === rowItem\.rowIndex && activeEditField === 'item'\}\}" class="inline-edit-input"[\s\S]*?<\/textarea>[\s\S]*?<view wx:else[^>]*class="inline-edit-value"[^>]*data-row-index="\{\{rowItem\.rowIndex\}\}"[^>]*data-field="item"[^>]*bindtap="beginRowFieldEdit"/,
+  )
+  assert.match(
+    wxml,
+    /<input wx:if="\{\{activeEditKind === 'measurement' && activeEditRowIndex === rowItem\.rowIndex && activeEditMeasurementIndex === measurementIndex\}\}" class="measurement-input"[\s\S]*?<view wx:else class="measurement-display" data-row-index="\{\{rowItem\.rowIndex\}\}" data-measurement-index="\{\{measurementIndex\}\}" bindtap="beginMeasurementEdit"/,
+  )
+  assert.match(
+    wxml,
+    /<textarea wx:if="\{\{activeEditKind === 'record' && activeEditField === 'notes'\}\}" class="inline-edit-input"/,
+  )
+  const inlineEditValue = scss.match(/\.inline-edit-value\s*\{([^}]*)\}/)?.[1] || ''
+  const inlineEditInput = scss.match(/\.inline-edit-input\s*\{([^}]*)\}/)?.[1] || ''
+  assert.doesNotMatch(inlineEditValue, /(?:^|\n)\s*height:\s*48rpx;/)
+  assert.match(scss, /\.inline-edit-value\s*\{[^}]*white-space:\s*pre-wrap;/)
+  assert.doesNotMatch(wxml, /\sauto-height(?:\s|>|\/)/)
+  assert.match(wxml, /class="inline-edit-input" style="height: \{\{activeEditorHeight\}\}rpx;"/)
+  assert.match(page, /calculateInlineEditorHeight/)
+  assert.match(page, /INLINE_EDITOR_MAX_HEIGHT_RPX = 192/)
+  assert.match(page, /createSelectorQuery\(\)[\s\S]*boundingClientRect/)
+  assert.match(page, /pixelsToRpx/)
+  assert.match(page, /activeEditorBaseHeight/)
+  assert.doesNotMatch(inlineEditInput, /min-height:/)
+  assert.doesNotMatch(inlineEditInput, /max-height:/)
+  assert.match(inlineEditInput, /overflow-y:\s*auto;/)
+  assert.match(wxml, /id="history-editor-record-model" class="inline-edit-value"/)
+  assert.match(wxml, /id="history-editor-row-\{\{rowItem\.rowIndex\}\}-specification" class="inline-edit-value"/)
+  assert.doesNotMatch(scss, /\.notes-field \.inline-edit-input/)
+  assert.match(page, /onInlineEditorInput[\s\S]*Math\.max\(this\.data\.activeEditorBaseHeight, height\)/)
   assert.doesNotMatch(wxml, /\sdisabled="\{\{!drawerMounted/)
   assert.doesNotMatch(wxml, /fixed=/)
   assert.match(wxml, /^<view class="history-modal-layer \{\{drawerMounted \? 'is-mounted' : ''\}\}/)
-  assert.match(wxml, /<view class="history-modal-panel"[\s\S]*class="shared-inline-editor/)
-  assert.ok(textareaOffset > 0 && drawerBodyOffset > textareaOffset)
   assert.match(wxml, /<scroll-view wx:if="\{\{drawerMounted\}\}" class="history-modal-body"/)
-  assert.match(wxml, /data-field="customer" data-label="客户" bindtap="beginRecordEdit"/)
-  assert.match(wxml, /data-field="item" data-label="检验项目" bindtap="beginRowFieldEdit"/)
-  assert.match(wxml, /data-measurement-index="\{\{measurementIndex\}\}" bindtap="beginMeasurementEdit"/)
   assert.doesNotMatch(wxml, /bindinput="(?:onRecordInput|onRowFieldInput|onMeasurementInput)"/)
   assert.match(wxml, /expandedRowIndex === rowItem\.rowIndex/)
   assert.doesNotMatch(wxml, /startEditing|编辑记录|wx:if="\{\{editing\}\}"/)
   assert.doesNotMatch(page, /editable:\s*true|wx\.showModal|wx\.showActionSheet|wx\.navigateTo/)
-  assert.match(page, /onSharedEditorInput[\s\S]*historyEditorDraftValues\.set/)
+  assert.match(page, /onInlineEditorInput[\s\S]*historyEditorDraftValues\.set/)
   assert.match(page, /commitActiveEditor[\s\S]*updateRowField/)
   assert.match(page, /commitActiveEditor[\s\S]*updateMeasurement/)
   assert.match(page, /detached\(\) \{[\s\S]*clearHistoryEditorCloseTimer\(this\)/)
@@ -559,7 +672,7 @@ test('history editor keeps one native input bridge while unloading drawer conten
   assert.match(page, /drawerMounted:\s*false/)
   assert.match(page, /observers:\s*\{[\s\S]*'visible, origin, recordId, sourceType, taskId, itemId'/)
   assert.match(page, /openDrawer\(\)[\s\S]*drawerMounted:\s*true/)
-  assert.match(activateSharedEditor, /commitActiveEditor\(activate,\s*true\)/)
+  assert.match(activateInlineEditor, /commitActiveEditor\(activateWithDisplayedHeight\)/)
   assert.match(finishClose, /closing:\s*true/)
   assert.match(finishClose, /expandedRowIndex:\s*-1/)
   assert.match(finishClose, /activeEditorFocused:\s*false/)
@@ -572,8 +685,11 @@ test('history editor keeps one native input bridge while unloading drawer conten
   assert.match(releaseDrawerContent, /historyEditorRawContents\.delete\(this\)/)
   assert.match(releaseDrawerContent, /historyEditorRows\.delete\(this\)/)
   assert.match(releaseDrawerContent, /triggerEvent\('close'/)
+  assert.match(scss, /\.inline-edit-input/)
+  assert.match(scss, /\.measurement-input/)
+  assert.doesNotMatch(scss, /\.shared-inline-editor/)
   assert.match(scss, /height:\s*88vh;/)
-  assert.doesNotMatch(scss, /backdrop-filter/)
+  assert.match(scss, /\.history-modal-mask\s*\{[^}]*backdrop-filter:\s*blur\(12rpx\);/)
   assert.match(scss, /@keyframes history-modal-sheet-up/)
   assert.match(scss, /@keyframes history-modal-sheet-down/)
 })

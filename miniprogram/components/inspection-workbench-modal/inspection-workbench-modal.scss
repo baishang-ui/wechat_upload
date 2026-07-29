@@ -122,10 +122,14 @@
 
 .modal-state-card,
 .product-summary-card,
+.formal-info-card,
 .workbench-source-card,
 .recognition-card,
+.inspection-upload-card,
 .overview-tip-card,
 .inspection-item-card,
+.inspection-empty-state,
+.formal-final-card,
 .unmatched-item {
   margin-bottom: 20rpx;
   padding: 26rpx;
@@ -224,6 +228,45 @@
   white-space: nowrap;
 }
 
+.formal-info-heading {
+  margin-top: 0;
+}
+
+.formal-info-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  border-top: 1rpx solid #e2eaf5;
+  border-left: 1rpx solid #e2eaf5;
+}
+
+.formal-info-item {
+  min-width: 0;
+  padding: 17rpx 18rpx;
+  display: flex;
+  flex-direction: column;
+  gap: 7rpx;
+  border-right: 1rpx solid #e2eaf5;
+  border-bottom: 1rpx solid #e2eaf5;
+  background: #fbfdff;
+}
+
+.formal-info-item text:first-child {
+  color: $ui-text-secondary;
+  font-size: 20rpx;
+  line-height: 1.4;
+}
+
+.formal-info-item text:last-child {
+  min-width: 0;
+  color: $ui-text-primary;
+  font-size: 24rpx;
+  font-weight: 650;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+  white-space: normal;
+  word-break: break-word;
+}
+
 .workbench-source-card { padding: 19rpx 22rpx; gap: 14rpx; }
 .workbench-source-dot { width: 14rpx; height: 14rpx; flex: none; border-radius: 50%; background: #4b8af7; }
 .workbench-source-content { min-width: 0; flex: 1; }
@@ -263,12 +306,37 @@
 .report-preview { position: relative; width: 132rpx; height: 132rpx; flex: none; overflow: hidden; border-radius: 16rpx; background: #edf2f9; }
 .report-preview image { width: 100%; height: 100%; }
 .report-preview text { position: absolute; right: 0; bottom: 0; left: 0; padding: 6rpx; color: #fff; font-size: 19rpx; text-align: center; background: rgba(20, 36, 60, .66); }
+.inspection-upload-list { margin-top: 20rpx; display: flex; gap: 14rpx; overflow-x: auto; }
+.inspection-upload-preview { position: relative; width: 132rpx; height: 132rpx; flex: none; overflow: hidden; border-radius: 16rpx; background: #edf2f9; }
+.inspection-upload-preview image { width: 100%; height: 100%; }
+.inspection-upload-preview text { position: absolute; right: 0; bottom: 0; left: 0; padding: 6rpx; color: #fff; font-size: 19rpx; text-align: center; background: rgba(20, 36, 60, .66); }
+.inspection-upload-delete {
+  position: absolute;
+  z-index: 2;
+  top: 8rpx;
+  right: 8rpx;
+  width: 40rpx;
+  height: 40rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  font-size: 30rpx;
+  line-height: 1;
+  border: 2rpx solid rgba(255, 255, 255, .86);
+  border-radius: 50%;
+  background: rgba(202, 48, 55, .94);
+  box-shadow: 0 4rpx 10rpx rgba(20, 36, 60, .24);
+}
+.inspection-upload-delete.is-disabled { opacity: .55; }
 .overview-tip-card { background: linear-gradient(135deg, #f1f6ff, #fbfdff); }
 .overview-tip-text { margin-top: 8rpx; }
 
 .page-section-heading { margin: 6rpx 4rpx 20rpx; gap: 18rpx; }
 .page-section-copy { min-width: 0; flex: 1; }
 .row-count { color: #61718d; background: #edf1f7; }
+.inspection-empty-state { padding: 42rpx 26rpx; text-align: center; }
+.inspection-empty-title { margin-bottom: 8rpx; color: $ui-text-primary; font-size: 26rpx; font-weight: 700; }
 .inspection-item-card { padding: 0; overflow: hidden; transition: border-color .2s ease, box-shadow .2s ease; }
 .inspection-item-card.is-expanded { border-color: #9fbcf0; box-shadow: 0 13rpx 33rpx rgba(53, 109, 194, .12); }
 .inspection-item-summary { min-height: 118rpx; padding: 23rpx 24rpx; }
@@ -312,6 +380,119 @@
 .unmatched-item-head text:last-child { color: #9a773b; font-size: 20rpx; }
 .unmatched-measurements { margin-top: 15rpx; color: #7d5d20; font-size: 23rpx; line-height: 1.5; word-break: break-all; }
 .unmatched-reason { margin-top: 10rpx; }
+.unmatched-section { margin-top: 26rpx; }
+
+.formal-final-card {
+  padding: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 188rpx;
+  overflow: hidden;
+}
+
+.formal-final-main {
+  min-width: 0;
+  padding: 28rpx;
+}
+
+.formal-final-label,
+.formal-conclusions-title,
+.formal-final-side view {
+  color: $ui-text-primary;
+  font-size: 25rpx;
+  font-weight: 700;
+  line-height: 1.4;
+}
+
+.formal-final-options {
+  margin-top: 20rpx;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14rpx;
+}
+
+.formal-final-option {
+  min-height: 58rpx;
+  padding: 0 18rpx;
+  display: flex;
+  align-items: center;
+  gap: 8rpx;
+  color: #61718d;
+  font-size: 23rpx;
+  font-weight: 650;
+  border: 1rpx solid #d7e1ee;
+  border-radius: 14rpx;
+  background: #f8fafc;
+}
+
+.formal-final-option.is-active {
+  color: #177655;
+  border-color: #8fd5b8;
+  background: #e9f8f1;
+}
+
+.formal-final-option--ng.is-active {
+  color: #b33e4b;
+  border-color: #e5a7ae;
+  background: #fff0f2;
+}
+
+.formal-final-checkbox {
+  width: 28rpx;
+  font-size: 27rpx;
+  line-height: 1;
+  text-align: center;
+}
+
+.formal-conclusions {
+  margin-top: 28rpx;
+  padding-top: 24rpx;
+  border-top: 1rpx solid #e4ebf4;
+}
+
+.formal-conclusion-item {
+  margin-top: 12rpx;
+  display: grid;
+  grid-template-columns: 32rpx minmax(0, 1fr);
+  gap: 7rpx;
+  color: #4b5b72;
+  font-size: 23rpx;
+  line-height: 1.55;
+}
+
+.formal-conclusion-item text:last-child {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.formal-final-side {
+  min-width: 0;
+  padding: 28rpx 18rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: 20rpx;
+  border-left: 1rpx solid #e1e9f3;
+  background: #f7faff;
+  text-align: center;
+}
+
+.formal-final-decision {
+  max-width: 100%;
+  padding: 12rpx 18rpx;
+  box-sizing: border-box;
+  color: #6c7890;
+  font-size: 30rpx;
+  font-weight: 800;
+  line-height: 1.2;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.formal-final-decision.is-ok { color: #16865f; }
+.formal-final-decision.is-ng { color: $ui-danger; }
+.formal-final-decision.is-pending { color: #9b6c23; font-size: 25rpx; }
 .modal-body-spacer { height: 18rpx; }
 
 .workbench-modal-actions {
@@ -357,10 +538,24 @@
   .workbench-modal-body { padding-right: 18rpx; padding-left: 18rpx; }
   .modal-state-card,
   .product-summary-card,
+  .formal-info-card,
   .workbench-source-card,
   .recognition-card,
+  .inspection-upload-card,
   .overview-tip-card,
+  .inspection-empty-state,
+  .formal-final-card,
   .unmatched-item { padding: 22rpx; }
+  .formal-info-card,
+  .formal-final-card { padding: 0; }
+  .formal-info-grid { grid-template-columns: 1fr; }
+  .formal-final-card { grid-template-columns: 1fr; }
+  .formal-final-side {
+    padding: 24rpx;
+    flex-direction: row;
+    border-top: 1rpx solid #e1e9f3;
+    border-left: 0;
+  }
   .recognition-actions { flex-direction: column; gap: 12rpx; }
   .recognition-button { width: 100%; flex: none; }
   .measurement-grid,

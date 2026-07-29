@@ -38,3 +38,11 @@ test('README explains quality-order-first pending matching', () => {
   assert.match(readme, /识别出的合同号只与质检订单的采购合同号匹配/)
   assert.match(readme, /同一采购合同存在多个质检订单时，继续结合产品和规格唯一匹配/)
 })
+
+test('README separates quality-sheet recognition from online inspection-photo recognition', () => {
+  assert.match(readme, /record_source_images/)
+  assert.match(readme, /ai_workbench_images/)
+  assert.match(readme, /visual_recognition_request/)
+  assert.match(readme, /小程序不调用验货图片 AI 识别接口/)
+  assert.match(readme, /线上 React 验货工作台恢复待处理图片后自动触发识别/)
+})

@@ -29,6 +29,8 @@ export interface InspectionTemplateRowDto {
 export interface InspectionTemplateDto {
   template_id: string
   version: string
+  title?: string
+  template_name?: string
   columns: InspectionTemplateColumnDto[]
   rows: InspectionTemplateRowDto[]
 }
@@ -84,6 +86,7 @@ export interface InspectionDraftLike {
   records?: InspectionDraftRecordLike[]
   ai_workbench_result: Record<string, unknown>
   ai_workbench_images: string[]
+  record_source_images?: string[]
   record_merge_mode?: string
 }
 
@@ -102,7 +105,7 @@ function fallbackPhotoRequired(row: InspectionTemplateRowDto): boolean {
 }
 
 
-function normalizedProject(value: string): string {
+export function normalizeInspectionProjectName(value: string): string {
   const normalized = value
     .trim()
     .toLowerCase()
@@ -125,7 +128,7 @@ function normalizedProject(value: string): string {
   return normalized
 }
 
-function semanticGroup(value: string): string {
+export function inspectionGroupSemantic(value: string): string {
   const group = normalizedGroup(value)
   if (group.includes('尺寸')) return 'dimension'
   if (group.includes('安全')) return 'safety'
@@ -135,21 +138,33 @@ function semanticGroup(value: string): string {
   return group
 }
 
-function aliasValues(project: string, standards: Record<string, string>): string[] {
+export function inspectionProjectAliases(
+  project: string,
+  standards: Record<string, string>,
+): string[] {
   const configured = standards['识别别名'] || standards.recognition_aliases || ''
   return [project, ...configured.split(/[|｜、,，;；]/)]
-    .map(normalizedProject)
+    .map(normalizeInspectionProjectName)
     .filter(Boolean)
 }
 
 function templateRowMatchesProject(row: InspectionTemplateRowDto, project: string): boolean {
-  const normalized = normalizedProject(project)
-  return Boolean(normalized) && aliasValues(row.project, row.measurement_standards).includes(normalized)
+  const normalized = normalizeInspectionProjectName(project)
+  return Boolean(normalized) && inspectionProjectAliases(
+    row.project,
+    row.measurement_standards,
+  ).includes(normalized)
 }
 
-function workbenchRowMatchesProject(row: InspectionWorkbenchRow, project: string): boolean {
-  const normalized = normalizedProject(project)
-  return Boolean(normalized) && aliasValues(row.project, row.measurementStandards).includes(normalized)
+export function workbenchRowMatchesProject(
+  row: InspectionWorkbenchRow,
+  project: string,
+): boolean {
+  const normalized = normalizeInspectionProjectName(project)
+  return Boolean(normalized) && inspectionProjectAliases(
+    row.project,
+    row.measurementStandards,
+  ).includes(normalized)
 }
 
 function matchDraftRecords(
@@ -166,7 +181,7 @@ function matchDraftRecords(
       && templateRowMatchesProject(row, draft.project)
     ))
     const exactSameGroup = exactMatches.filter((draft) => (
-      semanticGroup(draft.group_title) === semanticGroup(row.group_title)
+      inspectionGroupSemantic(draft.group_title) === inspectionGroupSemantic(row.group_title)
     ))
     const exact = exactSameGroup[0] || exactMatches[0]
     if (exact) {
@@ -175,7 +190,9 @@ function matchDraftRecords(
       return
     }
     const available = draftRecords.filter((draft) => !used.has(draft) && templateRowMatchesProject(row, draft.project))
-    const sameGroup = available.filter((draft) => semanticGroup(draft.group_title) === semanticGroup(row.group_title))
+    const sameGroup = available.filter((draft) => (
+      inspectionGroupSemantic(draft.group_title) === inspectionGroupSemantic(row.group_title)
+    ))
     const matches = sameGroup.length > 0 ? sameGroup : available
     if (matches.length === 1) {
       result.set(row, matches[0])
@@ -190,7 +207,7 @@ function uniqueWorkbenchRowKeys(rows: InspectionTemplateRowDto[]): Map<Inspectio
   const used = new Set<string>()
   rows.forEach((row, index) => {
     const sourceKey = row.row_key.trim()
-    const fallbackKey = `template-row:${row.display_order}:${semanticGroup(row.group_title)}:${normalizedProject(row.project)}`
+    const fallbackKey = `template-row:${row.display_order}:${inspectionGroupSemantic(row.group_title)}:${normalizeInspectionProjectName(row.project)}`
     const baseKey = sourceKey || fallbackKey || `template-row:${index}`
     let rowKey = baseKey
     let duplicateIndex = 2
@@ -327,9 +344,9 @@ export function mergeRecognitionRecord(
     ))
     if (!target) {
       const projectMatches = targets.filter((row) => workbenchRowMatchesProject(row, recognized.item))
-      const recognizedGroup = semanticGroup(recognized.groupTitle || '')
+      const recognizedGroup = inspectionGroupSemantic(recognized.groupTitle || '')
       const sameGroupMatches = recognizedGroup
-        ? projectMatches.filter((row) => semanticGroup(row.groupTitle) === recognizedGroup)
+        ? projectMatches.filter((row) => inspectionGroupSemantic(row.groupTitle) === recognizedGroup)
         : []
       const matches = sameGroupMatches.length > 0 ? sameGroupMatches : projectMatches
       if (matches.length === 1) target = matches[0]
@@ -381,6 +398,7 @@ export interface WorkbenchDraftPayload {
   inspection_records: WorkbenchDraftRecord[]
   ai_workbench_result: Record<string, unknown>
   ai_workbench_images: string[]
+  record_source_images: string[]
   record_merge_mode: 'workbench'
 }
 
@@ -390,7 +408,9 @@ export function workbenchToDraft(
     metadata: WorkbenchDraftMetadata
     rawContent: string
     unmatched: UnmatchedRecognitionRow[]
-    reportImages: string[]
+    qualitySheetImages: string[]
+    inspectionImages: string[]
+    aiResult?: Record<string, unknown>
   },
 ): WorkbenchDraftPayload {
   return {
@@ -410,6 +430,7 @@ export function workbenchToDraft(
         .map((photo) => photo.remoteUrl),
     })),
     ai_workbench_result: {
+      ...(options.aiResult || {}),
       schema_version: 'miniprogram-inspection-workbench/v1',
       source: 'miniprogram',
       template_id: workbench.templateId,
@@ -423,7 +444,8 @@ export function workbenchToDraft(
       recognition_raw_content: options.rawContent,
       unmatched_recognition_rows: options.unmatched,
     },
-    ai_workbench_images: [...options.reportImages],
+    ai_workbench_images: [...options.inspectionImages],
+    record_source_images: [...options.qualitySheetImages],
     record_merge_mode: 'workbench',
   }
 }

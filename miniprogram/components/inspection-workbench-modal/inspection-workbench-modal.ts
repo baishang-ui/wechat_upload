@@ -15,17 +15,23 @@ import {
 } from '../../domain/inspection-workbench'
 import {
   buildInspectionWorkbenchPages,
+  buildInspectionWorkbenchFinalState,
   findInspectionWorkbenchPageForRow,
+  InspectionWorkbenchFinalState,
   InspectionWorkbenchPage,
 } from '../../domain/inspection-workbench-pagination'
 import { buildOnlineInspectionTemplate } from '../../domain/online-inspection-template'
+import { normalizeInspectionDate } from '../../domain/inspection-record'
 import { prepareImageForUpload, recognizeInspection } from '../../services/inspection-service'
 import {
   getInspectionItemDetail,
+  QualityInspectionCustomerProductDto,
   uploadInspectionDraftImage,
   QualityInspectionItemDto,
+  QualityInspectionMasterProductDto,
   QualityInspectionTaskDto,
   saveInspectionDraft,
+  uploadInspectionWorkbenchImage,
   uploadInspectionRowImage,
 } from '../../services/quality-inspection-service'
 
@@ -56,6 +62,49 @@ function errorMessage(error: unknown, fallback: string): string {
   return error instanceof Error && error.message ? error.message : fallback
 }
 
+function currentLocalDate(): string {
+  const now = new Date()
+  const year = now.getFullYear()
+  const month = String(now.getMonth() + 1).padStart(2, '0')
+  const day = String(now.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
+function resolvedInspectionDate(...values: unknown[]): string {
+  for (const value of values) {
+    const candidate = text(value)
+    const normalized = normalizeInspectionDate(candidate.slice(0, 10))
+    if (normalized) return normalized
+  }
+  return ''
+}
+
+function quantityDisplay(item: QualityInspectionItemDto): string {
+  const quantity = item.quantity === null || item.quantity === undefined
+    ? '0'
+    : String(item.quantity)
+  return `${quantity} ${text(item.unit)}`.trim()
+}
+
+function inspectionRecognitionRequest(imageCount: number): Record<string, unknown> {
+  const changedAt = new Date().toISOString()
+  return {
+    visual_recognition_request: imageCount > 0
+      ? {
+          status: 'pending',
+          source: 'miniprogram',
+          requested_at: changedAt,
+          image_count: imageCount,
+        }
+      : {
+          status: 'cleared',
+          source: 'miniprogram',
+          cleared_at: changedAt,
+          image_count: 0,
+        },
+  }
+}
+
 Component({
   properties: {
     visible: { type: Boolean, value: false },
@@ -66,14 +115,25 @@ Component({
   data: {
     task: null as QualityInspectionTaskDto | null,
     item: null as QualityInspectionItemDto | null,
+    masterProduct: null as QualityInspectionMasterProductDto | null,
+    customerProduct: null as QualityInspectionCustomerProductDto | null,
     workbench: null as InspectionWorkbench | null,
+    aiWorkbenchResult: {} as Record<string, unknown>,
+    finalState: buildInspectionWorkbenchFinalState([], {}) as InspectionWorkbenchFinalState,
+    inspectionDate: '',
+    quantityDisplay: '',
+    templateDisplayName: '',
     loading: false,
     loadError: '',
     recognizing: false,
     recognitionError: '',
+    photoUploading: false,
+    photoDeletingIndex: -1,
+    photoUploadError: '',
     rawContent: '',
     reportImages: [] as string[],
     reportPreviewPaths: [] as string[],
+    inspectionImages: [] as string[],
     unmatched: [] as UnmatchedRecognitionRow[],
     pages: [] as InspectionWorkbenchPage[],
     currentPage: null as InspectionWorkbenchPage | null,
@@ -118,14 +178,25 @@ Component({
       this.setData({
         task: null,
         item: null,
+        masterProduct: null,
+        customerProduct: null,
         workbench: null,
+        aiWorkbenchResult: {},
+        finalState: buildInspectionWorkbenchFinalState([], {}),
+        inspectionDate: '',
+        quantityDisplay: '',
+        templateDisplayName: '',
         loading: false,
         loadError: '',
         recognizing: false,
         recognitionError: '',
+        photoUploading: false,
+        photoDeletingIndex: -1,
+        photoUploadError: '',
         rawContent: '',
         reportImages: [],
         reportPreviewPaths: [],
+        inspectionImages: [],
         unmatched: [],
         pages: [],
         currentPage: null,
@@ -140,18 +211,19 @@ Component({
     },
 
     async loadWorkbench() {
-      if (!this.data.visible || !this.data.taskId || !this.data.itemId || this.data.loading) return
+      if (
+        !this.data.taskId
+        || !this.data.itemId
+        || this.data.loading
+        || !this.isActiveWorkbenchRequest(this.data.taskId, this.data.itemId)
+      ) return
       const requestedTaskId = this.data.taskId
       const requestedItemId = this.data.itemId
       this.setData({ loading: true, loadError: '', savedMessage: '', recognitionError: '' })
       try {
         const detail = await getInspectionItemDetail(requestedTaskId, requestedItemId)
-        if (
-          !this.data.visible
-          || requestedTaskId !== this.data.taskId
-          || requestedItemId !== this.data.itemId
-        ) {
-          if (this.data.visible && this.data.taskId && this.data.itemId) {
+        if (!this.isActiveWorkbenchRequest(requestedTaskId, requestedItemId)) {
+          if (this.data.visible && !this.data.closing && this.data.taskId && this.data.itemId) {
             this.setData({ loading: false })
             void this.loadWorkbench()
           }
@@ -168,15 +240,30 @@ Component({
           template,
           draft: item.inspection_draft,
         })
-        const result = item.inspection_draft?.ai_workbench_result || {}
-        const unmatched = Array.isArray(result.unmatched_recognition_rows)
-          ? result.unmatched_recognition_rows as UnmatchedRecognitionRow[]
+        const aiWorkbenchResult = item.inspection_draft?.ai_workbench_result || {}
+        const unmatched = Array.isArray(aiWorkbenchResult.unmatched_recognition_rows)
+          ? aiWorkbenchResult.unmatched_recognition_rows as UnmatchedRecognitionRow[]
           : []
         const pages = buildInspectionWorkbenchPages(workbench.rows, unmatched)
+        const inspectionDate = resolvedInspectionDate(
+          aiWorkbenchResult.inspection_date,
+          task.signed_date,
+        ) || currentLocalDate()
+        const reportImages = (item.inspection_draft?.record_source_images || [])
+          .filter((image) => typeof image === 'string')
+        const inspectionImages = (item.inspection_draft?.ai_workbench_images || [])
+          .filter((image) => typeof image === 'string')
         this.setData({
           task,
           item,
+          masterProduct: detail.master_product || null,
+          customerProduct: detail.customer_product || null,
           workbench,
+          aiWorkbenchResult,
+          finalState: buildInspectionWorkbenchFinalState(workbench.rows, aiWorkbenchResult),
+          inspectionDate,
+          quantityDisplay: quantityDisplay(item),
+          templateDisplayName: text(template.title || template.template_name || template.template_id) || '未配置',
           unmatched,
           pages,
           currentPage: pages[0] || null,
@@ -184,17 +271,15 @@ Component({
           pageNumber: pages.length ? 1 : 0,
           pageTotal: pages.length,
           expandedRowKey: '',
-          reportImages: (item.inspection_draft?.ai_workbench_images || []).filter((image) => typeof image === 'string'),
-          rawContent: text(result.recognition_raw_content),
+          reportImages,
+          reportPreviewPaths: reportImages,
+          inspectionImages,
+          rawContent: text(aiWorkbenchResult.recognition_raw_content),
           dirty: false,
           loading: false,
         })
       } catch (error) {
-        if (
-          this.data.visible
-          && requestedTaskId === this.data.taskId
-          && requestedItemId === this.data.itemId
-        ) {
+        if (this.isActiveWorkbenchRequest(requestedTaskId, requestedItemId)) {
           this.setData({ loading: false, loadError: errorMessage(error, '产品检验表加载失败') })
         }
       }
@@ -202,12 +287,13 @@ Component({
 
     setRows(rows: InspectionWorkbenchRow[]) {
       const workbench = this.data.workbench
-      if (!workbench) return
+      if (!workbench || !this.data.visible || this.data.closing) return
       const next = { ...workbench, rows }
       const pages = buildInspectionWorkbenchPages(rows, this.data.unmatched)
       const activePage = Math.min(this.data.activePage, Math.max(0, pages.length - 1))
       this.setData({
         workbench: next,
+        finalState: buildInspectionWorkbenchFinalState(rows, this.data.aiWorkbenchResult),
         pages,
         currentPage: pages[activePage] || null,
         activePage,
@@ -216,6 +302,13 @@ Component({
         savedMessage: '',
         dirty: true,
       })
+    },
+
+    isActiveWorkbenchRequest(taskId: number, itemId: number): boolean {
+      return this.data.visible
+        && !this.data.closing
+        && taskId === this.data.taskId
+        && itemId === this.data.itemId
     },
 
     onMeasurementInput(event: InputEvent) {
@@ -241,7 +334,7 @@ Component({
 
     addRowPhotos(event: RowActionEvent) {
       const rowKey = text(event.currentTarget.dataset.rowKey)
-      if (!rowKey) return
+      if (!rowKey || !this.isActiveWorkbenchRequest(this.data.taskId, this.data.itemId)) return
       wx.chooseMedia({
         count: 9,
         mediaType: ['image'],
@@ -258,6 +351,9 @@ Component({
     },
 
     async appendAndUploadPhotos(rowKey: string, localPaths: string[]) {
+      const requestedTaskId = this.data.taskId
+      const requestedItemId = this.data.itemId
+      if (!this.isActiveWorkbenchRequest(requestedTaskId, requestedItemId)) return
       const workbench = this.data.workbench
       if (!workbench || localPaths.length === 0) return
       const previousCount = workbench.rows.find((row) => row.rowKey === rowKey)?.images.length || 0
@@ -265,12 +361,24 @@ Component({
       const additions = rows.find((row) => row.rowKey === rowKey)?.images.slice(previousCount) || []
       this.setRows(rows)
       for (const photo of additions) {
+        if (!this.isActiveWorkbenchRequest(requestedTaskId, requestedItemId)) return
         rows = updateWorkbenchPhoto(rows, rowKey, photo.id, { status: 'uploading', error: '' })
         this.setRows(rows)
         try {
-          const uploaded = await uploadInspectionRowImage(this.data.taskId, this.data.itemId, rowKey, photo.localPath)
+          const preparedPath = await prepareImageForUpload(photo.localPath)
+          if (!this.isActiveWorkbenchRequest(requestedTaskId, requestedItemId)) return
+          const uploaded = await uploadInspectionRowImage(
+            requestedTaskId,
+            requestedItemId,
+            rowKey,
+            preparedPath,
+            undefined,
+            async (path) => path,
+          )
+          if (!this.isActiveWorkbenchRequest(requestedTaskId, requestedItemId)) return
           rows = updateWorkbenchPhoto(rows, rowKey, photo.id, { status: 'uploaded', remoteUrl: uploaded.url, error: '' })
         } catch (error) {
+          if (!this.isActiveWorkbenchRequest(requestedTaskId, requestedItemId)) return
           rows = updateWorkbenchPhoto(rows, rowKey, photo.id, { status: 'failed', error: errorMessage(error, '上传失败') })
         }
         this.setRows(rows)
@@ -302,21 +410,226 @@ Component({
     },
 
     async retryPhotoUpload(rowKey: string, photo: InspectionPhoto) {
+      const requestedTaskId = this.data.taskId
+      const requestedItemId = this.data.itemId
+      if (!this.isActiveWorkbenchRequest(requestedTaskId, requestedItemId)) return
       const workbench = this.data.workbench
       if (!workbench) return
       let rows = updateWorkbenchPhoto(workbench.rows, rowKey, photo.id, { status: 'uploading', error: '' })
       this.setRows(rows)
       try {
-        const uploaded = await uploadInspectionRowImage(this.data.taskId, this.data.itemId, rowKey, photo.localPath)
+        const preparedPath = await prepareImageForUpload(photo.localPath)
+        if (!this.isActiveWorkbenchRequest(requestedTaskId, requestedItemId)) return
+        const uploaded = await uploadInspectionRowImage(
+          requestedTaskId,
+          requestedItemId,
+          rowKey,
+          preparedPath,
+          undefined,
+          async (path) => path,
+        )
+        if (!this.isActiveWorkbenchRequest(requestedTaskId, requestedItemId)) return
         rows = updateWorkbenchPhoto(rows, rowKey, photo.id, { status: 'uploaded', remoteUrl: uploaded.url, error: '' })
       } catch (error) {
+        if (!this.isActiveWorkbenchRequest(requestedTaskId, requestedItemId)) return
         rows = updateWorkbenchPhoto(rows, rowKey, photo.id, { status: 'failed', error: errorMessage(error, '上传失败') })
       }
       this.setRows(rows)
     },
 
+    chooseInspectionPhotos() {
+      if (
+        this.data.photoUploading
+        || this.data.photoDeletingIndex >= 0
+        || this.data.recognizing
+        || !this.isActiveWorkbenchRequest(this.data.taskId, this.data.itemId)
+      ) return
+      wx.chooseMedia({
+        count: 6,
+        mediaType: ['image'],
+        sourceType: ['camera', 'album'],
+        sizeType: ['original'],
+        success: ({ tempFiles }) => {
+          const localPaths = tempFiles.map((file) => file.tempFilePath).filter(Boolean)
+          if (localPaths.length) void this.uploadInspectionPhotos(localPaths)
+        },
+        fail: (error) => {
+          if (!error.errMsg?.includes('cancel')) showTopToast({ title: '选择现场图片失败，请重试', icon: 'none' })
+        },
+      })
+    },
+
+    async uploadInspectionPhotos(localPaths: string[]) {
+      const requestedTaskId = this.data.taskId
+      const requestedItemId = this.data.itemId
+      const workbench = this.data.workbench
+      if (
+        !workbench
+        || this.data.photoUploading
+        || this.data.photoDeletingIndex >= 0
+        || !this.isActiveWorkbenchRequest(requestedTaskId, requestedItemId)
+      ) return
+      this.setData({ photoUploading: true, photoUploadError: '', savedMessage: '' })
+      let inspectionImages = [...this.data.inspectionImages]
+      let uploadedCount = 0
+      let failedCount = 0
+      try {
+        for (const localPath of localPaths) {
+          try {
+            const preparedPath = await prepareImageForUpload(localPath)
+            if (!this.isActiveWorkbenchRequest(requestedTaskId, requestedItemId)) return
+            const uploaded = await uploadInspectionWorkbenchImage(
+              requestedTaskId,
+              requestedItemId,
+              preparedPath,
+            )
+            if (!this.isActiveWorkbenchRequest(requestedTaskId, requestedItemId)) return
+            inspectionImages = [...inspectionImages, uploaded.url]
+            uploadedCount += 1
+            this.setData({ inspectionImages })
+          } catch {
+            if (!this.isActiveWorkbenchRequest(requestedTaskId, requestedItemId)) return
+            failedCount += 1
+          }
+        }
+        if (!uploadedCount) throw new Error('验货图片上传失败，请重试')
+
+        const aiWorkbenchResult = inspectionRecognitionRequest(inspectionImages.length)
+        this.setData({
+          inspectionImages,
+          aiWorkbenchResult,
+          finalState: buildInspectionWorkbenchFinalState(
+            this.data.workbench?.rows || workbench.rows,
+            aiWorkbenchResult,
+          ),
+          dirty: true,
+        })
+
+        await saveInspectionDraft(requestedTaskId, requestedItemId, workbenchToDraft(
+          this.data.workbench || workbench,
+          {
+            metadata: {
+              customer: text(this.data.task?.customer_name),
+              supplier: text(this.data.task?.supplier_name),
+              orderNumber: text(this.data.task?.contract_no),
+              model: text(this.data.item?.spec_desc || this.data.item?.material_name),
+              arrivalQuantity: this.data.item?.quantity === null || this.data.item?.quantity === undefined
+                ? ''
+                : String(this.data.item.quantity),
+              inspectionDate: this.data.inspectionDate,
+            },
+            rawContent: this.data.rawContent,
+            unmatched: this.data.unmatched,
+            qualitySheetImages: this.data.reportImages,
+            inspectionImages,
+            aiResult: aiWorkbenchResult,
+          },
+        ))
+        if (!this.isActiveWorkbenchRequest(requestedTaskId, requestedItemId)) return
+        const savedMessage = failedCount
+          ? `已同步${uploadedCount}张，${failedCount}张上传失败`
+          : '已同步至线上验货图片区'
+        this.setData({
+          savedMessage,
+          photoUploadError: failedCount ? `${failedCount}张图片上传失败，请重新选择` : '',
+          dirty: false,
+        })
+        this.triggerEvent('saved', { taskId: requestedTaskId, itemId: requestedItemId })
+        showTopToast({
+          title: failedCount ? savedMessage : '图片已同步，线上工作台将自动识别',
+          icon: 'none',
+        })
+      } catch (error) {
+        if (!this.isActiveWorkbenchRequest(requestedTaskId, requestedItemId)) return
+        this.setData({
+          photoUploadError: errorMessage(error, '验货图片同步失败'),
+          dirty: uploadedCount > 0,
+        })
+      } finally {
+        if (this.isActiveWorkbenchRequest(requestedTaskId, requestedItemId)) {
+          this.setData({ photoUploading: false })
+        }
+      }
+    },
+
+    previewInspectionImage(event: RowActionEvent) {
+      const index = Number(event.currentTarget.dataset.index)
+      const current = this.data.inspectionImages[index]
+      if (!current) return
+      wx.previewImage({ current, urls: this.data.inspectionImages })
+    },
+
+    async deleteInspectionImage(event: RowActionEvent) {
+      const requestedTaskId = this.data.taskId
+      const requestedItemId = this.data.itemId
+      const index = Number(event.currentTarget.dataset.index)
+      const { workbench, task, item } = this.data
+      if (
+        !workbench
+        || !task
+        || !item
+        || !Number.isInteger(index)
+        || index < 0
+        || index >= this.data.inspectionImages.length
+        || this.data.photoUploading
+        || this.data.photoDeletingIndex >= 0
+        || this.data.saving
+        || this.data.recognizing
+        || !this.isActiveWorkbenchRequest(requestedTaskId, requestedItemId)
+      ) return
+
+      const inspectionImages = this.data.inspectionImages.filter((_, imageIndex) => imageIndex !== index)
+      const aiWorkbenchResult = inspectionRecognitionRequest(inspectionImages.length)
+      this.setData({
+        inspectionImages,
+        aiWorkbenchResult,
+        finalState: buildInspectionWorkbenchFinalState(workbench.rows, aiWorkbenchResult),
+        photoDeletingIndex: index,
+        photoUploadError: '',
+        savedMessage: '',
+        dirty: true,
+      })
+      try {
+        await saveInspectionDraft(requestedTaskId, requestedItemId, workbenchToDraft(workbench, {
+          metadata: {
+            customer: text(task.customer_name),
+            supplier: text(task.supplier_name),
+            orderNumber: text(task.contract_no),
+            model: text(item.spec_desc || item.material_name),
+            arrivalQuantity: item.quantity === null || item.quantity === undefined ? '' : String(item.quantity),
+            inspectionDate: this.data.inspectionDate,
+          },
+          rawContent: this.data.rawContent,
+          unmatched: this.data.unmatched,
+          qualitySheetImages: this.data.reportImages,
+          inspectionImages,
+          aiResult: aiWorkbenchResult,
+        }))
+        if (!this.isActiveWorkbenchRequest(requestedTaskId, requestedItemId)) return
+        this.setData({
+          savedMessage: inspectionImages.length ? '验货图片已更新' : '验货图片已清空',
+          dirty: false,
+        })
+        this.triggerEvent('saved', { taskId: requestedTaskId, itemId: requestedItemId })
+        showTopToast({
+          title: inspectionImages.length ? '图片已删除，线上将重新识别' : '验货图片已清空',
+          icon: 'none',
+        })
+      } catch (error) {
+        if (!this.isActiveWorkbenchRequest(requestedTaskId, requestedItemId)) return
+        this.setData({
+          photoUploadError: errorMessage(error, '图片删除同步失败，请点击保存草稿重试'),
+          dirty: true,
+        })
+      } finally {
+        if (this.isActiveWorkbenchRequest(requestedTaskId, requestedItemId)) {
+          this.setData({ photoDeletingIndex: -1 })
+        }
+      }
+    },
+
     takeQualitySheetPhoto() {
-      if (this.data.recognizing) return
+      if (this.data.recognizing || !this.isActiveWorkbenchRequest(this.data.taskId, this.data.itemId)) return
       wx.navigateTo({
         url: '/pages/document-camera/document-camera',
         events: { documentPhotoConfirmed: ({ tempFilePath }: { tempFilePath?: string }) => {
@@ -327,7 +640,7 @@ Component({
     },
 
     chooseQualitySheetPhoto() {
-      if (this.data.recognizing) return
+      if (this.data.recognizing || !this.isActiveWorkbenchRequest(this.data.taskId, this.data.itemId)) return
       wx.chooseMedia({
         count: 1,
         mediaType: ['image'],
@@ -344,28 +657,47 @@ Component({
     },
 
     async recognizeQualitySheet(imagePath: string) {
+      const requestedTaskId = this.data.taskId
+      const requestedItemId = this.data.itemId
       const workbench = this.data.workbench
-      if (!workbench || this.data.recognizing) return
+      if (
+        !workbench
+        || this.data.recognizing
+        || !this.isActiveWorkbenchRequest(requestedTaskId, requestedItemId)
+      ) return
       this.setData({ recognizing: true, recognitionError: '', savedMessage: '' })
       try {
         const preparedPath = await prepareImageForUpload(imagePath)
+        if (!this.isActiveWorkbenchRequest(requestedTaskId, requestedItemId)) return
         const result = await recognizeInspection(preparedPath)
+        if (!this.isActiveWorkbenchRequest(requestedTaskId, requestedItemId)) return
         const merged = mergeRecognitionRecord(this.data.workbench?.rows || workbench.rows, result.record)
         let reportImages = this.data.reportImages
         try {
           const uploadedReport = await uploadInspectionDraftImage(
-            this.data.taskId,
-            this.data.itemId,
+            requestedTaskId,
+            requestedItemId,
             preparedPath,
           )
+          if (!this.isActiveWorkbenchRequest(requestedTaskId, requestedItemId)) return
           reportImages = [...reportImages, uploadedReport.url]
         } catch {
+          if (!this.isActiveWorkbenchRequest(requestedTaskId, requestedItemId)) return
           showTopToast({ title: '识别完成，质检单图片未写入草稿', icon: 'none' })
         }
         const unmatched = [...this.data.unmatched, ...merged.unmatched]
         const next = { ...workbench, rows: merged.rows }
+        const recognizedInspectionDate = resolvedInspectionDate(result.record.inspectionDate)
+        const inspectionDate = recognizedInspectionDate || this.data.inspectionDate
+        const aiWorkbenchResult = {
+          ...this.data.aiWorkbenchResult,
+          ...(recognizedInspectionDate ? { inspection_date: recognizedInspectionDate } : {}),
+        }
         this.setData({
           workbench: next,
+          aiWorkbenchResult,
+          finalState: buildInspectionWorkbenchFinalState(merged.rows, aiWorkbenchResult),
+          inspectionDate,
           unmatched,
           rawContent: [this.data.rawContent, result.rawContent].filter(Boolean).join('\n\n---\n\n'),
           reportImages,
@@ -375,9 +707,13 @@ Component({
         this.syncCurrentPageAfterRecognition(next.rows, unmatched)
         showTopToast({ title: merged.unmatched.length ? '识别完成，请核对未匹配条目' : '识别结果已回填', icon: 'none' })
       } catch (error) {
-        this.setData({ recognitionError: errorMessage(error, '质检单识别失败') })
+        if (this.isActiveWorkbenchRequest(requestedTaskId, requestedItemId)) {
+          this.setData({ recognitionError: errorMessage(error, '质检单识别失败') })
+        }
       } finally {
-        this.setData({ recognizing: false })
+        if (this.isActiveWorkbenchRequest(requestedTaskId, requestedItemId)) {
+          this.setData({ recognizing: false })
+        }
       }
     },
 
@@ -426,12 +762,14 @@ Component({
     },
 
     syncCurrentPageAfterRecognition(rows: InspectionWorkbenchRow[], unmatched: UnmatchedRecognitionRow[]) {
+      if (!this.isActiveWorkbenchRequest(this.data.taskId, this.data.itemId)) return
       const pages = buildInspectionWorkbenchPages(rows, unmatched)
       const matchedRow = rows.find((row) => row.measurements.some((value) => value.trim()))
       const matchedIndex = matchedRow ? findInspectionWorkbenchPageForRow(pages, matchedRow.rowKey) : -1
       const activePage = matchedIndex >= 0 ? matchedIndex : Math.min(this.data.activePage, Math.max(0, pages.length - 1))
       this.setData({
         pages,
+        finalState: buildInspectionWorkbenchFinalState(rows, this.data.aiWorkbenchResult),
         activePage,
         currentPage: pages[activePage] || null,
         pageNumber: pages.length ? activePage + 1 : 0,
@@ -471,7 +809,17 @@ Component({
     async saveDraft(closeAfterSave = false) {
       const shouldClose = closeAfterSave === true
       const { workbench, task, item } = this.data
-      if (!workbench || !task || !item || this.data.saving || this.data.loading || this.data.recognizing) return
+      if (
+        !workbench
+        || !task
+        || !item
+        || this.data.saving
+        || this.data.loading
+        || this.data.recognizing
+        || this.data.photoUploading
+        || this.data.photoDeletingIndex >= 0
+        || !this.isActiveWorkbenchRequest(this.data.taskId, this.data.itemId)
+      ) return
       const pendingPhotos = workbench.rows.flatMap((row) => row.images).filter((photo) => photo.status !== 'uploaded')
       if (pendingPhotos.length) {
         showTopToast({ title: '请先重试或删除未完成上传的照片', icon: 'none' })
@@ -486,24 +834,31 @@ Component({
             orderNumber: text(task.contract_no),
             model: text(item.spec_desc || item.material_name),
             arrivalQuantity: item.quantity === null || item.quantity === undefined ? '' : String(item.quantity),
-            inspectionDate: text(task.signed_date),
+            inspectionDate: this.data.inspectionDate,
           },
           rawContent: this.data.rawContent,
           unmatched: this.data.unmatched,
-          reportImages: this.data.reportImages,
+          qualitySheetImages: this.data.reportImages,
+          inspectionImages: this.data.inspectionImages,
+          aiResult: this.data.aiWorkbenchResult,
         }))
+        if (!this.isActiveWorkbenchRequest(this.data.taskId, this.data.itemId)) return
         this.setData({ savedMessage: '草稿已保存', dirty: false })
         showTopToast({ title: '草稿已保存', icon: 'success' })
         this.triggerEvent('saved', { taskId: this.data.taskId, itemId: this.data.itemId })
         if (shouldClose) this.finishClose()
       } catch (error) {
-        showTopToast({
-          message: errorMessage(error, '草稿保存失败，请重试'),
-          type: 'error',
-          duration: 3600,
-        })
+        if (this.isActiveWorkbenchRequest(this.data.taskId, this.data.itemId)) {
+          showTopToast({
+            message: errorMessage(error, '草稿保存失败，请重试'),
+            type: 'error',
+            duration: 3600,
+          })
+        }
       } finally {
-        this.setData({ saving: false })
+        if (this.isActiveWorkbenchRequest(this.data.taskId, this.data.itemId)) {
+          this.setData({ saving: false })
+        }
       }
     },
   },

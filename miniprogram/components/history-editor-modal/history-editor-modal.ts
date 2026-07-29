@@ -54,9 +54,13 @@ const EDITABLE_RECORD_FIELDS = [
 type EditableRecordField = typeof EDITABLE_RECORD_FIELDS[number]
 type HistoryOrigin = 'local' | 'remote'
 type HistoryEditKind = '' | 'record' | 'row' | 'measurement'
+type InlineEditorWidth = 'narrow' | 'wide'
 
 const productLabels = PRODUCT_OPTIONS.map((option) => option.label)
 const HISTORY_EDITOR_CLOSE_DELAY_MS = 300
+const INLINE_EDITOR_MIN_HEIGHT_RPX = 48
+const INLINE_EDITOR_NOTES_MIN_HEIGHT_RPX = 72
+const INLINE_EDITOR_MAX_HEIGHT_RPX = 192
 const attachedHistoryEditorModals = new WeakSet<object>()
 const historyEditorCloseTimers = new WeakMap<object, ReturnType<typeof setTimeout>>()
 const historyEditorDraftValues = new WeakMap<object, string>()
@@ -90,6 +94,33 @@ function sourceTypeFrom(value: string): InspectionSourceType {
 
 function normalizeSharedEditorValue(value: string, multiline: boolean): string {
   return multiline ? value : value.replace(/[\r\n]+/g, ' ')
+}
+
+function calculateInlineEditorHeight(
+  value: string,
+  width: InlineEditorWidth,
+  multiline: boolean,
+): number {
+  const charactersPerLine = width === 'wide' ? 26 : 13
+  const lineCount = value
+    .split(/\r?\n/)
+    .reduce((count, line) => count + Math.max(1, Math.ceil(line.length / charactersPerLine)), 0)
+  const contentHeight = lineCount * 34 + 14
+  const minimumHeight = multiline
+    ? INLINE_EDITOR_NOTES_MIN_HEIGHT_RPX
+    : INLINE_EDITOR_MIN_HEIGHT_RPX
+  return Math.min(
+    INLINE_EDITOR_MAX_HEIGHT_RPX,
+    Math.max(minimumHeight, contentHeight),
+  )
+}
+
+function pixelsToRpx(height: number): number {
+  const windowWidth = wx.getSystemInfoSync().windowWidth
+  if (!Number.isFinite(height) || height <= 0 || !windowWidth) {
+    return 0
+  }
+  return Math.round(height * 750 / windowWidth)
 }
 
 function clearHistoryEditorCloseTimer(component: object): void {
@@ -141,12 +172,13 @@ Component({
     expandedRowIndex: -1,
     activeEditKind: '' as HistoryEditKind,
     activeEditField: '',
-    activeEditLabel: '',
     activeEditValue: '',
     activeEditRowIndex: -1,
     activeEditMeasurementIndex: -1,
     activeEditMultiline: false,
-    activeEditorVisible: false,
+    activeEditorWidth: 'narrow' as InlineEditorWidth,
+    activeEditorBaseHeight: INLINE_EDITOR_MIN_HEIGHT_RPX,
+    activeEditorHeight: INLINE_EDITOR_MIN_HEIGHT_RPX,
     activeEditorFocused: false,
   },
 
@@ -211,12 +243,13 @@ Component({
         expandedRowIndex: -1,
         activeEditKind: '',
         activeEditField: '',
-        activeEditLabel: '',
         activeEditValue: '',
         activeEditRowIndex: -1,
         activeEditMeasurementIndex: -1,
         activeEditMultiline: false,
-        activeEditorVisible: false,
+        activeEditorWidth: 'narrow',
+        activeEditorBaseHeight: INLINE_EDITOR_MIN_HEIGHT_RPX,
+        activeEditorHeight: INLINE_EDITOR_MIN_HEIGHT_RPX,
         activeEditorFocused: false,
       }, () => void this.loadRecord())
     },
@@ -329,12 +362,13 @@ Component({
         expandedRowIndex: -1,
         activeEditKind: '',
         activeEditField: '',
-        activeEditLabel: '',
         activeEditValue: '',
         activeEditRowIndex: -1,
         activeEditMeasurementIndex: -1,
         activeEditMultiline: false,
-        activeEditorVisible: false,
+        activeEditorWidth: 'narrow',
+        activeEditorBaseHeight: INLINE_EDITOR_MIN_HEIGHT_RPX,
+        activeEditorHeight: INLINE_EDITOR_MIN_HEIGHT_RPX,
         activeEditorFocused: false,
       })
     },
@@ -357,12 +391,13 @@ Component({
         expandedRowIndex: -1,
         activeEditKind: '',
         activeEditField: '',
-        activeEditLabel: '',
         activeEditValue: '',
         activeEditRowIndex: -1,
         activeEditMeasurementIndex: -1,
         activeEditMultiline: false,
-        activeEditorVisible: false,
+        activeEditorWidth: 'narrow',
+        activeEditorBaseHeight: INLINE_EDITOR_MIN_HEIGHT_RPX,
+        activeEditorHeight: INLINE_EDITOR_MIN_HEIGHT_RPX,
         activeEditorFocused: false,
       }, () => wx.hideKeyboard())
       scheduleHistoryEditorClose(this, () => {
@@ -406,12 +441,13 @@ Component({
         expandedRowIndex: -1,
         activeEditKind: '',
         activeEditField: '',
-        activeEditLabel: '',
         activeEditValue: '',
         activeEditRowIndex: -1,
         activeEditMeasurementIndex: -1,
         activeEditMultiline: false,
-        activeEditorVisible: false,
+        activeEditorWidth: 'narrow',
+        activeEditorBaseHeight: INLINE_EDITOR_MIN_HEIGHT_RPX,
+        activeEditorHeight: INLINE_EDITOR_MIN_HEIGHT_RPX,
         activeEditorFocused: false,
       }, () => {
         if (notifyParent && attachedHistoryEditorModals.has(this)) {
@@ -446,14 +482,15 @@ Component({
       if (this.data.closing || this.data.loading) return
       const field = String(event.currentTarget.dataset.field || '')
       if (!isEditableRecordField(field)) return
-      this.activateSharedEditor(
+      this.activateInlineEditor(
         'record',
         field,
         -1,
         -1,
-        String(event.currentTarget.dataset.label || ''),
         this.data.record[field],
         field === 'notes',
+        field === 'notes' || field === 'inspectionDate' ? 'wide' : 'narrow',
+        `#history-editor-record-${field}`,
       )
     },
 
@@ -464,14 +501,15 @@ Component({
       if (!Number.isInteger(rowIndex) || !isInspectionRowField(field)) return
       const row = (historyEditorRows.get(this) || [])[rowIndex]
       if (!row) return
-      this.activateSharedEditor(
+      this.activateInlineEditor(
         'row',
         field,
         rowIndex,
         -1,
-        String(event.currentTarget.dataset.label || ''),
         row[field],
         false,
+        field === 'specification' ? 'wide' : 'narrow',
+        `#history-editor-row-${rowIndex}-${field}`,
       )
     },
 
@@ -483,64 +521,92 @@ Component({
       const measurement = (historyEditorRows.get(this) || [])[rowIndex]
         ?.measurements[measurementIndex]
       if (measurement === undefined) return
-      this.activateSharedEditor(
+      this.activateInlineEditor(
         'measurement',
         '',
         rowIndex,
         measurementIndex,
-        `样本 ${measurementIndex + 1}`,
         measurement,
         false,
+        'narrow',
+        '',
       )
     },
 
-    activateSharedEditor(
+    activateInlineEditor(
       kind: Exclude<HistoryEditKind, ''>,
       field: string,
       rowIndex: number,
       measurementIndex: number,
-      label: string,
       value: string,
       multiline: boolean,
+      width: InlineEditorWidth,
+      displaySelector: string,
     ) {
-      const activate = () => {
+      const fallbackHeight = calculateInlineEditorHeight(value, width, multiline)
+      const activate = (height: number) => {
         if (!attachedHistoryEditorModals.has(this) || this.data.closing) return
         historyEditorDraftValues.set(this, value)
         this.setData({
           activeEditKind: kind,
           activeEditField: field,
-          activeEditLabel: label,
           activeEditValue: value,
           activeEditRowIndex: rowIndex,
           activeEditMeasurementIndex: measurementIndex,
           activeEditMultiline: multiline,
-          activeEditorVisible: true,
+          activeEditorWidth: width,
+          activeEditorBaseHeight: height,
+          activeEditorHeight: height,
           activeEditorFocused: true,
         })
       }
+      const activateWithDisplayedHeight = () => {
+        if (!displaySelector) {
+          activate(fallbackHeight)
+          return
+        }
+        wx.createSelectorQuery()
+          .in(this)
+          .select(displaySelector)
+          .boundingClientRect((rect) => {
+            const height = pixelsToRpx(rect?.height || 0)
+            activate(height || fallbackHeight)
+          })
+          .exec()
+      }
       if (this.data.activeEditKind) {
-        this.commitActiveEditor(activate, true)
+        this.commitActiveEditor(activateWithDisplayedHeight)
         return
       }
-      activate()
+      activateWithDisplayedHeight()
     },
 
-    onSharedEditorInput(event: InputValueEvent) {
+    onInlineEditorInput(event: InputValueEvent) {
       if (this.data.closing || !this.data.activeEditKind) return
-      historyEditorDraftValues.set(this, event.detail.value)
+      const value = event.detail.value
+      historyEditorDraftValues.set(this, value)
+      const height = calculateInlineEditorHeight(
+        value,
+        this.data.activeEditorWidth,
+        this.data.activeEditMultiline,
+      )
+      const nextHeight = Math.max(this.data.activeEditorBaseHeight, height)
+      if (nextHeight !== this.data.activeEditorHeight) {
+        this.setData({ activeEditorHeight: nextHeight })
+      }
     },
 
-    onSharedEditorBlur() {
+    onInlineEditorBlur() {
       if (this.data.closing || !this.data.activeEditKind) return
       this.commitActiveEditor()
     },
 
-    confirmSharedEditor() {
+    confirmInlineEditor() {
       if (this.data.closing || !this.data.activeEditKind) return
       this.commitActiveEditor(() => wx.hideKeyboard())
     },
 
-    commitActiveEditor(callback?: () => void, preserveEditor = false) {
+    commitActiveEditor(callback?: () => void) {
       const kind = this.data.activeEditKind
       if (!kind) {
         if (callback) callback()
@@ -551,19 +617,18 @@ Component({
         historyEditorDraftValues.get(this) ?? this.data.activeEditValue,
         this.data.activeEditMultiline,
       )
-      const patch: Record<string, unknown> = preserveEditor
-        ? {}
-        : {
-            activeEditKind: '',
-            activeEditField: '',
-            activeEditLabel: '',
-            activeEditValue: '',
-            activeEditRowIndex: -1,
-            activeEditMeasurementIndex: -1,
-            activeEditMultiline: false,
-            activeEditorVisible: false,
-            activeEditorFocused: false,
-          }
+      const patch: Record<string, unknown> = {
+        activeEditKind: '',
+        activeEditField: '',
+        activeEditValue: '',
+        activeEditRowIndex: -1,
+        activeEditMeasurementIndex: -1,
+        activeEditMultiline: false,
+        activeEditorWidth: 'narrow',
+        activeEditorBaseHeight: INLINE_EDITOR_MIN_HEIGHT_RPX,
+        activeEditorHeight: INLINE_EDITOR_MIN_HEIGHT_RPX,
+        activeEditorFocused: false,
+      }
 
       if (kind === 'record' && isEditableRecordField(this.data.activeEditField)) {
         patch[`record.${this.data.activeEditField}`] = value

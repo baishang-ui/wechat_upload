@@ -21,6 +21,8 @@
   position: absolute;
   inset: 0;
   background: rgba(15, 28, 53, .42);
+  -webkit-backdrop-filter: blur(12rpx);
+  backdrop-filter: blur(12rpx);
   animation: history-modal-mask-in .24s ease-out both;
 }
 
@@ -117,7 +119,9 @@
   background: #e7ecf2;
   box-sizing: border-box;
   font-size: 36rpx;
+  font-weight: 400;
   line-height: 1;
+  text-align: center;
   transition: color .18s ease, background .18s ease, transform .18s ease;
 }
 
@@ -125,104 +129,6 @@
   color: #35445a;
   background: #dbe3ec;
   transform: scale(.92);
-}
-
-.shared-inline-editor {
-  flex: none;
-  width: 100%;
-  max-height: 0;
-  padding: 0 24rpx;
-  overflow: hidden;
-  opacity: 0;
-  visibility: hidden;
-  border-bottom: 0 solid #dce5f1;
-  background: #fff;
-  box-sizing: border-box;
-  pointer-events: none;
-  transition:
-    max-height .18s ease,
-    padding .18s ease,
-    opacity .14s ease,
-    border-width .18s ease,
-    visibility 0s linear .18s;
-}
-
-.shared-inline-editor.is-active {
-  max-height: 134rpx;
-  padding-top: 12rpx;
-  padding-bottom: 14rpx;
-  opacity: 1;
-  visibility: visible;
-  border-bottom-width: 1rpx;
-  pointer-events: auto;
-  transition-delay: 0s;
-}
-
-.shared-inline-editor.is-active.is-multiline {
-  max-height: 222rpx;
-}
-
-.shared-inline-editor-label {
-  height: 30rpx;
-  overflow: hidden;
-  color: $ui-text-secondary;
-  font-size: 20rpx;
-  line-height: 30rpx;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.shared-inline-editor-control {
-  min-width: 0;
-  margin-top: 6rpx;
-  display: flex;
-  align-items: flex-end;
-  gap: 12rpx;
-}
-
-.shared-inline-editor-input {
-  min-width: 0;
-  width: auto;
-  height: 64rpx;
-  min-height: 64rpx;
-  max-height: 64rpx;
-  margin: 0;
-  padding: 12rpx 14rpx;
-  flex: 1;
-  overflow: hidden;
-  color: $ui-text-primary;
-  border: 1rpx solid #aebed3;
-  border-radius: 12rpx;
-  background: #f8fafc;
-  box-sizing: border-box;
-  font-size: 24rpx;
-  line-height: 38rpx;
-}
-
-.shared-inline-editor.is-multiline .shared-inline-editor-input {
-  height: 144rpx;
-  min-height: 144rpx;
-  max-height: 144rpx;
-  line-height: 1.5;
-}
-
-.shared-inline-editor-done {
-  flex: none;
-  width: 92rpx;
-  height: 64rpx;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 12rpx;
-  color: #fff;
-  background: #3275dd;
-  box-sizing: border-box;
-  font-size: 22rpx;
-  font-weight: 700;
-}
-
-.shared-inline-editor-done:active {
-  opacity: .72;
 }
 
 .history-modal-body {
@@ -319,13 +225,12 @@
   gap: 12rpx;
 }
 
-.detail-field,
-.row-field {
+.form-field {
   min-width: 0;
-  padding: 16rpx;
+  padding: 13rpx 15rpx;
   border: 1rpx solid $ui-field-border;
   border-radius: 14rpx;
-  background: $ui-field-background;
+  background: #fff;
   box-sizing: border-box;
 }
 
@@ -344,7 +249,7 @@
 
 .field-label {
   display: block;
-  margin-bottom: 7rpx;
+  margin-bottom: 6rpx;
   font-size: 20rpx;
 }
 
@@ -360,26 +265,37 @@
 .inline-edit-value {
   width: 100%;
   min-height: 48rpx;
-  padding: 4rpx 2rpx;
+  padding: 7rpx 0;
   display: flex;
-  align-items: center;
-  overflow: hidden;
+  align-items: flex-start;
+  overflow: visible;
   color: $ui-text-primary;
-  border-bottom: 1rpx dashed #b9c8dc;
   box-sizing: border-box;
-  font-size: 24rpx;
+  font-size: 23rpx;
   line-height: 1.45;
   overflow-wrap: anywhere;
-}
-
-.inline-edit-value.is-active {
-  color: #1f5fb7;
-  border-bottom-color: #4f86d7;
-  background: #edf4ff;
+  white-space: pre-wrap;
+  word-break: break-word;
 }
 
 .inline-edit-value:active {
   opacity: .7;
+}
+
+.inline-edit-input {
+  width: 100%;
+  margin: 0;
+  padding: 7rpx 0;
+  overflow-y: auto;
+  color: $ui-text-primary;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-sizing: border-box;
+  font-size: 23rpx;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .product-selector {
@@ -412,14 +328,14 @@
 .inspection-list {
   display: flex;
   flex-direction: column;
-  gap: 18rpx;
+  gap: 20rpx;
 }
 
 .inspection-item-card {
   margin: 0;
   padding: 0;
   overflow: hidden;
-  background: rgba(249, 252, 255, .9);
+  background: rgba(255, 255, 255, .9);
   transition: border-color .2s ease, box-shadow .2s ease;
 }
 
@@ -429,17 +345,17 @@
 }
 
 .inspection-item-summary {
-  min-height: 112rpx;
-  padding: 22rpx 24rpx;
+  min-height: 118rpx;
+  padding: 23rpx 24rpx;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 18rpx;
   box-sizing: border-box;
 }
 
 .inspection-item-title-wrap {
   min-width: 0;
+  padding-right: 18rpx;
   flex: 1;
 }
 
@@ -471,66 +387,88 @@
 }
 
 .inspection-item-details {
-  padding: 20rpx 20rpx 22rpx;
+  padding: 4rpx 24rpx 26rpx;
   border-top: 1rpx solid #e6edf7;
   background: rgba(249, 252, 255, .78);
   animation: history-item-details-in .2s ease-out both;
 }
 
-.measurement-grid,
+.detail-label--spaced {
+  margin-top: 22rpx;
+}
+
+.measurement-grid {
+  margin-top: 10rpx;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12rpx;
+}
+
 .judgement-grid {
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 8rpx;
 }
 
-.measurement-grid {
-  margin-top: 14rpx;
-}
-
-.measurement-cell {
+.measurement-field {
   min-width: 0;
-  height: 88rpx;
-  padding: 7rpx 4rpx;
   display: flex;
-  flex-direction: column;
   align-items: center;
-  justify-content: center;
-  overflow: hidden;
-  border: 1rpx solid #e1e7ef;
-  border-radius: 10rpx;
-  background: #fff;
+  gap: 8rpx;
+  padding: 9rpx 11rpx;
+  border-radius: 13rpx;
+  background: $ui-field-background;
   box-sizing: border-box;
-  text-align: center;
 }
 
-.measurement-cell.is-active {
-  color: #1f5fb7;
-  border-color: #77a1dc;
-  background: #edf4ff;
+.measurement-display {
+  min-width: 0;
+  height: 48rpx;
+  min-height: 48rpx;
+  flex: 1;
+  display: flex;
+  align-items: center;
+  overflow: hidden;
 }
 
-.measurement-cell:active {
+.measurement-display:active {
   opacity: .72;
 }
 
-.measurement-label,
+.measurement-label {
+  width: 26rpx;
+  flex: none;
+  color: $ui-text-secondary;
+  font-size: 21rpx;
+  text-align: center;
+}
+
 .measurement-value {
+  min-width: 0;
   width: 100%;
   overflow: hidden;
+  color: $ui-text-primary;
+  font-size: 23rpx;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.measurement-label {
-  color: $ui-text-secondary;
-  font-size: 18rpx;
-}
-
-.measurement-value {
-  margin-top: 4rpx;
+.measurement-input {
+  min-width: 0;
+  width: auto;
+  height: 48rpx;
+  min-height: 48rpx;
+  margin: 0;
+  padding: 0;
+  flex: 1;
   color: $ui-text-primary;
-  font-size: 22rpx;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-sizing: border-box;
+  font-size: 23rpx;
+  line-height: 48rpx;
+  text-align: left;
 }
 
 .judgement-section {
@@ -575,8 +513,6 @@
 
 .notes-value {
   min-height: 72rpx;
-  align-items: flex-start;
-  white-space: pre-wrap;
 }
 
 .modal-body-spacer {
@@ -650,13 +586,20 @@
   }
 
   .detail-grid,
-  .row-field-grid {
+  .row-field-grid,
+  .measurement-grid {
     grid-template-columns: 1fr;
   }
 
   .detail-field--wide,
   .row-field--wide {
     grid-column: auto;
+  }
+
+  .inspection-item-summary,
+  .inspection-item-details {
+    padding-right: 20rpx;
+    padding-left: 20rpx;
   }
 }
 

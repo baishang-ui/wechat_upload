@@ -17,6 +17,7 @@ import {
   recognizeInspectionFile,
   saveInspectionDraft,
   uploadInspectionDraftImage,
+  uploadInspectionWorkbenchImage,
   uploadInspectionRowImage,
   QualityInspectionDraftPayload,
 } from '../miniprogram/services/quality-inspection-service'
@@ -59,7 +60,6 @@ test('listProductQualityTemplates reads inspection rows from the product databas
   })
   assert.deepEqual(result, { items: [] })
 })
-
 
 test('recognized order number and model match one pending database product', () => {
   const record = createCompleteRecord()
@@ -928,6 +928,32 @@ test('uploadInspectionDraftImage stores the recognized report as a server URL', 
     row_key: 'quality-sheet',
   })
   assert.equal(result.url, 'https://www.binictools.cn:7876/uploads/quality-sheet.jpg')
+})
+
+test('uploadInspectionWorkbenchImage sends images to the online AI workbench area', async () => {
+  const calls: Array<Record<string, unknown>> = []
+  const result = await uploadInspectionWorkbenchImage(
+    10,
+    11,
+    '/tmp/inspection-photo.jpg',
+    async <T>(options: Record<string, unknown>): Promise<T> => {
+      calls.push(options)
+      return {
+        image_url: '/uploads/inspection-photo.jpg',
+        image_path: '/srv/uploads/inspection-photo.jpg',
+      } as T
+    },
+  )
+
+  assert.equal(calls[0].path, '/inquiries/api/upload-image')
+  assert.equal(calls[0].filePath, '/tmp/inspection-photo.jpg')
+  assert.equal(calls[0].name, 'file')
+  assert.deepEqual(calls[0].formData, {
+    task_id: '10',
+    item_id: '11',
+    row_key: 'ai-workbench',
+  })
+  assert.equal(result.url, 'https://www.binictools.cn:7876/uploads/inspection-photo.jpg')
 })
 
 test('uploadInspectionRowImage sends the row context with the multipart file', async () => {

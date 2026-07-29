@@ -42,6 +42,31 @@ test('inspection workbench modal uses a record-style drawer, page controls, and 
   assert.match(scss, /@keyframes modal-sheet-up/)
 })
 
+test('inspection workbench drawer mirrors the six online formal report sections and final decision content', () => {
+  const wxml = source('miniprogram/components/inspection-workbench-modal/inspection-workbench-modal.wxml')
+  const ts = source('miniprogram/components/inspection-workbench-modal/inspection-workbench-modal.ts')
+
+  assert.match(ts, /buildInspectionWorkbenchFinalState/)
+  assert.match(wxml, /currentPage\.kind === 'overview'/)
+  assert.match(wxml, /报告编号/)
+  assert.match(wxml, /检验日期/)
+  assert.match(wxml, /产品名称/)
+  assert.match(wxml, /物料编码/)
+  assert.match(wxml, /批号/)
+  assert.match(wxml, /规格型号/)
+  assert.match(wxml, /订单号/)
+  assert.match(wxml, /抽检数量/)
+  assert.match(wxml, /检验模板/)
+  assert.match(wxml, /currentPage\.kind === 'inspection'/)
+  assert.match(wxml, /currentPage\.kind === 'final'/)
+  assert.match(wxml, /合格/)
+  assert.match(wxml, /让步接收/)
+  assert.match(wxml, /不合格/)
+  assert.match(wxml, /异常说明与处理建议/)
+  assert.match(wxml, /总判定/)
+  assert.doesNotMatch(wxml, /每页最多展示 3 项/)
+})
+
 test('inspection workbench drawer keeps record-style fixed height, scrollable content, and exit animation', () => {
   const wxml = source('miniprogram/components/inspection-workbench-modal/inspection-workbench-modal.wxml')
   const scss = source('miniprogram/components/inspection-workbench-modal/inspection-workbench-modal.scss')
@@ -121,9 +146,8 @@ test('workbench drawer discards stale item detail responses before they can over
 
   assert.match(ts, /const requestedTaskId = this\.data\.taskId/)
   assert.match(ts, /const requestedItemId = this\.data\.itemId/)
-  assert.match(ts, /requestedTaskId !== this\.data\.taskId/)
-  assert.match(ts, /requestedItemId !== this\.data\.itemId/)
-  assert.match(ts, /!this\.data\.visible/)
+  assert.match(ts, /!this\.isActiveWorkbenchRequest\(requestedTaskId, requestedItemId\)/)
+  assert.match(ts, /this\.data\.visible && !this\.data\.closing && this\.data\.taskId && this\.data\.itemId/)
 })
 
 test('pending workbench drawer uses a decision switch with on as OK and off as NG', () => {
@@ -150,9 +174,59 @@ test('workbench draft metadata keeps the purchase contract separate from the qua
 
 test('recognized quality sheets are uploaded before draft save instead of embedding base64 in the item remark', () => {
   const modal = source('miniprogram/components/inspection-workbench-modal/inspection-workbench-modal.ts')
+  const qualitySheetMethod = modal.match(/async recognizeQualitySheet\(imagePath: string\) \{([\s\S]*?)\n    \},\n\n    previewReportImage/)?.[1] || ''
 
-  assert.match(modal, /uploadInspectionDraftImage\(\s*this\.data\.taskId,\s*this\.data\.itemId,\s*preparedPath,\s*\)/)
-  assert.doesNotMatch(modal, /inspectionImageToDataUrl\(preparedPath\)/)
-  assert.match(modal, /reportImages:\s*this\.data\.reportImages/)
+  assert.match(qualitySheetMethod, /uploadInspectionDraftImage\(\s*requestedTaskId,\s*requestedItemId,\s*preparedPath,\s*\)/)
+  assert.doesNotMatch(qualitySheetMethod, /inspectionImageToDataUrl\(preparedPath\)/)
+  assert.match(qualitySheetMethod, /let reportImages = this\.data\.reportImages/)
+  assert.match(qualitySheetMethod, /reportImages,/)
   assert.match(modal, /saveInspectionDraft\(this\.data\.taskId, this\.data\.itemId/)
+})
+
+test('workbench overview uploads inspection photos to the online AI workbench without running AI locally', () => {
+  const wxml = source('miniprogram/components/inspection-workbench-modal/inspection-workbench-modal.wxml')
+  const scss = source('miniprogram/components/inspection-workbench-modal/inspection-workbench-modal.scss')
+  const ts = source('miniprogram/components/inspection-workbench-modal/inspection-workbench-modal.ts')
+  const photoMethods = ts.match(/chooseInspectionPhotos\(\) \{[\s\S]*?\n    \},\n\n    takeQualitySheetPhoto/)?.[0] || ''
+
+  assert.match(wxml, /验货图片识别/)
+  assert.match(wxml, /同步到线上验货图片识别区域/)
+  assert.match(wxml, /bindtap="chooseInspectionPhotos"/)
+  assert.match(wxml, /bindtap="previewInspectionImage"/)
+  assert.match(wxml, /catchtap="deleteInspectionImage"/)
+  assert.match(wxml, /class="inspection-upload-delete/)
+  assert.match(wxml, /inspectionImages/)
+  assert.doesNotMatch(wxml, /assignPendingPhoto|removePendingPhoto|candidateRow/)
+  assert.match(ts, /photoUploading:\s*false/)
+  assert.match(ts, /photoUploadError:\s*''/)
+  assert.match(ts, /inspectionImages:\s*\[\]/)
+  assert.match(ts, /uploadInspectionWorkbenchImage/)
+  assert.match(ts, /visual_recognition_request:\s*imageCount > 0/)
+  assert.match(ts, /status:\s*'pending'[\s\S]*?source:\s*'miniprogram'/)
+  assert.match(ts, /status:\s*'cleared'[\s\S]*?source:\s*'miniprogram'[\s\S]*?image_count:\s*0/)
+  assert.match(ts, /await saveInspectionDraft\(requestedTaskId, requestedItemId/)
+  assert.match(ts, /async deleteInspectionImage\(event: RowActionEvent\)/)
+  assert.match(ts, /inspectionRecognitionRequest\(inspectionImages\.length\)/)
+  assert.match(ts, /inspectionImages,\s*\n\s*aiResult:\s*aiWorkbenchResult/)
+  assert.doesNotMatch(ts, /recognizeInspectionPhotoAssignments|classifyInspectionPhotoAssignments/)
+  assert.doesNotMatch(photoMethods, /recognizeInspection\s*\(/)
+  assert.doesNotMatch(photoMethods, /\/ai-judge/)
+  assert.doesNotMatch(photoMethods, /wx\.showModal|wx\.showActionSheet/)
+  assert.match(scss, /\.inspection-upload-list/)
+  assert.match(scss, /\.inspection-upload-preview/)
+  assert.match(scss, /\.inspection-upload-delete/)
+  assert.doesNotMatch(scss, /\.pending-photo-/)
+})
+
+test('workbench photo requests stop mutating the drawer after closing begins', () => {
+  const ts = source('miniprogram/components/inspection-workbench-modal/inspection-workbench-modal.ts')
+  const scss = source('miniprogram/components/inspection-workbench-modal/inspection-workbench-modal.scss')
+
+  assert.match(ts, /isActiveWorkbenchRequest\(taskId: number, itemId: number\): boolean \{\s*return this\.data\.visible\s*&& !this\.data\.closing\s*&& taskId === this\.data\.taskId\s*&& itemId === this\.data\.itemId/)
+  assert.match(ts, /async loadWorkbench\(\) \{[\s\S]*?!this\.isActiveWorkbenchRequest\(requestedTaskId, requestedItemId\)/)
+  assert.match(ts, /async uploadInspectionPhotos\(localPaths: string\[\]\) \{[\s\S]*?if \(!this\.isActiveWorkbenchRequest\(requestedTaskId, requestedItemId\)\) return/)
+  assert.match(ts, /async appendAndUploadPhotos\(rowKey: string, localPaths: string\[\]\) \{[\s\S]*?if \(!this\.isActiveWorkbenchRequest\(requestedTaskId, requestedItemId\)\) return/)
+  assert.match(ts, /async saveDraft\(closeAfterSave = false\) \{[\s\S]*?!this\.isActiveWorkbenchRequest\(this\.data\.taskId, this\.data\.itemId\)/)
+  assert.match(scss, /\.workbench-modal-mask\s*\{[\s\S]*?backdrop-filter:\s*blur\(12rpx\)/)
+  assert.match(scss, /\.workbench-modal-layer\.is-closing \.workbench-modal-panel\s*\{[\s\S]*?modal-sheet-down/)
 })
