@@ -77,17 +77,11 @@
               <view class="recognition-button recognition-button--primary {{photoUploading ? 'is-disabled' : ''}}" aria-disabled="{{photoUploading}}" role="button" bindtap="chooseInspectionPhotos">{{photoUploading ? '正在上传…' : '拍摄或选择验货图片'}}</view>
             </view>
             <view wx:if="{{photoUploadError}}" class="inline-error">{{photoUploadError}}</view>
-            <view wx:if="{{inspectionImages.length}}" class="inspection-upload-list">
-              <view wx:for="{{inspectionImages}}" wx:key="*this" class="inspection-upload-preview" data-index="{{index}}" bindtap="previewInspectionImage">
-                <image src="{{item}}" mode="aspectFill"></image>
-                <text>验货图片 {{index + 1}}</text>
-                <view
-                  class="inspection-upload-delete {{photoDeletingIndex === index ? 'is-disabled' : ''}}"
-                  data-index="{{index}}"
-                  aria-label="删除验货图片 {{index + 1}}"
-                  role="button"
-                  catchtap="deleteInspectionImage"
-                >×</view>
+            <view wx:if="{{inspectionImages.length}}" class="inspection-classification-status {{inspectionClassificationPending ? 'is-pending' : ''}}">
+              <view class="inspection-classification-status-main">
+                <text>{{inspectionClassificationPending ? '线上正在识别归类' : '线上归类结果'}}</text>
+                <text wx:if="{{inspectionClassificationPending}}">识别完成后，重新打开订单即可同步到对应检验条目</text>
+                <text wx:else>已关联 {{inspectionClassifiedCount}} / {{inspectionImages.length}} 张，图片显示在对应条目的现场照片中</text>
               </view>
             </view>
           </view>

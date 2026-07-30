@@ -12,6 +12,7 @@ import {
   inspectionImageToDataUrl,
   inspectionRecordToDraft,
   getInspectionItemDetail,
+  getInspectionTask,
   listInspectionTasks,
   listProductQualityTemplates,
   matchRecognizedInspectionToPendingItem,
@@ -592,6 +593,112 @@ test('task lists expose online inspection data and row photos without extra item
   })
 })
 
+test('compact task payload preserves server summaries and caps lazy previews', async () => {
+  const calls: Array<Record<string, unknown>> = []
+  const result = await listInspectionTasks({
+    page: 1,
+    compact: true,
+  }, async <T>(options: Record<string, unknown>) => {
+    calls.push(options)
+    return {
+      items: [{
+        id: 18,
+        items: [{
+          id: 19,
+          inspection_summary: {
+            total: 8,
+            filled: 6,
+            ok: 5,
+            ng: 1,
+            has_data: true,
+          },
+          preview_images: [
+            '/uploads/one.jpg',
+            '/uploads/two.jpg',
+            '/uploads/three.jpg',
+            '/uploads/four.jpg',
+          ],
+          preview_thumbnails: [
+            '/customer-orders/api/purchase-orders/quality-inspection-image-thumbnail?url=%2Fuploads%2Fone.jpg',
+            '/customer-orders/api/purchase-orders/quality-inspection-image-thumbnail?url=%2Fuploads%2Ftwo.jpg',
+            '/customer-orders/api/purchase-orders/quality-inspection-image-thumbnail?url=%2Fuploads%2Fthree.jpg',
+            '/customer-orders/api/purchase-orders/quality-inspection-image-thumbnail?url=%2Fuploads%2Ffour.jpg',
+          ],
+          preview_image_count: 12,
+        }],
+      }],
+      total: 1,
+      page: 1,
+      page_size: 10,
+      stats: {},
+    } as T
+  })
+
+  assert.equal(
+    calls[0].path,
+    '/customer-orders/api/purchase-orders/quality-inspections?page=1&compact=true',
+  )
+  const item = result.items[0].items?.[0]
+  assert.deepEqual(item?.preview_images, [
+    'https://www.binictools.cn:7876/uploads/one.jpg',
+    'https://www.binictools.cn:7876/uploads/two.jpg',
+    'https://www.binictools.cn:7876/uploads/three.jpg',
+  ])
+  assert.deepEqual(item?.preview_thumbnails, [
+    'https://www.binictools.cn:7876/customer-orders/api/purchase-orders/quality-inspection-image-thumbnail?url=%2Fuploads%2Fone.jpg',
+    'https://www.binictools.cn:7876/customer-orders/api/purchase-orders/quality-inspection-image-thumbnail?url=%2Fuploads%2Ftwo.jpg',
+    'https://www.binictools.cn:7876/customer-orders/api/purchase-orders/quality-inspection-image-thumbnail?url=%2Fuploads%2Fthree.jpg',
+  ])
+  assert.equal(item?.preview_image_count, 12)
+  assert.deepEqual(item?.inspection_summary, {
+    total: 8,
+    filled: 6,
+    ok: 5,
+    ng: 1,
+    has_data: true,
+  })
+  assert.equal(item?.inspection_draft, undefined)
+})
+
+test('compact task detail uses the compact endpoint and drops legacy full drafts', async () => {
+  const calls: Array<Record<string, unknown>> = []
+  const task = await getInspectionTask(18, true, async <T>(options: Record<string, unknown>) => {
+    calls.push(options)
+    return {
+      id: 18,
+      items: [{
+        id: 19,
+        inspection_draft: {
+          records: [{
+            sample_data: ['1'],
+            decision: 'OK',
+            note: '',
+            images: [
+              '/uploads/one.jpg',
+              '/uploads/two.jpg',
+              '/uploads/three.jpg',
+              '/uploads/four.jpg',
+            ],
+          }],
+          ai_workbench_images: [],
+        },
+      }],
+    } as T
+  })
+
+  assert.deepEqual(calls[0], {
+    method: 'GET',
+    path: '/customer-orders/api/purchase-orders/quality-inspections/18?compact=true',
+  })
+  assert.equal(task.items?.[0].inspection_draft, undefined)
+  assert.equal(task.items?.[0].preview_images?.length, 3)
+  assert.deepEqual(
+    task.items?.[0].preview_thumbnails,
+    task.items?.[0].preview_images,
+  )
+  assert.equal(task.items?.[0].preview_image_count, 4)
+})
+
 test('draft save and recognition use shared backend paths', async () => {
   const requestCalls: Array<Record<string, unknown>> = []
   const uploadCalls: Array<Record<string, unknown>> = []
@@ -628,6 +735,19 @@ test('encodeTaskQuery always requests purchase-order tasks for the pending tab',
       sourceType: 'purchase_order',
     }),
     'page=2&page_size=20&search=PO-1&status=pending&source_type=purchase_order',
+  )
+})
+
+test('compact task query opts into the small backend payload', () => {
+  const { encodeTaskQuery } = require('../miniprogram/services/quality-inspection-service') as typeof import('../miniprogram/services/quality-inspection-service')
+  assert.equal(
+    encodeTaskQuery({
+      page: 1,
+      pageSize: 10,
+      sourceType: 'all',
+      compact: true,
+    }),
+    'page=1&page_size=10&source_type=all&compact=true',
   )
 })
 
@@ -1097,6 +1217,7 @@ test('inspectionImageToDataUrl embeds large images without checking a client-sid
 
 test('pending task refresh policy caches normal tab visits for thirty seconds', () => {
   const {
+    TASK_PAGE_SIZE,
     TASK_REFRESH_TTL_MS,
     shouldQueueInspectionTaskRefresh,
     shouldRefreshInspectionTasks,
@@ -1104,6 +1225,7 @@ test('pending task refresh policy caches normal tab visits for thirty seconds', 
   const now = 1_000_000
 
   assert.equal(TASK_REFRESH_TTL_MS, 30_000)
+  assert.equal(TASK_PAGE_SIZE, 10)
   assert.equal(shouldRefreshInspectionTasks(0, now), true)
   assert.equal(shouldRefreshInspectionTasks(now - 29_999, now), false)
   assert.equal(shouldRefreshInspectionTasks(now - 30_000, now), true)

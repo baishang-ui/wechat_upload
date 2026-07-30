@@ -41,6 +41,8 @@ export interface InspectionPhoto {
   remoteUrl: string
   status: 'local' | 'compressing' | 'uploading' | 'uploaded' | 'failed'
   error: string
+  origin?: 'ai_assignment'
+  sourceImageIndex?: number
 }
 
 export interface InspectionWorkbenchRow {
@@ -170,36 +172,69 @@ export function workbenchRowMatchesProject(
 function matchDraftRecords(
   sourceRows: InspectionTemplateRowDto[],
   draftRecords: InspectionDraftRecordLike[],
-): Map<InspectionTemplateRowDto, InspectionDraftRecordLike> {
-  const result = new Map<InspectionTemplateRowDto, InspectionDraftRecordLike>()
+): Map<InspectionTemplateRowDto, InspectionDraftRecordLike[]> {
+  const result = new Map<InspectionTemplateRowDto, InspectionDraftRecordLike[]>()
   const used = new Set<InspectionDraftRecordLike>()
   sourceRows.forEach((row) => {
+    const sameSemanticGroup = (draft: InspectionDraftRecordLike) => (
+      inspectionGroupSemantic(draft.group_title) === inspectionGroupSemantic(row.group_title)
+    )
     const exactMatches = draftRecords.filter((draft) => (
       !used.has(draft)
       && Boolean(row.row_key)
       && draft.row_key === row.row_key
       && templateRowMatchesProject(row, draft.project)
     ))
-    const exactSameGroup = exactMatches.filter((draft) => (
-      inspectionGroupSemantic(draft.group_title) === inspectionGroupSemantic(row.group_title)
-    ))
+    const exactSameGroup = exactMatches.filter(sameSemanticGroup)
     const exact = exactSameGroup[0] || exactMatches[0]
     if (exact) {
-      result.set(row, exact)
-      used.add(exact)
+      const matches = fallbackPhotoRequired(row)
+        ? [
+            exact,
+            ...draftRecords.filter((draft) => (
+              draft !== exact
+              && !used.has(draft)
+              && sameSemanticGroup(draft)
+              && templateRowMatchesProject(row, draft.project)
+            )),
+          ]
+        : [exact]
+      result.set(row, matches)
+      matches.forEach((draft) => used.add(draft))
       return
     }
-    const available = draftRecords.filter((draft) => !used.has(draft) && templateRowMatchesProject(row, draft.project))
-    const sameGroup = available.filter((draft) => (
-      inspectionGroupSemantic(draft.group_title) === inspectionGroupSemantic(row.group_title)
+    const available = draftRecords.filter((draft) => (
+      !used.has(draft)
+      && templateRowMatchesProject(row, draft.project)
     ))
+    const sameGroup = available.filter(sameSemanticGroup)
     const matches = sameGroup.length > 0 ? sameGroup : available
-    if (matches.length === 1) {
-      result.set(row, matches[0])
-      used.add(matches[0])
+    if (matches.length === 1 || (matches.length > 1 && fallbackPhotoRequired(row))) {
+      result.set(row, matches)
+      matches.forEach((draft) => used.add(draft))
     }
   })
   return result
+}
+
+function mergedDraftDecision(records: InspectionDraftRecordLike[]): 'OK' | 'NG' {
+  const decisions = records.map((record) => String(record.decision || '').trim().toUpperCase())
+  if (decisions.includes('NG')) return 'NG'
+  if (decisions.includes('OK')) return 'OK'
+  return 'NG'
+}
+
+function mergedDraftNote(records: InspectionDraftRecordLike[], fallback: string): string {
+  const notes = records
+    .map((record) => record.note.trim())
+    .filter((note, index, all) => Boolean(note) && all.indexOf(note) === index)
+  return notes.length > 0 ? notes.join('；') : fallback
+}
+
+function mergedDraftImages(records: InspectionDraftRecordLike[]): string[] {
+  return records
+    .flatMap((record) => record.images || [])
+    .filter((image, index, all) => Boolean(image) && all.indexOf(image) === index)
 }
 
 function uniqueWorkbenchRowKeys(rows: InspectionTemplateRowDto[]): Map<InspectionTemplateRowDto, string> {
@@ -247,7 +282,11 @@ export function buildInspectionWorkbench(options: {
   const workbenchRowKeys = uniqueWorkbenchRowKeys(orderedRows)
   const rows = orderedRows
     .map((row) => {
-      const saved = matchedDrafts.get(row)
+      const savedRecords = matchedDrafts.get(row) || []
+      const saved = savedRecords[0]
+      const measurementRecord = savedRecords.find((record) => (
+        record.sample_data.some((value) => Boolean(String(value || '').trim()))
+      )) || saved
       const photoRequired = fallbackPhotoRequired(row)
       const rowKey = workbenchRowKeys.get(row) || row.row_key
       return {
@@ -257,13 +296,13 @@ export function buildInspectionWorkbench(options: {
         project: row.project,
         method: row.method,
         standard: row.standard,
-        measurements: normalizeTenValues(saved?.sample_data || []),
+        measurements: normalizeTenValues(measurementRecord?.sample_data || []),
         measurementStandards: { ...row.measurement_standards },
-        decision: normalizeDecision(saved?.decision),
-        note: saved?.note || row.note,
+        decision: savedRecords.length > 0 ? mergedDraftDecision(savedRecords) : normalizeDecision(undefined),
+        note: mergedDraftNote(savedRecords, row.note),
         photoRequired,
         inputMode: row.input_mode || (photoRequired ? 'manual_photo' : 'manual'),
-        images: (saved?.images || []).map((remoteUrl, index) => ({
+        images: mergedDraftImages(savedRecords).map((remoteUrl, index) => ({
           id: `remote-${rowKey}-${index}`,
           localPath: '',
           remoteUrl,
@@ -399,6 +438,7 @@ export interface WorkbenchDraftPayload {
   ai_workbench_result: Record<string, unknown>
   ai_workbench_images: string[]
   record_source_images: string[]
+  deleted_record_images: string[]
   record_merge_mode: 'workbench'
 }
 
@@ -410,6 +450,7 @@ export function workbenchToDraft(
     unmatched: UnmatchedRecognitionRow[]
     qualitySheetImages: string[]
     inspectionImages: string[]
+    deletedRecordImages?: string[]
     aiResult?: Record<string, unknown>
   },
 ): WorkbenchDraftPayload {
@@ -426,7 +467,11 @@ export function workbenchToDraft(
       note: row.note,
       ai_result: {},
       images: row.images
-        .filter((photo) => photo.status === 'uploaded' && photo.remoteUrl)
+        .filter((photo) => (
+          photo.status === 'uploaded'
+          && photo.remoteUrl
+          && photo.origin !== 'ai_assignment'
+        ))
         .map((photo) => photo.remoteUrl),
     })),
     ai_workbench_result: {
@@ -446,6 +491,7 @@ export function workbenchToDraft(
     },
     ai_workbench_images: [...options.inspectionImages],
     record_source_images: [...options.qualitySheetImages],
+    deleted_record_images: [...(options.deletedRecordImages || [])],
     record_merge_mode: 'workbench',
   }
 }

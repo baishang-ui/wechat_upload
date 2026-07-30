@@ -42,6 +42,13 @@ test('inspection workbench modal uses a record-style drawer, page controls, and 
   assert.match(scss, /@keyframes modal-sheet-up/)
 })
 
+test('inspection workbench modal always uses the Web-aligned online formal template', () => {
+  const ts = source('miniprogram/components/inspection-workbench-modal/inspection-workbench-modal.ts')
+
+  assert.match(ts, /const template = buildOnlineInspectionTemplate\(detail\)/)
+  assert.doesNotMatch(ts, /let template = item\.inspection_template/)
+})
+
 test('inspection workbench drawer mirrors the six online formal report sections and final decision content', () => {
   const wxml = source('miniprogram/components/inspection-workbench-modal/inspection-workbench-modal.wxml')
   const ts = source('miniprogram/components/inspection-workbench-modal/inspection-workbench-modal.ts')
@@ -192,30 +199,57 @@ test('workbench overview uploads inspection photos to the online AI workbench wi
   assert.match(wxml, /验货图片识别/)
   assert.match(wxml, /同步到线上验货图片识别区域/)
   assert.match(wxml, /bindtap="chooseInspectionPhotos"/)
-  assert.match(wxml, /bindtap="previewInspectionImage"/)
-  assert.match(wxml, /catchtap="deleteInspectionImage"/)
-  assert.match(wxml, /class="inspection-upload-delete/)
   assert.match(wxml, /inspectionImages/)
+  assert.match(wxml, /线上正在识别归类/)
+  assert.match(wxml, /已关联 \{\{inspectionClassifiedCount\}\}/)
+  assert.doesNotMatch(wxml, /inspectionImageGroups|unassignedInspectionImages/)
+  assert.doesNotMatch(wxml, /inspection-upload-list|inspection-classification-list/)
+  assert.doesNotMatch(wxml, /previewInspectionImage|deleteInspectionImage/)
+  assert.match(wxml, /wx:for="\{\{row\.images\}\}"/)
+  assert.match(wxml, /现场照片/)
   assert.doesNotMatch(wxml, /assignPendingPhoto|removePendingPhoto|candidateRow/)
   assert.match(ts, /photoUploading:\s*false/)
   assert.match(ts, /photoUploadError:\s*''/)
   assert.match(ts, /inspectionImages:\s*\[\]/)
+  assert.match(ts, /buildInspectionImageClassificationState/)
+  assert.match(ts, /mergeInspectionImageAssignmentsIntoRows/)
   assert.match(ts, /uploadInspectionWorkbenchImage/)
   assert.match(ts, /visual_recognition_request:\s*imageCount > 0/)
   assert.match(ts, /status:\s*'pending'[\s\S]*?source:\s*'miniprogram'/)
   assert.match(ts, /status:\s*'cleared'[\s\S]*?source:\s*'miniprogram'[\s\S]*?image_count:\s*0/)
   assert.match(ts, /await saveInspectionDraft\(requestedTaskId, requestedItemId/)
-  assert.match(ts, /async deleteInspectionImage\(event: RowActionEvent\)/)
+  assert.match(ts, /deleteInspectionImageAt\(index: number\)/)
+  assert.match(ts, /this\.saveDraft\(false, \[photo\.remoteUrl\]\)/)
+  assert.match(ts, /deletedRecordImages/)
   assert.match(ts, /inspectionRecognitionRequest\(inspectionImages\.length\)/)
   assert.match(ts, /inspectionImages,\s*\n\s*aiResult:\s*aiWorkbenchResult/)
   assert.doesNotMatch(ts, /recognizeInspectionPhotoAssignments|classifyInspectionPhotoAssignments/)
   assert.doesNotMatch(photoMethods, /recognizeInspection\s*\(/)
   assert.doesNotMatch(photoMethods, /\/ai-judge/)
   assert.doesNotMatch(photoMethods, /wx\.showModal|wx\.showActionSheet/)
-  assert.match(scss, /\.inspection-upload-list/)
-  assert.match(scss, /\.inspection-upload-preview/)
-  assert.match(scss, /\.inspection-upload-delete/)
+  assert.doesNotMatch(scss, /\.inspection-upload-list/)
+  assert.doesNotMatch(scss, /\.inspection-upload-preview/)
+  assert.doesNotMatch(scss, /\.inspection-classification-group/)
+  assert.match(scss, /\.inspection-classification-status\.is-pending/)
   assert.doesNotMatch(scss, /\.pending-photo-/)
+})
+
+test('row photo uploads and retries immediately persist the shared backend draft', () => {
+  const ts = source('miniprogram/components/inspection-workbench-modal/inspection-workbench-modal.ts')
+  const uploadFlow = ts.slice(
+    ts.indexOf('async appendAndUploadPhotos'),
+    ts.indexOf('previewPhoto(event'),
+  )
+  const retryFlow = ts.slice(
+    ts.indexOf('async retryPhotoUpload'),
+    ts.indexOf('chooseInspectionPhotos()'),
+  )
+
+  assert.match(ts, /async syncUploadedRowPhotos/)
+  assert.match(ts, /if \(!hasPendingPhotos\) await this\.loadWorkbench\(\)/)
+  assert.match(uploadFlow, /await this\.syncUploadedRowPhotos\(requestedTaskId, requestedItemId, rows\)/)
+  assert.match(retryFlow, /await this\.syncUploadedRowPhotos\(requestedTaskId, requestedItemId, rows\)/)
+  assert.match(ts, /照片已上传并同步/)
 })
 
 test('workbench photo requests stop mutating the drawer after closing begins', () => {
@@ -226,7 +260,7 @@ test('workbench photo requests stop mutating the drawer after closing begins', (
   assert.match(ts, /async loadWorkbench\(\) \{[\s\S]*?!this\.isActiveWorkbenchRequest\(requestedTaskId, requestedItemId\)/)
   assert.match(ts, /async uploadInspectionPhotos\(localPaths: string\[\]\) \{[\s\S]*?if \(!this\.isActiveWorkbenchRequest\(requestedTaskId, requestedItemId\)\) return/)
   assert.match(ts, /async appendAndUploadPhotos\(rowKey: string, localPaths: string\[\]\) \{[\s\S]*?if \(!this\.isActiveWorkbenchRequest\(requestedTaskId, requestedItemId\)\) return/)
-  assert.match(ts, /async saveDraft\(closeAfterSave = false\) \{[\s\S]*?!this\.isActiveWorkbenchRequest\(this\.data\.taskId, this\.data\.itemId\)/)
+  assert.match(ts, /async saveDraft\(closeAfterSave = false, deletedRecordImages: string\[\] = \[\]\) \{[\s\S]*?!this\.isActiveWorkbenchRequest\(this\.data\.taskId, this\.data\.itemId\)/)
   assert.match(scss, /\.workbench-modal-mask\s*\{[\s\S]*?backdrop-filter:\s*blur\(12rpx\)/)
   assert.match(scss, /\.workbench-modal-layer\.is-closing \.workbench-modal-panel\s*\{[\s\S]*?modal-sheet-down/)
 })

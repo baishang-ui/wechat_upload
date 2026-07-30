@@ -27,6 +27,8 @@ import {
 
 export const HISTORY_REFRESH_TTL_MS = 30_000
 export const TASK_REFRESH_TTL_MS = 30_000
+export const TASK_PAGE_SIZE = 10
+export const TASK_PREVIEW_IMAGE_LIMIT = 3
 
 export function shouldRefreshInspectionTasks(
   lastLoadedAt: number,
@@ -88,6 +90,7 @@ export interface QualityInspectionDraftPayload {
   ai_workbench_result: Record<string, unknown>
   ai_workbench_images: string[]
   record_source_images?: string[]
+  deleted_record_images?: string[]
   record_merge_mode: QualityInspectionRecordMergeMode
   saved_at?: string
 }
@@ -112,6 +115,8 @@ export interface QualityInspectionItemDto {
   inspection_draft?: QualityInspectionDraftPayload
   inspection_template?: InspectionTemplateDto | null
   preview_images?: string[]
+  preview_thumbnails?: string[]
+  preview_image_count?: number
   inspection_summary?: QualityInspectionSummary
   [key: string]: unknown
 }
@@ -242,6 +247,7 @@ export interface TaskQuery {
   search?: string
   status?: string
   sourceType?: 'purchase_order' | 'standalone' | 'all'
+  compact?: boolean
 }
 
 export interface TaskListData {
@@ -805,6 +811,7 @@ export function encodeTaskQuery(query: TaskQuery): string {
   if (query.search) values.push(['search', query.search])
   if (query.status) values.push(['status', query.status])
   if (query.sourceType) values.push(['source_type', query.sourceType])
+  if (query.compact) values.push(['compact', 'true'])
   return values
     .map(([key, value]) => `${encodeURIComponent(key)}=${encodeURIComponent(value)}`)
     .join('&')
@@ -995,7 +1002,7 @@ function inspectionDraftRecords(
   return draft.records || draft.inspection_records || []
 }
 
-function inspectionItemPreviewImages(
+function inspectionItemImages(
   draft: QualityInspectionDraftPayload | undefined,
 ): string[] {
   const records = inspectionDraftRecords(draft)
@@ -1003,6 +1010,18 @@ function inspectionItemPreviewImages(
     ...records.flatMap((record) => record.images || []),
     ...(draft?.ai_workbench_images || []),
   ])
+}
+
+function normalizeInspectionSummary(
+  summary: QualityInspectionSummary | undefined,
+): QualityInspectionSummary {
+  return {
+    total: Math.max(0, Number(summary?.total) || 0),
+    filled: Math.max(0, Number(summary?.filled) || 0),
+    ok: Math.max(0, Number(summary?.ok) || 0),
+    ng: Math.max(0, Number(summary?.ng) || 0),
+    has_data: Boolean(summary?.has_data),
+  }
 }
 
 export function summarizeQualityInspectionDraft(
@@ -1039,22 +1058,41 @@ export function summarizeQualityInspectionDraft(
 
 export function normalizeQualityInspectionItem(
   item: QualityInspectionItemDto,
+  compact = false,
 ): QualityInspectionItemDto {
   const inspectionDraft = normalizeInspectionDraft(item.inspection_draft)
-  return {
+  const draftImages = inspectionItemImages(inspectionDraft)
+  const serverPreviewImages = normalizeServerImageList(item.preview_images)
+  const serverPreviewThumbnails = normalizeServerImageList(item.preview_thumbnails)
+  const previewImages = (inspectionDraft ? draftImages : serverPreviewImages)
+    .slice(0, TASK_PREVIEW_IMAGE_LIMIT)
+  const previewThumbnails = previewImages.map((image, index) => (
+    serverPreviewThumbnails[index] || image
+  ))
+  const serverImageCount = Math.max(0, Number(item.preview_image_count) || 0)
+  const normalized: QualityInspectionItemDto = {
     ...item,
     inspection_draft: inspectionDraft,
-    preview_images: inspectionItemPreviewImages(inspectionDraft),
-    inspection_summary: summarizeQualityInspectionDraft(inspectionDraft),
+    preview_images: previewImages,
+    preview_thumbnails: previewThumbnails,
+    preview_image_count: inspectionDraft
+      ? draftImages.length
+      : Math.max(serverImageCount, serverPreviewImages.length),
+    inspection_summary: inspectionDraft
+      ? summarizeQualityInspectionDraft(inspectionDraft)
+      : normalizeInspectionSummary(item.inspection_summary),
   }
+  if (compact) delete normalized.inspection_draft
+  return normalized
 }
 
 export function normalizeQualityInspectionTask(
   task: QualityInspectionTaskDto,
+  compact = false,
 ): QualityInspectionTaskDto {
   return {
     ...task,
-    items: task.items?.map(normalizeQualityInspectionItem),
+    items: task.items?.map((item) => normalizeQualityInspectionItem(item, compact)),
   }
 }
 
@@ -1070,19 +1108,20 @@ export async function listInspectionTasks(
   })
   return {
     ...data,
-    items: data.items.map(normalizeQualityInspectionTask),
+    items: data.items.map((task) => normalizeQualityInspectionTask(task, Boolean(query.compact))),
   }
 }
 
 export async function getInspectionTask(
   taskId: number,
+  compact = false,
   request: QualityRequest = serverRequest,
 ): Promise<QualityInspectionTaskDto> {
   const task = await request<QualityInspectionTaskDto>({
     method: 'GET',
-    path: `/customer-orders/api/purchase-orders/quality-inspections/${taskId}`,
+    path: `/customer-orders/api/purchase-orders/quality-inspections/${taskId}${compact ? '?compact=true' : ''}`,
   })
-  return normalizeQualityInspectionTask(task)
+  return normalizeQualityInspectionTask(task, compact)
 }
 
 export interface QualityInspectionItemDetailDto {

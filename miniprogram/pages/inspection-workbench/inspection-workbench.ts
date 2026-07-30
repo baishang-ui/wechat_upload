@@ -273,10 +273,7 @@ Page({
       const task = detail.task
       const item = detail.item
       if (!task || !item) throw new Error('线上任务中未找到该产品')
-      let template = item.inspection_template
-      if (!template) {
-        template = buildOnlineInspectionTemplate(detail)
-      }
+      const template = buildOnlineInspectionTemplate(detail)
       const workbench = buildInspectionWorkbench({
         template,
         draft: item.inspection_draft,

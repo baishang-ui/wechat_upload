@@ -67,6 +67,7 @@ import {
   shouldQueueInspectionTaskRefresh,
   shouldRefreshInspectionHistory,
   shouldRefreshInspectionTasks,
+  TASK_PAGE_SIZE,
   taskItemToInspectionRecord,
 } from '../../services/quality-inspection-service'
 
@@ -183,6 +184,7 @@ Component({
               accountLoading: false,
               accountError: '',
             })
+            void this.loadTasks(true)
           })
           .catch((error: Error) => {
             if (error instanceof ServerClientError && error.statusCode === 401) {
@@ -323,7 +325,7 @@ Component({
           : {}),
       })
       if (activeTab === 'history' && previousTab !== 'history') this.refreshHistory()
-      if (activeTab === 'tasks' && previousTab !== 'tasks') this.loadTasks(true, true)
+      if (activeTab === 'tasks' && previousTab !== 'tasks') this.loadTasks(true)
     },
     switchTab(event: WechatMiniprogram.TouchEvent) {
       this.activateTab(event.currentTarget.dataset.tab as WorkspaceTab)
@@ -384,10 +386,11 @@ Component({
       })
       return listInspectionTasks({
         page,
-        pageSize: 20,
+        pageSize: TASK_PAGE_SIZE,
         search: search || undefined,
         status: status === 'all' ? undefined : status,
         sourceType: 'all',
+        compact: true,
       })
         .then((data) => {
           if (this.data.taskRequestId !== requestId) return
@@ -468,7 +471,7 @@ Component({
         taskOpenRequestId: requestId,
         taskOpeningId: taskId,
       })
-      getInspectionTask(taskId)
+      getInspectionTask(taskId, true)
         .then((task) => {
           if (this.data.taskOpenRequestId !== requestId || this.data.selectedTaskId !== taskId) return
           this.setData({

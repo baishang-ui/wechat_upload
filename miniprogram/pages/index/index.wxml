@@ -282,19 +282,22 @@
               <scroll-view wx:if="{{taskItem.preview_images && taskItem.preview_images.length}}" class="task-item-photo-scroll" scroll-x enhanced show-scrollbar="{{false}}">
                 <view class="task-item-photo-list">
                   <image
-                    wx:for="{{taskItem.preview_images}}"
+                    wx:for="{{taskItem.preview_thumbnails}}"
                     wx:key="*this"
                     wx:for-item="taskPhoto"
+                    wx:for-index="taskPhotoIndex"
                     class="task-item-photo"
                     src="{{taskPhoto}}"
                     mode="aspectFill"
+                    lazy-load="{{true}}"
                     data-task-id="{{task.id}}"
                     data-item-id="{{taskItem.id}}"
-                    data-url="{{taskPhoto}}"
+                    data-url="{{taskItem.preview_images[taskPhotoIndex]}}"
                     catchtap="previewTaskItemPhoto"
                   ></image>
                 </view>
               </scroll-view>
+              <view wx:if="{{taskItem.preview_image_count > taskItem.preview_images.length}}" class="task-item-photo-count">共 {{taskItem.preview_image_count}} 张，完整图片进入检验后加载</view>
               <view class="task-item-action">进入检验</view>
             </view>
           </view>

@@ -109,6 +109,90 @@ test('buildInspectionWorkbench restores draft values and uploaded photos over te
 })
 
 
+test('formal online rows restore Web-classified inspection photos by project semantics', () => {
+  const template = buildOnlineInspectionTemplate({
+    task: { id: 12, task_no: 'QI-12' },
+    item: { id: 34, material_name: '未配置模板产品' },
+    master_product: { category: 'NEW', subcategory: '全新品类' },
+    customer_product: { packaging_method: '彩盒' },
+  })
+  const workbench = buildInspectionWorkbench({
+    template,
+    draft: {
+      records: [{
+        row_key: 'web-product-appearance',
+        group_title: '产品外观',
+        project: '产品外观',
+        method: '目视检查',
+        standard: '无外观缺陷',
+        decision: 'OK',
+        sample_data: [],
+        measurement_standards: {},
+        note: '',
+        ai_result: {},
+        images: [
+          'https://example.com/product-front.jpg',
+          'https://example.com/product-back.jpg',
+        ],
+      }],
+      ai_workbench_result: {},
+      ai_workbench_images: [],
+    },
+  })
+
+  const productBody = workbench.rows.find((row) => row.project === '产品本体（正面/反面）')
+  assert.ok(productBody)
+  assert.deepEqual(
+    productBody.images.map((photo) => photo.remoteUrl),
+    [
+      'https://example.com/product-front.jpg',
+      'https://example.com/product-back.jpg',
+    ],
+  )
+})
+
+test('formal photo rows merge images and decisions from multiple Web appearance entries', () => {
+  const template = buildOnlineInspectionTemplate({
+    task: { id: 13, task_no: 'QI-13' },
+    item: { id: 35, material_name: '百叶轮' },
+    master_product: { category: 'FD', subcategory: '百叶轮' },
+    customer_product: {},
+  })
+  const record = (project: string, decision: string, image: string, note: string) => ({
+    row_key: `web-${project}`,
+    group_title: '产品外观',
+    project,
+    method: '目视检查',
+    standard: '无外观缺陷',
+    decision,
+    sample_data: [],
+    measurement_standards: {},
+    note,
+    ai_result: {},
+    images: [image],
+  })
+  const workbench = buildInspectionWorkbench({
+    template,
+    draft: {
+      records: [
+        record('页片完整性', 'OK', 'https://example.com/edge.jpg', '页片正常'),
+        record('粘接质量', 'NG', 'https://example.com/ring.jpg', '粘接需复核'),
+      ],
+      ai_workbench_result: {},
+      ai_workbench_images: [],
+    },
+  })
+
+  const productBody = workbench.rows.find((row) => row.project === '产品本体（正面/反面）')
+  assert.ok(productBody)
+  assert.deepEqual(
+    productBody.images.map((photo) => photo.remoteUrl),
+    ['https://example.com/edge.jpg', 'https://example.com/ring.jpg'],
+  )
+  assert.equal(productBody.decision, 'NG')
+  assert.equal(productBody.note, '页片正常；粘接需复核')
+})
+
 test('addLocalPhotos keeps every photo across repeated batches without a total limit', () => {
   const workbench = buildInspectionWorkbench({ template: createTemplate() })
   const firstBatch = Array.from({ length: 9 }, (_, index) => `/tmp/a-${index}.jpg`)
@@ -266,6 +350,64 @@ test('workbenchToDraft preserves online rows and only serializes uploaded photo 
   assert.deepEqual(draft.ai_workbench_result.unmatched_recognition_rows, unmatched)
   assert.deepEqual(draft.record_source_images, ['https://files.example.com/quality-sheet.jpg'])
   assert.deepEqual(draft.ai_workbench_images, ['https://files.example.com/inspection.jpg'])
+})
+
+test('workbenchToDraft keeps AI classified evidence in the shared result instead of duplicating it into row images', () => {
+  const workbench = buildInspectionWorkbench({ template: createTemplate() })
+  workbench.rows[0].images = [{
+    id: 'ai-assignment-appearance-1',
+    localPath: '',
+    remoteUrl: 'https://files.example.com/classified.jpg',
+    status: 'uploaded',
+    error: '',
+    origin: 'ai_assignment',
+    sourceImageIndex: 0,
+  }]
+
+  const draft = workbenchToDraft(workbench, {
+    metadata: {
+      customer: '',
+      supplier: '',
+      orderNumber: '',
+      model: '',
+      arrivalQuantity: '',
+      inspectionDate: '2026-07-30',
+    },
+    rawContent: '',
+    unmatched: [],
+    qualitySheetImages: [],
+    inspectionImages: ['https://files.example.com/classified.jpg'],
+    aiResult: {
+      image_assignments: [{ image_index: 1, section: '产品外观' }],
+    },
+  })
+
+  assert.deepEqual(draft.inspection_records[0].images, [])
+  assert.deepEqual(draft.ai_workbench_images, ['https://files.example.com/classified.jpg'])
+  assert.deepEqual(draft.ai_workbench_result.image_assignments, [
+    { image_index: 1, section: '产品外观' },
+  ])
+})
+
+test('workbenchToDraft sends explicit image deletion tombstones for cross-client removal', () => {
+  const workbench = buildInspectionWorkbench({ template: createTemplate() })
+  const draft = workbenchToDraft(workbench, {
+    metadata: {
+      customer: '',
+      supplier: '',
+      orderNumber: '',
+      model: '',
+      arrivalQuantity: '',
+      inspectionDate: '2026-07-30',
+    },
+    rawContent: '',
+    unmatched: [],
+    qualitySheetImages: [],
+    inspectionImages: [],
+    deletedRecordImages: ['https://files.example.com/deleted.jpg'],
+  })
+
+  assert.deepEqual(draft.deleted_record_images, ['https://files.example.com/deleted.jpg'])
 })
 
 
@@ -485,6 +627,7 @@ test('online item detail falls back to the same generic report used by the onlin
     '产品性能',
   ])
   assert.equal(template.rows[0].input_mode, 'manual_photo')
+  assert.equal(template.rows[0].row_key, 'online-formal:generic:产品外观:产品本体')
   assert.equal(template.rows[1].input_mode, 'ocr_measurement')
 })
 

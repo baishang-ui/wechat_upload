@@ -306,29 +306,12 @@
 .report-preview { position: relative; width: 132rpx; height: 132rpx; flex: none; overflow: hidden; border-radius: 16rpx; background: #edf2f9; }
 .report-preview image { width: 100%; height: 100%; }
 .report-preview text { position: absolute; right: 0; bottom: 0; left: 0; padding: 6rpx; color: #fff; font-size: 19rpx; text-align: center; background: rgba(20, 36, 60, .66); }
-.inspection-upload-list { margin-top: 20rpx; display: flex; gap: 14rpx; overflow-x: auto; }
-.inspection-upload-preview { position: relative; width: 132rpx; height: 132rpx; flex: none; overflow: hidden; border-radius: 16rpx; background: #edf2f9; }
-.inspection-upload-preview image { width: 100%; height: 100%; }
-.inspection-upload-preview text { position: absolute; right: 0; bottom: 0; left: 0; padding: 6rpx; color: #fff; font-size: 19rpx; text-align: center; background: rgba(20, 36, 60, .66); }
-.inspection-upload-delete {
-  position: absolute;
-  z-index: 2;
-  top: 8rpx;
-  right: 8rpx;
-  width: 40rpx;
-  height: 40rpx;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: #fff;
-  font-size: 30rpx;
-  line-height: 1;
-  border: 2rpx solid rgba(255, 255, 255, .86);
-  border-radius: 50%;
-  background: rgba(202, 48, 55, .94);
-  box-shadow: 0 4rpx 10rpx rgba(20, 36, 60, .24);
-}
-.inspection-upload-delete.is-disabled { opacity: .55; }
+.inspection-classification-status { margin-top: 20rpx; padding: 16rpx 18rpx; display: flex; align-items: center; gap: 16rpx; border-radius: 16rpx; background: #edf7f2; }
+.inspection-classification-status.is-pending { background: #fff5dc; }
+.inspection-classification-status-main { min-width: 0; display: flex; flex: 1; flex-direction: column; gap: 4rpx; }
+.inspection-classification-status-main text:first-child { color: #25674d; font-size: 24rpx; font-weight: 700; }
+.inspection-classification-status.is-pending .inspection-classification-status-main text:first-child { color: #8c6419; }
+.inspection-classification-status-main text:last-child { color: #64738a; font-size: 20rpx; }
 .overview-tip-card { background: linear-gradient(135deg, #f1f6ff, #fbfdff); }
 .overview-tip-text { margin-top: 8rpx; }
 

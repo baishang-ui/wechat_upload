@@ -57,9 +57,13 @@ test('online report structure is rebuilt even when an older draft already contai
 
   for (const implementation of [page, modal]) {
     assert.doesNotMatch(implementation, /draftRecords\.length === 0/)
-    assert.match(implementation, /if \(!template\)/)
     assert.match(implementation, /buildOnlineInspectionTemplate\(detail\)/)
     assert.match(implementation, /draft: item\.inspection_draft/)
+  }
+
+  for (const implementation of [page, modal]) {
+    assert.match(implementation, /const template = buildOnlineInspectionTemplate\(detail\)/)
+    assert.doesNotMatch(implementation, /let template = item\.inspection_template/)
   }
 })
 

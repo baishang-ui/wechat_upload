@@ -2304,6 +2304,12 @@ page {
   background: $ui-field-background;
 }
 
+.task-item-photo-count {
+  margin-top: 8rpx;
+  color: rgba(215, 223, 232, .9);
+  font-size: 21rpx;
+}
+
 .task-item-action {
   position: absolute;
   top: 50%;
