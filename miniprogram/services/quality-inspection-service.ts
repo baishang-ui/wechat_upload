@@ -83,13 +83,21 @@ export interface QualityInspectionDraftRecord {
 export type QualityInspectionRecordMergeMode = 'replace' | 'matched_only' | 'workbench'
 
 export interface QualityInspectionDraftPayload {
-  inspection_records: QualityInspectionDraftRecord[]
+  inspection_records?: QualityInspectionDraftRecord[]
   records?: QualityInspectionDraftRecord[]
   ai_workbench_result: Record<string, unknown>
   ai_workbench_images: string[]
   record_source_images?: string[]
   record_merge_mode: QualityInspectionRecordMergeMode
   saved_at?: string
+}
+
+export interface QualityInspectionSummary {
+  total: number
+  filled: number
+  ok: number
+  ng: number
+  has_data: boolean
 }
 
 export interface QualityInspectionItemDto {
@@ -103,6 +111,8 @@ export interface QualityInspectionItemDto {
   packaging_method?: string | null
   inspection_draft?: QualityInspectionDraftPayload
   inspection_template?: InspectionTemplateDto | null
+  preview_images?: string[]
+  inspection_summary?: QualityInspectionSummary
   [key: string]: unknown
 }
 
@@ -944,26 +954,135 @@ export async function syncStoredInspection(
 }
 
 
-export function listInspectionTasks(
+function normalizeServerImageList(images: unknown): string[] {
+  if (!Array.isArray(images)) return []
+  const normalized: string[] = []
+  images.forEach((image) => {
+    if (typeof image !== 'string') return
+    const url = normalizeServerImageUrl(image)
+    if (url && !normalized.includes(url)) normalized.push(url)
+  })
+  return normalized
+}
+
+function normalizeDraftRecordImages(
+  records: QualityInspectionDraftRecord[] | undefined,
+): QualityInspectionDraftRecord[] | undefined {
+  return records?.map((record) => ({
+    ...record,
+    images: normalizeServerImageList(record.images),
+  }))
+}
+
+function normalizeInspectionDraft(
+  draft: QualityInspectionDraftPayload | undefined,
+): QualityInspectionDraftPayload | undefined {
+  if (!draft) return undefined
+  return {
+    ...draft,
+    inspection_records: normalizeDraftRecordImages(draft.inspection_records),
+    records: normalizeDraftRecordImages(draft.records),
+    ai_workbench_images: normalizeServerImageList(draft.ai_workbench_images),
+    record_source_images: normalizeServerImageList(draft.record_source_images),
+  }
+}
+
+function inspectionDraftRecords(
+  draft: QualityInspectionDraftPayload | undefined,
+): QualityInspectionDraftRecord[] {
+  if (!draft) return []
+  if (draft.inspection_records?.length) return draft.inspection_records
+  return draft.records || draft.inspection_records || []
+}
+
+function inspectionItemPreviewImages(
+  draft: QualityInspectionDraftPayload | undefined,
+): string[] {
+  const records = inspectionDraftRecords(draft)
+  return normalizeServerImageList([
+    ...records.flatMap((record) => record.images || []),
+    ...(draft?.ai_workbench_images || []),
+  ])
+}
+
+export function summarizeQualityInspectionDraft(
+  draft: QualityInspectionDraftPayload | undefined,
+): QualityInspectionSummary {
+  const records = inspectionDraftRecords(draft)
+  let filled = 0
+  let ok = 0
+  let ng = 0
+
+  records.forEach((record) => {
+    const decision = String(record.decision || '').trim().toUpperCase()
+    const hasSampleData = Array.isArray(record.sample_data)
+      && record.sample_data.some((value) => String(value || '').trim())
+    const hasData = Boolean(
+      hasSampleData
+      || decision
+      || String(record.note || '').trim()
+      || (Array.isArray(record.images) && record.images.length > 0),
+    )
+    if (hasData) filled += 1
+    if (decision === 'OK') ok += 1
+    if (decision === 'NG') ng += 1
+  })
+
+  return {
+    total: records.length,
+    filled,
+    ok,
+    ng,
+    has_data: filled > 0,
+  }
+}
+
+export function normalizeQualityInspectionItem(
+  item: QualityInspectionItemDto,
+): QualityInspectionItemDto {
+  const inspectionDraft = normalizeInspectionDraft(item.inspection_draft)
+  return {
+    ...item,
+    inspection_draft: inspectionDraft,
+    preview_images: inspectionItemPreviewImages(inspectionDraft),
+    inspection_summary: summarizeQualityInspectionDraft(inspectionDraft),
+  }
+}
+
+export function normalizeQualityInspectionTask(
+  task: QualityInspectionTaskDto,
+): QualityInspectionTaskDto {
+  return {
+    ...task,
+    items: task.items?.map(normalizeQualityInspectionItem),
+  }
+}
+
+export async function listInspectionTasks(
   query: TaskQuery,
   request: QualityRequest = serverRequest,
 ): Promise<TaskListData> {
   const encoded = encodeTaskQuery(query)
   const suffix = encoded ? `?${encoded}` : ''
-  return request<TaskListData>({
+  const data = await request<TaskListData>({
     method: 'GET',
     path: `/customer-orders/api/purchase-orders/quality-inspections${suffix}`,
   })
+  return {
+    ...data,
+    items: data.items.map(normalizeQualityInspectionTask),
+  }
 }
 
-export function getInspectionTask(
+export async function getInspectionTask(
   taskId: number,
   request: QualityRequest = serverRequest,
 ): Promise<QualityInspectionTaskDto> {
-  return request<QualityInspectionTaskDto>({
+  const task = await request<QualityInspectionTaskDto>({
     method: 'GET',
     path: `/customer-orders/api/purchase-orders/quality-inspections/${taskId}`,
   })
+  return normalizeQualityInspectionTask(task)
 }
 
 export interface QualityInspectionItemDetailDto {
@@ -974,15 +1093,35 @@ export interface QualityInspectionItemDetailDto {
   customer_product?: QualityInspectionCustomerProductDto | null
 }
 
-export function getInspectionItemDetail(
+export async function getInspectionItemDetail(
   taskId: number,
   itemId: number,
   request: QualityRequest = serverRequest,
 ): Promise<QualityInspectionItemDetailDto> {
-  return request<QualityInspectionItemDetailDto>({
+  const detail = await request<QualityInspectionItemDetailDto>({
     method: 'GET',
     path: `/customer-orders/api/purchase-orders/quality-inspections/${taskId}/items/${itemId}`,
   })
+  return {
+    ...detail,
+    task: normalizeQualityInspectionTask(detail.task),
+    item: normalizeQualityInspectionItem(detail.item),
+    master_product: detail.master_product
+      ? {
+          ...detail.master_product,
+          image_paths: normalizeServerImageList(detail.master_product.image_paths),
+          packaging_images: normalizeServerImageList(detail.master_product.packaging_images),
+          technical_spec_sheet_paths: normalizeServerImageList(detail.master_product.technical_spec_sheet_paths),
+          tray_image_paths: normalizeServerImageList(detail.master_product.tray_image_paths),
+        }
+      : detail.master_product,
+    customer_product: detail.customer_product
+      ? {
+          ...detail.customer_product,
+          customer_images: normalizeServerImageList(detail.customer_product.customer_images),
+        }
+      : detail.customer_product,
+  }
 }
 
 export function saveInspectionDraft(
@@ -1022,7 +1161,7 @@ export function createStandaloneInspection(
   })
 }
 
-function normalizeUploadedImageUrl(value: string): string {
+export function normalizeServerImageUrl(value: string): string {
   const imageUrl = String(value || '').trim()
   if (!imageUrl || /^(?:https?:|data:|wxfile:)/i.test(imageUrl)) return imageUrl
   if (imageUrl.startsWith('//')) {
@@ -1048,7 +1187,7 @@ export async function uploadInspectionDraftImage(
       row_key: 'quality-sheet',
     },
   })
-  const url = normalizeUploadedImageUrl(uploaded.image_url || '')
+  const url = normalizeServerImageUrl(uploaded.image_url || '')
   if (!url) throw new Error('服务器未返回质检单图片地址，请重试')
   return {
     id: String(uploaded.image_path || url),
@@ -1072,7 +1211,7 @@ export async function uploadInspectionWorkbenchImage(
       row_key: 'ai-workbench',
     },
   })
-  const url = normalizeUploadedImageUrl(uploaded.image_url || '')
+  const url = normalizeServerImageUrl(uploaded.image_url || '')
   if (!url) throw new Error('服务器未返回验货图片地址，请重试')
   return {
     id: String(uploaded.image_path || url),
@@ -1099,7 +1238,7 @@ export async function uploadInspectionRowImage(
       row_key: rowKey,
     },
   })
-  const url = normalizeUploadedImageUrl(uploaded.image_url || '')
+  const url = normalizeServerImageUrl(uploaded.image_url || '')
   if (!url) throw new Error('服务器未返回照片地址，请重试')
   return {
     id: String(uploaded.image_path || url),

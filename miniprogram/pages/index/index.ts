@@ -127,6 +127,7 @@ Component({
     taskLoadedQueryKey: '',
     taskRefreshQueued: false,
     taskRequestId: 0,
+    taskOpenRequestId: 0,
     taskOpeningId: 0,
     selectedTaskId: 0,
     selectedItemId: 0,
@@ -451,29 +452,37 @@ Component({
     openTask(event: WechatMiniprogram.TouchEvent) {
       const taskId = Number(event.currentTarget.dataset.id)
       if (!taskId) return
+      const requestId = this.data.taskOpenRequestId + 1
       if (this.data.selectedTaskId === taskId) {
-        this.setData({ selectedTaskId: 0, selectedItemId: 0 })
+        this.setData({
+          selectedTaskId: 0,
+          selectedItemId: 0,
+          taskOpenRequestId: requestId,
+          taskOpeningId: 0,
+        })
         return
       }
-      if (this.data.taskOpeningId) return
-      this.setData({ taskOpeningId: taskId })
+      this.setData({
+        selectedTaskId: taskId,
+        selectedItemId: 0,
+        taskOpenRequestId: requestId,
+        taskOpeningId: taskId,
+      })
       getInspectionTask(taskId)
         .then((task) => {
-          if (this.data.taskOpeningId !== taskId) return
+          if (this.data.taskOpenRequestId !== requestId || this.data.selectedTaskId !== taskId) return
           this.setData({
-            selectedTaskId: task.id,
-            selectedItemId: 0,
             taskItems: this.data.taskItems.map((item) => (
               item.id === task.id ? task : item
             )),
           })
         })
         .catch((error: Error) => {
-          if (this.data.taskOpeningId !== taskId) return
-          showTopToast({ title: error.message || '任务详情加载失败', icon: 'none' })
+          if (this.data.taskOpenRequestId !== requestId || this.data.selectedTaskId !== taskId) return
+          showTopToast({ title: error.message || '线上产品同步失败，已显示当前列表', icon: 'none' })
         })
         .finally(() => {
-          if (this.data.taskOpeningId === taskId) this.setData({ taskOpeningId: 0 })
+          if (this.data.taskOpenRequestId === requestId) this.setData({ taskOpeningId: 0 })
         })
     },
     selectTaskItem(event: WechatMiniprogram.TouchEvent) {
@@ -481,6 +490,16 @@ Component({
       const itemId = Number(event.currentTarget.dataset.itemId)
       if (!taskId || !itemId) return
       this.openWorkbenchModal(taskId, itemId)
+    },
+    previewTaskItemPhoto(event: WechatMiniprogram.TouchEvent) {
+      const taskId = Number(event.currentTarget.dataset.taskId)
+      const itemId = Number(event.currentTarget.dataset.itemId)
+      const current = String(event.currentTarget.dataset.url || '')
+      const task = this.data.taskItems.find((item) => item.id === taskId)
+      const item = task?.items?.find((candidate) => candidate.id === itemId)
+      const urls = item?.preview_images || []
+      if (!current || urls.length === 0) return
+      wx.previewImage({ current, urls })
     },
     openWorkbenchModal(taskId: number, itemId: number) {
       this.setData({

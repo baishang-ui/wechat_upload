@@ -260,7 +260,8 @@
             <view class="task-status-badge {{task.status === 'completed' ? 'is-completed' : ''}}">{{task.status === 'completed' ? '已完成' : '待检'}}</view>
           </view>
           <view wx:if="{{selectedTaskId === task.id}}" class="task-item-list">
-            <view wx:if="{{!task.items || task.items.length === 0}}" class="task-item-empty">该任务暂无质检明细</view>
+            <view wx:if="{{taskOpeningId === task.id}}" class="task-item-syncing">正在同步线上产品…</view>
+            <view wx:if="{{(!task.items || task.items.length === 0) && taskOpeningId !== task.id}}" class="task-item-empty">该任务暂无质检明细</view>
             <view
               wx:for="{{task.items}}"
               wx:key="id"
@@ -272,6 +273,28 @@
             >
               <view class="task-item-name">{{taskItem.material_name || taskItem.material_code || '未命名物料'}}</view>
               <view class="task-item-meta">{{taskItem.spec_desc || '无规格'}} · {{taskItem.quantity || 0}} {{taskItem.unit || 'Pcs'}}</view>
+              <view class="task-item-inspection-summary">
+                <text wx:if="{{taskItem.inspection_summary && taskItem.inspection_summary.total}}">线上检测：已录入 {{taskItem.inspection_summary.filled}}/{{taskItem.inspection_summary.total}} 项</text>
+                <text wx:else>线上检测：暂无检测数据</text>
+                <text wx:if="{{taskItem.inspection_summary && taskItem.inspection_summary.ng}}" class="task-item-inspection-result is-ng">NG {{taskItem.inspection_summary.ng}} 项</text>
+                <text wx:elif="{{taskItem.inspection_summary && taskItem.inspection_summary.ok}}" class="task-item-inspection-result is-ok">OK {{taskItem.inspection_summary.ok}} 项</text>
+              </view>
+              <scroll-view wx:if="{{taskItem.preview_images && taskItem.preview_images.length}}" class="task-item-photo-scroll" scroll-x enhanced show-scrollbar="{{false}}">
+                <view class="task-item-photo-list">
+                  <image
+                    wx:for="{{taskItem.preview_images}}"
+                    wx:key="*this"
+                    wx:for-item="taskPhoto"
+                    class="task-item-photo"
+                    src="{{taskPhoto}}"
+                    mode="aspectFill"
+                    data-task-id="{{task.id}}"
+                    data-item-id="{{taskItem.id}}"
+                    data-url="{{taskPhoto}}"
+                    catchtap="previewTaskItemPhoto"
+                  ></image>
+                </view>
+              </scroll-view>
               <view class="task-item-action">进入检验</view>
             </view>
           </view>

@@ -12,6 +12,7 @@ import {
   inspectionImageToDataUrl,
   inspectionRecordToDraft,
   getInspectionItemDetail,
+  listInspectionTasks,
   listProductQualityTemplates,
   matchRecognizedInspectionToPendingItem,
   recognizeInspectionFile,
@@ -481,15 +482,32 @@ test('database-bound serializers reject invalid dates before a request', async (
   assert.equal(calls.length, 0)
 })
 
-test('getInspectionItemDetail loads the online product context endpoint', async () => {
+test('getInspectionItemDetail loads shared online data and resolves server image paths', async () => {
   const calls: Array<Record<string, unknown>> = []
   const request = async <T>(options: Record<string, unknown>): Promise<T> => {
     calls.push(options)
     return {
       task: { id: 12 },
-      item: { id: 34 },
-      master_product: {},
-      customer_product: {},
+      item: {
+        id: 34,
+        inspection_draft: {
+          records: [{
+            sample_data: ['', '', ''],
+            decision: '',
+            note: '',
+            images: ['/uploads/appearance.jpg'],
+          }],
+          ai_workbench_images: ['/uploads/workbench.jpg'],
+          record_source_images: ['/uploads/report.jpg'],
+        },
+      },
+      master_product: {
+        image_paths: ['/uploads/master.jpg'],
+        packaging_images: ['/uploads/package.jpg'],
+      },
+      customer_product: {
+        customer_images: ['/uploads/customer.jpg'],
+      },
     } as T
   }
 
@@ -500,6 +518,78 @@ test('getInspectionItemDetail loads the online product context endpoint', async 
     path: '/customer-orders/api/purchase-orders/quality-inspections/12/items/34',
   })
   assert.equal(detail.item.id, 34)
+  assert.deepEqual(detail.item.preview_images, [
+    'https://www.binictools.cn:7876/uploads/appearance.jpg',
+    'https://www.binictools.cn:7876/uploads/workbench.jpg',
+  ])
+  assert.deepEqual(detail.item.inspection_draft?.records?.[0].images, [
+    'https://www.binictools.cn:7876/uploads/appearance.jpg',
+  ])
+  assert.deepEqual(detail.item.inspection_summary, {
+    total: 1,
+    filled: 1,
+    ok: 0,
+    ng: 0,
+    has_data: true,
+  })
+  assert.deepEqual(detail.master_product?.image_paths, [
+    'https://www.binictools.cn:7876/uploads/master.jpg',
+  ])
+  assert.deepEqual(detail.customer_product?.customer_images, [
+    'https://www.binictools.cn:7876/uploads/customer.jpg',
+  ])
+})
+
+test('task lists expose online inspection data and row photos without extra item requests', async () => {
+  const result = await listInspectionTasks({ page: 1 }, async <T>() => ({
+    items: [{
+      id: 8,
+      items: [{
+        id: 9,
+        inspection_draft: {
+          records: [
+            {
+              sample_data: ['12.5', '', ''],
+              decision: 'OK',
+              note: '',
+              images: ['/uploads/row.jpg', 'https://cdn.example.com/row-2.jpg'],
+            },
+            {
+              sample_data: ['', '', ''],
+              decision: 'NG',
+              note: '等待复检',
+              images: ['/uploads/row.jpg'],
+            },
+            {
+              sample_data: ['', '', ''],
+              decision: '',
+              note: '',
+              images: [],
+            },
+          ],
+          ai_workbench_images: ['/uploads/site.jpg'],
+          record_source_images: [],
+        },
+      }],
+    }],
+    total: 1,
+    page: 1,
+    page_size: 20,
+    stats: {},
+  }) as T)
+
+  assert.deepEqual(result.items[0].items?.[0].preview_images, [
+    'https://www.binictools.cn:7876/uploads/row.jpg',
+    'https://cdn.example.com/row-2.jpg',
+    'https://www.binictools.cn:7876/uploads/site.jpg',
+  ])
+  assert.deepEqual(result.items[0].items?.[0].inspection_summary, {
+    total: 3,
+    filled: 2,
+    ok: 1,
+    ng: 1,
+    has_data: true,
+  })
 })
 
 test('draft save and recognition use shared backend paths', async () => {

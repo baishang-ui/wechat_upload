@@ -464,7 +464,30 @@ test('quality orders use the same all-source and all-status default scope as the
   assert.match(page, /changeTaskStatus[\s\S]*?loadTasks\(true, true\)/)
   assert.match(openTask, /getInspectionTask\(taskId\)/)
   assert.doesNotMatch(openTask, /taskLoading:\s*true/)
-  assert.match(openTask, /taskOpeningId/)
+  assert.match(openTask, /const requestId = this\.data\.taskOpenRequestId \+ 1/)
+  assert.match(openTask, /selectedTaskId:\s*taskId[\s\S]*?taskOpenRequestId:\s*requestId[\s\S]*?taskOpeningId:\s*taskId[\s\S]*?getInspectionTask\(taskId\)/)
+  assert.match(openTask, /taskOpenRequestId !== requestId/)
+  assert.doesNotMatch(openTask, /if \(this\.data\.taskOpeningId\) return/)
+})
+
+test('pending task items show shared backend inspection data and photos', () => {
+  const page = source('miniprogram/pages/index/index.ts')
+  const wxml = source('miniprogram/pages/index/index.wxml')
+  const scss = source('miniprogram/pages/index/index.scss')
+
+  assert.match(wxml, /taskItem\.inspection_summary\.filled/)
+  assert.match(wxml, /taskItem\.inspection_summary\.ng/)
+  assert.match(wxml, /线上检测：已录入/)
+  assert.match(wxml, /线上检测：暂无检测数据/)
+  assert.match(wxml, /taskItem\.preview_images/)
+  assert.match(wxml, /catchtap="previewTaskItemPhoto"/)
+  assert.match(wxml, /taskOpeningId === task\.id/)
+  assert.match(page, /previewTaskItemPhoto/)
+  assert.match(page, /wx\.previewImage\(\{ current, urls \}\)/)
+  assert.match(scss, /\.task-item-inspection-summary/)
+  assert.match(scss, /\.task-item-inspection-result\.is-ng/)
+  assert.match(scss, /\.task-item-photo-scroll/)
+  assert.match(scss, /\.task-item-photo/)
 })
 
 test('sample judgements use binary switches with on as OK and off as NG', () => {
