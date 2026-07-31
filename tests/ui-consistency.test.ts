@@ -218,28 +218,74 @@ test('recognition cards advance progress on a 300ms wall-clock timer while a req
   )
 })
 
-test('history page throttles automatic refreshes without flashing cached records', () => {
+test('task and history lists initialize once and use only pull-down refresh afterwards', () => {
   const page = source('miniprogram/pages/index/index.ts')
   const wxml = source('miniprogram/pages/index/index.wxml')
-  const attached = page.match(/attached\(\)\s*\{([\s\S]*?)\n    \},/)?.[1] || ''
+  const scss = source('miniprogram/pages/index/index.scss')
 
-  assert.doesNotMatch(attached, /refreshHistory\(/)
-  assert.match(page, /historyLoadedAt:\s*0/)
-  assert.match(page, /historyRefreshQueued:\s*false/)
-  assert.match(page, /shouldRefreshInspectionHistory/)
-  assert.match(page, /shouldQueueInspectionHistoryRefresh/)
-  assert.match(page, /const previousTab = this\.data\.activeTab/)
-  assert.match(page, /activeTab === 'history' && previousTab !== 'history'/)
-  assert.match(
-    page,
-    /historyRecords:\s*this\.data\.historyRecords\.length > 0\s*\? this\.data\.historyRecords/,
-  )
-  assert.match(wxml, /bindtap="retryHistoryRefresh"/)
-  assert.match(page, /shouldQueueInspectionHistoryRefresh\([\s\S]*?this\.data\.historyRefreshQueued/)
-  assert.match(page, /const queuedRefresh = this\.data\.historyRefreshQueued/)
-  assert.match(page, /historyRefreshQueued:\s*false/)
-  assert.match(page, /if \(queuedRefresh\) this\.refreshHistory\(true\)/)
-  assert.ok((page.match(/refreshHistory\(true\)/g) || []).length >= 4)
+  assert.match(page, /taskInitialized:\s*false/)
+  assert.match(page, /historyInitialized:\s*false/)
+  assert.match(page, /taskPullRefreshing:\s*false/)
+  assert.match(page, /taskPulling:\s*false/)
+  assert.match(page, /historyPullRefreshing:\s*false/)
+  assert.match(page, /historyPulling:\s*false/)
+  assert.match(page, /taskLoadingQueryKey:\s*''/)
+  assert.match(page, /loadActiveListOnce\(\)/)
+  assert.match(page, /activeTab === 'tasks' && !this\.data\.taskInitialized[\s\S]*?loadTasks\(true\)/)
+  assert.match(page, /activeTab === 'history' && !this\.data\.historyInitialized[\s\S]*?loadHistory\(\)/)
+  assert.match(page, /onListPullDownRefresh\(\)[\s\S]*?taskPullRefreshing:\s*true[\s\S]*?loadTasks\(true, true\)/)
+  assert.match(page, /const PULL_REFRESH_MINIMUM_DURATION_MS = 1000/)
+  assert.match(page, /function keepPullRefreshVisible\(operation: Promise<void>\)[\s\S]*?PULL_REFRESH_MINIMUM_DURATION_MS[\s\S]*?setTimeout\(resolve, Math\.max\(0, remaining\)\)/)
+  assert.match(page, /keepPullRefreshVisible\(this\.loadTasks\(true, true\)\)/)
+  assert.match(page, /onListPullDownRefresh\(\)[\s\S]*?historyPullRefreshing:\s*true[\s\S]*?loadHistory\(\)/)
+  assert.match(page, /keepPullRefreshVisible\(this\.loadHistory\(\)\)/)
+  assert.match(page, /const taskListRequests = new WeakMap<object, Promise<void>>\(\)/)
+  assert.match(page, /const historyListRequests = new WeakMap<object, Promise<void>>\(\)/)
+  assert.match(page, /this\.data\.taskLoading[\s\S]*?queryKey === this\.data\.taskLoadingQueryKey[\s\S]*?return taskListRequests\.get\(this\) \?\? Promise\.resolve\(\)/)
+  assert.match(page, /this\.data\.historyLoading[\s\S]*?return historyListRequests\.get\(this\) \?\? Promise\.resolve\(\)/)
+  assert.doesNotMatch(page, /pageLifetimes:/)
+  assert.doesNotMatch(page, /refreshHistory/)
+  assert.doesNotMatch(page, /shouldRefreshInspectionHistory/)
+  assert.doesNotMatch(page, /shouldQueueInspectionHistoryRefresh/)
+  assert.match(wxml, /refresher-enabled="\{\{activeTab === 'tasks' \|\| activeTab === 'history'\}\}"/)
+  assert.match(wxml, /refresher-default-style="none"/)
+  assert.match(wxml, /refresher-threshold="72"/)
+  assert.match(wxml, /refresher-triggered="\{\{\(activeTab === 'tasks' && taskPullRefreshing\) \|\| \(activeTab === 'history' && historyPullRefreshing\)\}\}"/)
+  assert.match(wxml, /bindrefresherrefresh="onListPullDownRefresh"/)
+  assert.match(wxml, /bindrefresherpulling="onListPulling"/)
+  assert.match(wxml, /bindrefresherrestore="onListPullRefreshRestore"/)
+  assert.match(wxml, /bindrefresherabort="onListPullRefreshRestore"/)
+  assert.match(page, /onListPulling\(\)[\s\S]*?taskPulling:\s*true[\s\S]*?historyPulling:\s*true/)
+  assert.match(page, /onListPullRefreshRestore\(\)[\s\S]*?taskPulling\s*=\s*false[\s\S]*?historyPulling\s*=\s*false/)
+  assert.match(wxml, /slot="refresher"[\s\S]*?class="pull-refresh-indicator \{\{[\s\S]*?taskPulling[\s\S]*?historyPulling[\s\S]*?is-pulling[\s\S]*?taskPullRefreshing[\s\S]*?historyPullRefreshing[\s\S]*?is-refreshing[\s\S]*?pull-refresh-visual[\s\S]*?pull-refresh-ring/)
+  assert.doesNotMatch(wxml, /pull-refresh-loading-indicator/)
+  assert.doesNotMatch(wxml, /pull-refresh-icon|pull-refresh-core|pull-refresh-halo/)
+  assert.match(wxml, /slot="refresher"[\s\S]*?style="transform: translate3d\(0, \{\{navigationBarHeight\}\}px, 0\);"/)
+  assert.match(wxml, /class="page-scroll"[\s\S]*?scroll-top="\{\{workspaceScrollTop\}\}"/)
+  assert.match(scss, /\.page-scroll\s*\{[\s\S]*?height:\s*100vh;/)
+  assert.match(wxml, /activeTab === 'tasks'[\s\S]*?taskPullRefreshing[\s\S]*?activeTab === 'history'[\s\S]*?historyPullRefreshing/)
+  assert.doesNotMatch(wxml, /pull-refresh-motion\.wxs|pullMotion\./)
+  assert.doesNotMatch(page, /pullRefreshOpacity|pullRefreshOffset|pullRefreshProgress/)
+  assert.match(page, /workspaceScrollTop:\s*1[\s\S]*?workspaceScrollTop:\s*0/)
+  assert.match(scss, /\.pull-refresh-indicator\s*\{[\s\S]*?width:\s*100%;[\s\S]*?height:\s*112rpx;[\s\S]*?pointer-events:\s*none;/)
+  assert.doesNotMatch(scss.match(/\.pull-refresh-indicator\s*\{[^}]*\}/)?.[0] || '', /position:\s*fixed/)
+  assert.match(scss, /\.pull-refresh-indicator\.is-pulling\s*\{[\s\S]*?pull-refresh-fade-in 160ms ease-out both;[\s\S]*?animation-delay:\s*140ms;/)
+  assert.match(scss, /\.pull-refresh-ring\s*\{[\s\S]*?border:\s*\d+rpx solid[\s\S]*?border-top-color:[\s\S]*?border-right-color:/)
+  assert.doesNotMatch(scss, /\.pull-refresh-icon|\.pull-refresh-core|\.pull-refresh-halo|pull-refresh-glow/)
+  assert.doesNotMatch(scss, /\.pull-refresh-ring::after/)
+  assert.match(scss, /\.pull-refresh-indicator \.pull-refresh-ring\s*\{[\s\S]*?pull-refresh-spin[\s\S]*?paused/)
+  assert.match(scss, /\.pull-refresh-indicator\.is-refreshing \.pull-refresh-ring\s*\{[\s\S]*?animation-play-state:\s*running;/)
+  assert.match(scss, /@keyframes pull-refresh-fade-in/)
+  assert.doesNotMatch(scss, /pull-refresh-visual-in/)
+  assert.doesNotMatch(scss, /pull-refresh-float/)
+  assert.match(page, /function hasSameListData\([\s\S]*?JSON\.stringify\(left\) === JSON\.stringify\(right\)/)
+  assert.match(page, /const historyChanged = !hasSameListData\(this\.data\.historyRecords, historyRecords\)/)
+  assert.match(page, /if \(!historyChanged && !this\.data\.historyError\) return/)
+  assert.match(page, /const keepCurrentPages = resetList && preserveLoadedPages && !queryChanged/)
+  assert.match(page, /const itemsChanged = !hasSameListData\(this\.data\.taskItems, taskItems\)/)
+  assert.match(page, /if \(Object\.keys\(updates\)\.length > 0\) this\.setData\(updates\)/)
+  assert.doesNotMatch(wxml, /bindtap="retryHistoryRefresh"/)
+  assert.match(wxml, /请下拉刷新重试/)
 })
 
 test('all top navigation bars use the shared glass material', () => {
@@ -248,8 +294,6 @@ test('all top navigation bars use the shared glass material', () => {
   const loginWxml = source('miniprogram/pages/login/login.wxml')
   const indexWxml = source('miniprogram/pages/index/index.wxml')
   const logsWxml = source('miniprogram/pages/logs/logs.wxml')
-  const skeletonWxml = source('miniprogram/pages/index/index.skeleton.wxml')
-  const skeletonWxss = source('miniprogram/pages/index/index.skeleton.wxss')
 
   assert.match(navigationScss, /background:\s*rgba\(246,\s*249,\s*252,\s*\.48\)/)
   const navigationBlur = navigationScss.match(/backdrop-filter:\s*blur\((\d+rpx)\)\s+saturate\(132%\)/)?.[1]
@@ -264,9 +308,6 @@ test('all top navigation bars use the shared glass material', () => {
   for (const wxml of [loginWxml, indexWxml, logsWxml]) {
     assert.match(wxml, /background="rgba\(246, 249, 252, \.48\)"/)
   }
-
-  assert.match(skeletonWxml, /background:\s*rgba\(246, 249, 252, \.48\)/)
-  assert.match(skeletonWxss, new RegExp(`backdrop-filter:\\s*blur\\(${navigationBlur}\\)\\s+saturate\\(132%\\)`))
 })
 
 test('glass navigation remains fixed with spacing derived from the unified height', () => {
@@ -278,8 +319,6 @@ test('glass navigation remains fixed with spacing derived from the unified heigh
   const loginScss = source('miniprogram/pages/login/login.scss')
   const logsWxml = source('miniprogram/pages/logs/logs.wxml')
   const logsScss = source('miniprogram/pages/logs/logs.scss')
-  const skeletonWxml = source('miniprogram/pages/index/index.skeleton.wxml')
-  const skeletonWxss = source('miniprogram/pages/index/index.skeleton.wxss')
 
   assert.match(navigationScss, /\.weui-navigation-bar\s*\{\s*position:\s*fixed;/)
   assert.doesNotMatch(navigationScss, /position:\s*sticky/)
@@ -289,7 +328,6 @@ test('glass navigation remains fixed with spacing derived from the unified heigh
 
   assert.match(indexWxml, /^<navigation-bar[^>]*>[^]*?<scroll-view[^>]*class="page-scroll"/)
   assert.match(logsWxml, /<navigation-bar[^>]*>[^]*?<scroll-view[^>]*class="scrollarea"/)
-  assert.match(skeletonWxml, /<view is="components\/navigation-bar\/navigation-bar">[^]*?<scroll-view[^>]*class="page-scroll"/)
 
   const indexShell = indexScss.match(/\.page-shell\s*\{([^}]*)\}/)?.[1] || ''
   assert.match(navigationScss, /height:\s*calc\(var\(--height\) \+ env\(safe-area-inset-top\) \+ 8px\)/)
@@ -299,8 +337,6 @@ test('glass navigation remains fixed with spacing derived from the unified heigh
   assert.match(indexShell, /padding:\s*calc\(36px \+ env\(safe-area-inset-top\) \+ 8px \+ 32rpx\)/)
   assert.match(loginScss, /padding:\s*calc\(36px \+ env\(safe-area-inset-top\) \+ 8px \+ 72rpx\)/)
   assert.match(logsScss, /padding-top:\s*calc\(36px \+ env\(safe-area-inset-top\) \+ 8px\)/)
-  assert.match(skeletonWxml, /height: calc\(var\(--height\) \+ 55px\); padding-top: 55px;/)
-  assert.match(skeletonWxss, /\.bar--weui-navigation-bar\s*\{\s*--height:\s*36px;[^}]*position:\s*fixed;/)
 
   assert.match(navigationTs, /const windowInfo = wx\.getWindowInfo\(\)/)
   assert.match(navigationTs, /const deviceInfo = wx\.getDeviceInfo\(\)/)
@@ -316,13 +352,11 @@ test('glass navigation remains fixed with spacing derived from the unified heigh
 
 test('all glass navigation variants share one content height', () => {
   const navigationScss = source('miniprogram/components/navigation-bar/navigation-bar.scss')
-  const skeletonWxss = source('miniprogram/pages/index/index.skeleton.wxss')
   const baseHeight = navigationScss.match(/\.weui-navigation-bar\s*\{[^}]*--height:\s*(\d+px)/)?.[1]
   const androidHeight = navigationScss.match(/\.weui-navigation-bar \.android\s*\{[^}]*--height:\s*(\d+px)/)?.[1]
 
   assert.equal(baseHeight, '36px')
   assert.equal(androidHeight, baseHeight)
-  assert.match(skeletonWxss, new RegExp(`\\.bar--weui-navigation-bar\\s*\\{[^}]*--height:\\s*${baseHeight}`))
 })
 
 test('all image pickers request original files without client-side compression', () => {
@@ -394,7 +428,7 @@ test('review text inputs keep identical text metrics before and after focus', ()
     wxml,
     /<view wx:if="\{\{activeTab === 'scan' && screen === 'review'\}\}" class="review-native-page">/,
   )
-  assert.match(wxml, /<scroll-view\s+wx:else\s+class="page-scroll"\s+scroll-y\s+enhanced/)
+  assert.match(wxml, /<scroll-view\s+wx:else\s+class="page-scroll"[^>]*\s+scroll-y[^>]*\s+enhanced/)
   assert.doesNotMatch(reviewEditor, /class="page-scroll"/)
   assert.doesNotMatch(pageConfig, /"disableScroll":\s*true/)
   assert.match(reviewEditor, /<scroll-view class="table-scroll" scroll-x show-scrollbar="\{\{false\}\}">/)
@@ -436,37 +470,32 @@ test('review actions keep return, export, and save controls in one balanced row'
 test('quality orders use the same all-source and all-status default scope as the web workbench', () => {
   const page = source('miniprogram/pages/index/index.ts')
   const activateTab = page.match(/activateTab\(activeTab: WorkspaceTab\) \{([\s\S]*?)\n    \},\n    switchTab/)?.[1] || ''
-  const loadTasks = page.match(/loadTasks\(reset = false, force = false\): Promise<void> \{([\s\S]*?)\n    \},\n    loadMoreTasks/)?.[1] || ''
+  const loadTasks = page.match(/loadTasks\(reset = false, preserveLoadedPages = false\): Promise<void> \{([\s\S]*?)\n    \},\n    loadMoreTasks/)?.[1] || ''
   const openTask = page.match(/openTask\(event: WechatMiniprogram\.TouchEvent\) \{([\s\S]*?)\n    \},\n    selectTaskItem/)?.[1] || ''
-  const pageShow = page.match(/pageLifetimes:\s*\{[\s\S]*?show\(\) \{([\s\S]*?)\n    \},?[\s\S]*?\n  \},\n  methods:/)?.[1] || ''
 
   assert.match(page, /taskAppliedSearch:\s*''/)
   assert.match(page, /taskStatus:\s*'all'/)
-  assert.match(page, /taskLoadedAt:\s*0/)
-  assert.match(page, /taskRefreshQueued:\s*false/)
+  assert.match(page, /taskInitialized:\s*false/)
+  assert.match(page, /taskPullRefreshing:\s*false/)
   assert.match(page, /taskRequestId:\s*0/)
   assert.match(page, /taskOpeningId:\s*0/)
-  assert.match(activateTab, /activeTab === 'tasks' && previousTab !== 'tasks'[\s\S]*?loadTasks\(true\)/)
-  assert.match(pageShow, /activeTab === 'tasks'/)
-  assert.match(pageShow, /loadTasks\(true, true\)/)
-  assert.match(page, /getCurrentUser\(\)[\s\S]*?void this\.loadTasks\(true\)/)
-  assert.match(page, /activeTab === 'tasks' && previousTab !== 'tasks'\) this\.loadTasks\(true\)/)
-  assert.doesNotMatch(page, /activeTab === 'tasks' && previousTab !== 'tasks'\) this\.loadTasks\(true, true\)/)
+  assert.match(activateTab, /this\.loadActiveListOnce\(\)/)
+  assert.doesNotMatch(page, /pageLifetimes:/)
+  assert.match(page, /getCurrentUser\(\)[\s\S]*?this\.loadActiveListOnce\(\)/)
   assert.match(loadTasks, /pageSize:\s*TASK_PAGE_SIZE/)
   assert.match(loadTasks, /const search = this\.data\.taskAppliedSearch\.trim\(\)/)
   assert.match(loadTasks, /status:\s*status === 'all' \? undefined : status/)
   assert.match(loadTasks, /sourceType:\s*'all'/)
   assert.match(loadTasks, /compact:\s*true/)
   assert.doesNotMatch(loadTasks, /sourceType:\s*'purchase_order'/)
-  assert.match(loadTasks, /shouldRefreshInspectionTasks/)
-  assert.match(loadTasks, /shouldQueueInspectionTaskRefresh/)
-  assert.match(loadTasks, /const preserveTaskItems = resetList && !queryChanged/)
-  assert.match(loadTasks, /taskRefreshing:\s*preserveTaskItems/)
+  assert.doesNotMatch(loadTasks, /shouldRefreshInspectionTasks/)
+  assert.doesNotMatch(loadTasks, /shouldQueueInspectionTaskRefresh/)
+  assert.match(loadTasks, /taskInitialized:\s*true/)
   assert.match(loadTasks, /resetList && queryChanged[\s\S]*?taskItems:\s*\[\]/)
   assert.match(loadTasks, /taskRequestId !== requestId/)
-  assert.match(loadTasks, /taskRefreshQueued/)
-  assert.match(page, /confirmTaskSearch\(\)[\s\S]*?taskAppliedSearch[\s\S]*?loadTasks\(true, true\)/)
-  assert.match(page, /changeTaskStatus[\s\S]*?loadTasks\(true, true\)/)
+  assert.doesNotMatch(loadTasks, /taskRefreshQueued/)
+  assert.match(page, /confirmTaskSearch\(\)[\s\S]*?taskAppliedSearch[\s\S]*?loadTasks\(true\)/)
+  assert.match(page, /changeTaskStatus[\s\S]*?loadTasks\(true\)/)
   assert.match(openTask, /getInspectionTask\(taskId, true\)/)
   assert.doesNotMatch(openTask, /taskLoading:\s*true/)
   assert.match(openTask, /const requestId = this\.data\.taskOpenRequestId \+ 1/)

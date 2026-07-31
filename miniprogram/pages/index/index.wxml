@@ -104,10 +104,30 @@
   wx:else
   class="page-scroll"
   scroll-y
+  scroll-top="{{workspaceScrollTop}}"
+  scroll-with-animation="{{false}}"
   enhanced
   show-scrollbar="{{false}}"
   bindscrolltolower="loadMoreTasks"
+  refresher-enabled="{{activeTab === 'tasks' || activeTab === 'history'}}"
+  refresher-default-style="none"
+  refresher-threshold="72"
+  refresher-background="#f3f6f8"
+  refresher-triggered="{{(activeTab === 'tasks' && taskPullRefreshing) || (activeTab === 'history' && historyPullRefreshing)}}"
+  bindrefresherpulling="onListPulling"
+  bindrefresherrefresh="onListPullDownRefresh"
+  bindrefresherrestore="onListPullRefreshRestore"
+  bindrefresherabort="onListPullRefreshRestore"
 >
+  <view
+    slot="refresher"
+    class="pull-refresh-indicator {{(activeTab === 'tasks' && taskPulling) || (activeTab === 'history' && historyPulling) ? 'is-pulling' : ''}} {{(activeTab === 'tasks' && taskPullRefreshing) || (activeTab === 'history' && historyPullRefreshing) ? 'is-refreshing' : ''}}"
+    style="transform: translate3d(0, {{navigationBarHeight}}px, 0);"
+  >
+    <view class="pull-refresh-visual">
+      <view class="pull-refresh-ring"></view>
+    </view>
+  </view>
   <view class="page-shell" style="padding-top: calc({{navigationBarHeight}}px + 32rpx);">
     <block wx:if="{{activeTab === 'scan'}}">
     <block wx:if="{{screen === 'capture'}}">
@@ -194,7 +214,7 @@
             <view class="task-toolbar-eyebrow">QUALITY INSPECTION ORDER</view>
             <view class="task-toolbar-title">质检订单</view>
           </view>
-          <view class="task-toolbar-count {{taskRefreshing ? 'is-refreshing' : ''}}">{{taskRefreshing ? '刷新中' : taskTotal + ' 项'}}</view>
+          <view class="task-toolbar-count">{{taskTotal}} 项</view>
         </view>
         <view class="task-search-row">
           <input
@@ -303,8 +323,7 @@
           </view>
         </view>
         <view class="task-list-footer">
-          <text wx:if="{{taskRefreshing}}">正在刷新任务…</text>
-          <text wx:elif="{{taskLoading}}">正在加载更多…</text>
+          <text wx:if="{{taskLoading}}">正在加载任务…</text>
           <text wx:elif="{{taskItems.length >= taskTotal}}">已加载全部 {{taskTotal}} 个任务</text>
           <text wx:else>上拉加载更多</text>
         </view>
@@ -320,9 +339,9 @@
         <view class="local-pill">{{historyRecords.length}} 份数据</view>
       </view>
 
-      <view wx:if="{{historyError}}" class="history-error-bar" bindtap="retryHistoryRefresh">
+      <view wx:if="{{historyError}}" class="history-error-bar">
         <text>{{historyError}}</text>
-        <text class="history-error-action">点击重试</text>
+        <text class="history-error-action">请下拉刷新重试</text>
       </view>
 
       <view wx:if="{{historyLoading && historyRecords.length === 0}}" class="history-skeleton-list">

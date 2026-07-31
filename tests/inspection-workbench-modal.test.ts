@@ -122,14 +122,14 @@ test('inspection workbench keeps actions readable and content orderly on narrow 
   assert.match(scss, /@media \(max-width:\s*360px\)[\s\S]*?\.workbench-photo-grid[\s\S]*?grid-template-columns:\s*repeat\(2, minmax\(0, 1fr\)\)/)
 })
 
-test('closing the workbench does not refresh pending tasks unless a draft was saved', () => {
+test('closing or saving the workbench leaves list refresh to the pull-down gesture', () => {
   const indexTs = source('miniprogram/pages/index/index.ts')
   const closeMethod = indexTs.match(/closeWorkbenchModal\(\)\s*\{([\s\S]*?)\n    \},\n    onWorkbenchSaved/)?.[1] || ''
   const savedMethod = indexTs.match(/onWorkbenchSaved\(\)\s*\{([\s\S]*?)\n    \},/)?.[1] || ''
 
   assert.ok(closeMethod)
   assert.doesNotMatch(closeMethod, /loadTasks/)
-  assert.match(savedMethod, /loadTasks\(true, true\)/)
+  assert.doesNotMatch(savedMethod, /loadTasks/)
 })
 
 test('manual save from the drawer does not treat the tap event as a close-after-save request', () => {
@@ -234,8 +234,12 @@ test('workbench overview uploads inspection photos to the online AI workbench wi
   assert.doesNotMatch(scss, /\.pending-photo-/)
 })
 
-test('row photo uploads and retries immediately persist the shared backend draft', () => {
+test('row photo uploads and retries persist the shared backend draft without refreshing the workbench', () => {
   const ts = source('miniprogram/components/inspection-workbench-modal/inspection-workbench-modal.ts')
+  const syncFlow = ts.slice(
+    ts.indexOf('async syncUploadedRowPhotos'),
+    ts.indexOf('async appendAndUploadPhotos'),
+  )
   const uploadFlow = ts.slice(
     ts.indexOf('async appendAndUploadPhotos'),
     ts.indexOf('previewPhoto(event'),
@@ -246,7 +250,7 @@ test('row photo uploads and retries immediately persist the shared backend draft
   )
 
   assert.match(ts, /async syncUploadedRowPhotos/)
-  assert.match(ts, /if \(!hasPendingPhotos\) await this\.loadWorkbench\(\)/)
+  assert.doesNotMatch(syncFlow, /loadWorkbench\(\)/)
   assert.match(uploadFlow, /await this\.syncUploadedRowPhotos\(requestedTaskId, requestedItemId, rows\)/)
   assert.match(retryFlow, /await this\.syncUploadedRowPhotos\(requestedTaskId, requestedItemId, rows\)/)
   assert.match(ts, /照片已上传并同步/)

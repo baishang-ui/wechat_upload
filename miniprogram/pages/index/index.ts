@@ -63,10 +63,6 @@ import {
   listInspectionTasks,
   mergeInspectionHistory,
   QualityInspectionTaskDto,
-  shouldQueueInspectionHistoryRefresh,
-  shouldQueueInspectionTaskRefresh,
-  shouldRefreshInspectionHistory,
-  shouldRefreshInspectionTasks,
   TASK_PAGE_SIZE,
   taskItemToInspectionRecord,
 } from '../../services/quality-inspection-service'
@@ -84,10 +80,13 @@ type WorkspaceTab = 'scan' | 'tasks' | 'history' | 'account'
 const productLabels = PRODUCT_OPTIONS.map((option) => option.label)
 const measurementHeaders = Array.from({ length: MEASUREMENT_COUNT }, (_, index) => index + 1)
 const RECOGNITION_PROGRESS_TICK_MS = 300
+const PULL_REFRESH_MINIMUM_DURATION_MS = 1000
 const recognitionProgressTimers = new Map<string, ReturnType<typeof setInterval>>()
 const recognitionProgressStartedAt = new Map<string, number>()
 const attachedWorkspaceComponents = new WeakSet<object>()
 const recognitionStageTimers = new WeakMap<object, Set<ReturnType<typeof setTimeout>>>()
+const taskListRequests = new WeakMap<object, Promise<void>>()
+const historyListRequests = new WeakMap<object, Promise<void>>()
 
 function scheduleRecognitionStage(component: object, callback: () => void): void {
   if (!attachedWorkspaceComponents.has(component)) return
@@ -112,6 +111,70 @@ function getAccountInitial(user: AuthUser): string {
   return String(user.real_name || user.username || '账').trim().slice(0, 1) || '账'
 }
 
+function keepPullRefreshVisible(operation: Promise<void>): Promise<void> {
+  const startedAt = Date.now()
+  return operation.finally(() => new Promise<void>((resolve) => {
+    const remaining = PULL_REFRESH_MINIMUM_DURATION_MS - (Date.now() - startedAt)
+    setTimeout(resolve, Math.max(0, remaining))
+  }))
+}
+
+function upsertHistoryRecord(
+  items: HistoryViewItem[],
+  record: StoredInspectionRecord,
+): HistoryViewItem[] {
+  const recordView = mergeInspectionHistory([record], [])[0]
+  if (!recordView) return items
+  const index = items.findIndex((item) => (
+    item.id === record.id
+    || (
+      record.taskId !== null
+      && record.itemId !== null
+      && item.taskId === record.taskId
+      && item.itemId === record.itemId
+    )
+  ))
+  const nextItem = index >= 0
+    ? {
+      ...recordView,
+      id: items[index].id,
+      origin: items[index].origin,
+    }
+    : recordView
+  const next = index >= 0
+    ? items.map((item, itemIndex) => (itemIndex === index ? nextItem : item))
+    : [nextItem, ...items]
+  return next.sort((left, right) => right.updatedAt - left.updatedAt)
+}
+
+function hasSameListData(left: readonly unknown[], right: readonly unknown[]): boolean {
+  return JSON.stringify(left) === JSON.stringify(right)
+}
+
+function mergeRefreshedTaskPage(
+  current: QualityInspectionTaskDto[],
+  incoming: QualityInspectionTaskDto[],
+  total: number,
+): QualityInspectionTaskDto[] {
+  const incomingIds = new Set(incoming.map((item) => item.id))
+  return [
+    ...incoming,
+    ...current.filter((item) => !incomingIds.has(item.id)),
+  ].slice(0, total)
+}
+
+function appendTaskPage(
+  current: QualityInspectionTaskDto[],
+  incoming: QualityInspectionTaskDto[],
+  total: number,
+): QualityInspectionTaskDto[] {
+  const currentIds = new Set(current.map((item) => item.id))
+  return [
+    ...current,
+    ...incoming.filter((item) => !currentIds.has(item.id)),
+  ].slice(0, total)
+}
+
 Component({
   data: {
     navigationBarHeight: 91,
@@ -123,10 +186,11 @@ Component({
     taskAppliedSearch: '',
     taskStatus: 'all',
     taskLoading: false,
-    taskRefreshing: false,
-    taskLoadedAt: 0,
+    taskInitialized: false,
+    taskPullRefreshing: false,
+    taskPulling: false,
     taskLoadedQueryKey: '',
-    taskRefreshQueued: false,
+    taskLoadingQueryKey: '',
     taskRequestId: 0,
     taskOpenRequestId: 0,
     taskOpeningId: 0,
@@ -154,8 +218,9 @@ Component({
     editingRecordId: '',
     historyRecords: [] as HistoryViewItem[],
     historyLoading: false,
-    historyLoadedAt: 0,
-    historyRefreshQueued: false,
+    historyInitialized: false,
+    historyPullRefreshing: false,
+    historyPulling: false,
     historyError: '',
     historyRequestId: 0,
     historyDeletingId: '',
@@ -166,6 +231,7 @@ Component({
     historyEditorTaskId: 0,
     historyEditorItemId: 0,
     pressedTab: '' as WorkspaceTab | '',
+    workspaceScrollTop: 0,
     currentUser: null as AuthUser | null,
     accountInitial: '账',
     accountLoading: !DEMO_MODE,
@@ -183,8 +249,7 @@ Component({
               accountInitial: getAccountInitial(currentUser),
               accountLoading: false,
               accountError: '',
-            })
-            void this.loadTasks(true)
+            }, () => this.loadActiveListOnce())
           })
           .catch((error: Error) => {
             if (error instanceof ServerClientError && error.statusCode === 401) {
@@ -205,14 +270,12 @@ Component({
       this.stopAllRecognitionProgress()
     },
   },
-  pageLifetimes: {
-    show() {
-      if (this.data.activeTab === 'tasks') void this.loadTasks(true, true)
-    },
-  },
   methods: {
     onNavigationHeightChange(event: NavigationHeightChangeEvent) {
-      this.setData({ navigationBarHeight: event.detail.height })
+      const navigationBarHeight = Number(event.detail.height)
+      if (!Number.isFinite(navigationBarHeight) || navigationBarHeight <= 0) return
+      if (this.data.navigationBarHeight === navigationBarHeight) return
+      this.setData({ navigationBarHeight })
     },
     loadAccountUser() {
       if (DEMO_MODE || this.data.accountLoading) return
@@ -256,23 +319,10 @@ Component({
         },
       })
     },
-    refreshHistory(force = false): Promise<void> {
-      const forceRefresh = force === true
+    loadHistory(): Promise<void> {
       if (this.data.historyLoading) {
-        if (shouldQueueInspectionHistoryRefresh(
-          this.data.historyLoading,
-          forceRefresh,
-          this.data.historyRefreshQueued,
-        )) {
-          this.setData({ historyRefreshQueued: true })
-        }
-        return Promise.resolve()
+        return historyListRequests.get(this) ?? Promise.resolve()
       }
-      if (!shouldRefreshInspectionHistory(
-        this.data.historyLoadedAt,
-        Date.now(),
-        forceRefresh,
-      )) return Promise.resolve()
       const requestId = this.data.historyRequestId + 1
       const local = loadInspectionHistory()
       this.setData({
@@ -280,16 +330,19 @@ Component({
           ? this.data.historyRecords
           : mergeInspectionHistory(local, []),
         historyLoading: true,
+        historyInitialized: true,
         historyError: '',
         historyRequestId: requestId,
       })
-      return listInspectionHistory()
+      const request = listInspectionHistory()
         .then((data) => {
           if (this.data.historyRequestId !== requestId) return
+          const historyRecords = mergeInspectionHistory(loadInspectionHistory(), data.items)
+          const historyChanged = !hasSameListData(this.data.historyRecords, historyRecords)
+          if (!historyChanged && !this.data.historyError) return
           this.setData({
-            historyRecords: mergeInspectionHistory(loadInspectionHistory(), data.items),
+            ...(historyChanged ? { historyRecords } : {}),
             historyError: '',
-            historyLoadedAt: Date.now(),
           })
         })
         .catch((error: Error) => {
@@ -299,33 +352,79 @@ Component({
               ? this.data.historyRecords
               : mergeInspectionHistory(loadInspectionHistory(), []),
             historyError: `服务器记录加载失败：${error.message || '请稍后重试'}`,
-            historyLoadedAt: Date.now(),
           })
         })
         .finally(() => {
           if (this.data.historyRequestId === requestId) {
-            const queuedRefresh = this.data.historyRefreshQueued
-            this.setData({
-              historyLoading: false,
-              historyRefreshQueued: false,
-            })
-            if (queuedRefresh) this.refreshHistory(true)
+            this.setData({ historyLoading: false })
+          }
+          if (historyListRequests.get(this) === request) {
+            historyListRequests.delete(this)
           }
         })
+      historyListRequests.set(this, request)
+      return request
     },
-    retryHistoryRefresh() {
-      this.refreshHistory(true)
+    loadActiveListOnce() {
+      if (this.data.accountLoading) return
+      if (this.data.activeTab === 'tasks' && !this.data.taskInitialized) {
+        void this.loadTasks(true)
+      }
+      if (this.data.activeTab === 'history' && !this.data.historyInitialized) {
+        void this.loadHistory()
+      }
+    },
+    onListPullDownRefresh() {
+      if (this.data.activeTab === 'tasks') {
+        if (this.data.taskPullRefreshing) return
+        this.setData({
+          taskPullRefreshing: true,
+        })
+        void keepPullRefreshVisible(this.loadTasks(true, true)).finally(() => {
+          this.setData({ taskPullRefreshing: false })
+        })
+        return
+      }
+      if (this.data.activeTab === 'history') {
+        if (this.data.historyPullRefreshing) return
+        this.setData({
+          historyPullRefreshing: true,
+        })
+        void keepPullRefreshVisible(this.loadHistory()).finally(() => {
+          this.setData({ historyPullRefreshing: false })
+        })
+      }
+    },
+    onListPulling() {
+      if (this.data.activeTab === 'tasks' && !this.data.taskPulling) {
+        this.setData({ taskPulling: true })
+        return
+      }
+      if (this.data.activeTab === 'history' && !this.data.historyPulling) {
+        this.setData({ historyPulling: true })
+      }
+    },
+    onListPullRefreshRestore() {
+      const updates: Record<string, boolean> = {}
+      if (this.data.taskPulling) updates.taskPulling = false
+      if (this.data.historyPulling) updates.historyPulling = false
+      if (Object.keys(updates).length > 0) this.setData(updates)
     },
     activateTab(activeTab: WorkspaceTab) {
-      const previousTab = this.data.activeTab
+      const tabChanged = activeTab !== this.data.activeTab
       this.setData({
         activeTab,
+        ...(tabChanged ? { workspaceScrollTop: 1 } : {}),
         ...(activeTab === 'scan'
           ? { selectedTaskId: 0, selectedItemId: 0 }
           : {}),
+      }, () => {
+        if (!tabChanged) {
+          this.loadActiveListOnce()
+          return
+        }
+        this.setData({ workspaceScrollTop: 0 }, () => this.loadActiveListOnce())
       })
-      if (activeTab === 'history' && previousTab !== 'history') this.refreshHistory()
-      if (activeTab === 'tasks' && previousTab !== 'tasks') this.loadTasks(true)
     },
     switchTab(event: WechatMiniprogram.TouchEvent) {
       this.activateTab(event.currentTarget.dataset.tab as WorkspaceTab)
@@ -343,38 +442,26 @@ Component({
     showHistory() {
       this.activateTab('history')
     },
-    loadTasks(reset = false, force = false): Promise<void> {
+    loadTasks(reset = false, preserveLoadedPages = false): Promise<void> {
       const resetList = reset === true
-      const forceRefresh = force === true
-      if (this.data.taskLoading) {
-        if (shouldQueueInspectionTaskRefresh(
-          this.data.taskLoading,
-          resetList,
-          forceRefresh,
-          this.data.taskRefreshQueued,
-        )) {
-          this.setData({ taskRefreshQueued: true })
-        }
-        return Promise.resolve()
-      }
-
       const search = this.data.taskAppliedSearch.trim()
       const status = this.data.taskStatus
       const queryKey = JSON.stringify([status, search])
       const queryChanged = queryKey !== this.data.taskLoadedQueryKey
-      if (resetList && !shouldRefreshInspectionTasks(
-        this.data.taskLoadedAt,
-        Date.now(),
-        forceRefresh || queryChanged,
-      )) return Promise.resolve()
+      if (
+        this.data.taskLoading
+        && (!resetList || queryKey === this.data.taskLoadingQueryKey)
+      ) {
+        return taskListRequests.get(this) ?? Promise.resolve()
+      }
       if (!resetList && this.data.taskItems.length >= this.data.taskTotal) return Promise.resolve()
 
       const page = resetList ? 1 : this.data.taskPage
       const requestId = this.data.taskRequestId + 1
-      const preserveTaskItems = resetList && !queryChanged && this.data.taskItems.length > 0
       this.setData({
         taskLoading: true,
-        taskRefreshing: preserveTaskItems,
+        taskLoadingQueryKey: queryKey,
+        ...(resetList ? { taskInitialized: true } : {}),
         taskRequestId: requestId,
         ...(resetList && queryChanged ? {
           taskItems: [],
@@ -384,7 +471,7 @@ Component({
           selectedItemId: 0,
         } : {}),
       })
-      return listInspectionTasks({
+      const request = listInspectionTasks({
         page,
         pageSize: TASK_PAGE_SIZE,
         search: search || undefined,
@@ -399,20 +486,26 @@ Component({
             this.data.taskAppliedSearch.trim(),
           ])
           if (currentQueryKey !== queryKey) {
-            this.setData({ taskRefreshQueued: true })
             return
           }
-          this.setData({
-            taskItems: resetList
+          const keepCurrentPages = resetList && preserveLoadedPages && !queryChanged
+          const taskItems = keepCurrentPages
+            ? mergeRefreshedTaskPage(this.data.taskItems, data.items, data.total)
+            : resetList
               ? data.items
-              : [...this.data.taskItems, ...data.items],
-            taskTotal: data.total,
-            taskPage: page + 1,
-            ...(resetList ? {
-              taskLoadedAt: Date.now(),
-              taskLoadedQueryKey: queryKey,
-            } : {}),
-          })
+              : appendTaskPage(this.data.taskItems, data.items, data.total)
+          const taskPage = keepCurrentPages
+            ? Math.max(this.data.taskPage, page + 1)
+            : page + 1
+          const itemsChanged = !hasSameListData(this.data.taskItems, taskItems)
+          const updates: Record<string, unknown> = {}
+          if (itemsChanged) updates.taskItems = taskItems
+          if (this.data.taskTotal !== data.total) updates.taskTotal = data.total
+          if (this.data.taskPage !== taskPage) updates.taskPage = taskPage
+          if (resetList && this.data.taskLoadedQueryKey !== queryKey) {
+            updates.taskLoadedQueryKey = queryKey
+          }
+          if (Object.keys(updates).length > 0) this.setData(updates)
         })
         .catch((error: Error) => {
           if (this.data.taskRequestId !== requestId) return
@@ -420,15 +513,16 @@ Component({
         })
         .finally(() => {
           if (this.data.taskRequestId !== requestId) return
-          const queuedRefresh = this.data.taskRefreshQueued
           this.setData({
             taskLoading: false,
-            taskRefreshing: false,
-            taskRefreshQueued: false,
-          }, () => {
-            if (queuedRefresh) this.loadTasks(true, true)
+            taskLoadingQueryKey: '',
           })
+          if (taskListRequests.get(this) === request) {
+            taskListRequests.delete(this)
+          }
         })
+      taskListRequests.set(this, request)
+      return request
     },
     loadMoreTasks() {
       if (this.data.activeTab === 'tasks') this.loadTasks(false)
@@ -438,19 +532,13 @@ Component({
     },
     confirmTaskSearch() {
       const taskAppliedSearch = this.data.taskSearch.trim()
-      if (taskAppliedSearch === this.data.taskAppliedSearch) {
-        this.loadTasks(true, true)
-        return
-      }
-      this.setData({ taskAppliedSearch }, () => this.loadTasks(true, true))
+      if (taskAppliedSearch === this.data.taskAppliedSearch) return
+      this.setData({ taskAppliedSearch }, () => this.loadTasks(true))
     },
     changeTaskStatus(event: WechatMiniprogram.TouchEvent) {
       const taskStatus = String(event.currentTarget.dataset.status || 'pending')
-      if (taskStatus === this.data.taskStatus) {
-        this.loadTasks(true, true)
-        return
-      }
-      this.setData({ taskStatus }, () => this.loadTasks(true, true))
+      if (taskStatus === this.data.taskStatus) return
+      this.setData({ taskStatus }, () => this.loadTasks(true))
     },
     openTask(event: WechatMiniprogram.TouchEvent) {
       const taskId = Number(event.currentTarget.dataset.id)
@@ -519,9 +607,7 @@ Component({
         workbenchModalItemId: 0,
       })
     },
-    onWorkbenchSaved() {
-      void this.loadTasks(true, true)
-    },
+    onWorkbenchSaved() {},
     onHistoryEditorSaved(result: StoredInspectionRecord) {
       if (
         result.syncStatus === 'synced'
@@ -537,7 +623,9 @@ Component({
           ),
         })
       }
-      void this.refreshHistory(true)
+      this.setData({
+        historyRecords: upsertHistoryRecord(this.data.historyRecords, result),
+      })
       showTopToast({
         title: result.syncStatus === 'synced'
           ? '记录已更新并同步'
@@ -581,8 +669,10 @@ Component({
         )),
       })
       this.syncHistoryRecord(stored)
-        .then((result) => this.refreshHistory(true).then(() => result))
         .then((result) => {
+          this.setData({
+            historyRecords: upsertHistoryRecord(this.data.historyRecords, result),
+          })
           showTopToast({
             title: result.syncStatus === 'synced'
               ? '同步成功'
@@ -929,7 +1019,10 @@ Component({
       const selected = this.data.historyRecords.find((item) => item.id === id)
       if (!selected || this.data.historyEditorVisible) return
       if (selected.origin === 'local' && !loadInspectionHistory().some((item) => item.id === id)) {
-        void this.refreshHistory(true)
+        this.setData({
+          historyRecords: this.data.historyRecords.filter((item) => item.id !== id),
+        })
+        showTopToast({ title: '记录已不存在，已从列表移除', icon: 'none' })
         return
       }
       if (selected.origin === 'remote' && (!selected.taskId || !selected.itemId)) return
@@ -981,9 +1074,14 @@ Component({
             })()
             : deleteInspectionHistory(id)
           deleting
-            .then(() => this.refreshHistory(true))
             .then(() => {
-              if (isRemote && selected.sourceType === 'purchase_order') this.loadTasks(true)
+              this.setData({
+                historyRecords: this.data.historyRecords.filter((item) => (
+                  isRemote
+                    ? item.taskId !== selected.taskId || item.itemId !== selected.itemId
+                    : item.id !== id
+                )),
+              })
               showTopToast({ title: '已删除', icon: 'success' })
             })
             .catch((error: Error) => {
@@ -1095,8 +1193,8 @@ Component({
             reviewQueueItemId: '',
             recognitionQueue: queue,
             recognitionQueueStats: getQueueStats(queue),
+            historyRecords: upsertHistoryRecord(this.data.historyRecords, stored),
           })
-          this.refreshHistory(true)
           if (stored.syncStatus !== 'synced' && stored.syncError) {
             showTopToast({
               title: stored.syncError,

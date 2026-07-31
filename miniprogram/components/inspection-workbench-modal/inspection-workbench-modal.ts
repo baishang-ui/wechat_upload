@@ -410,7 +410,6 @@ Component({
           savedMessage: '照片已上传并同步',
           dirty: hasPendingPhotos,
         })
-        if (!hasPendingPhotos) await this.loadWorkbench()
         if (!this.isActiveWorkbenchRequest(requestedTaskId, requestedItemId)) return false
         this.triggerEvent('saved', { taskId: requestedTaskId, itemId: requestedItemId })
         return true
