@@ -1,0 +1,188 @@
+.workspace-tabs {
+  position: fixed;
+  z-index: 80;
+  right: 0;
+  bottom: calc(28rpx + env(safe-area-inset-bottom));
+  left: 0;
+  width: 320PX;
+  height: 52PX;
+  margin: 0 auto;
+  padding: 4PX;
+  overflow: hidden;
+  background: rgba(255, 255, 255, .9);
+  border: 1PX solid rgba(220, 228, 240, .92);
+  border-radius: 27PX;
+  box-shadow: 0 16rpx 44rpx rgba(35, 58, 92, .16);
+  backdrop-filter: blur(24rpx);
+  animation: workspace-tabs-in .36s cubic-bezier(.25, .1, .25, 1) both;
+  touch-action: pan-y;
+}
+
+.workspace-tabs__track {
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(4, 72PX);
+  gap: 4PX;
+  width: 300PX;
+  height: 44PX;
+  margin: 0 auto;
+}
+
+.workspace-tabs__indicator {
+  position: absolute;
+  z-index: 0;
+  top: 0;
+  left: 0;
+  width: 72PX;
+  height: 44PX;
+  transition: transform .42s cubic-bezier(.38, .56, .46, 1);
+  will-change: transform;
+}
+
+.workspace-tabs__indicator-fill {
+  width: calc(100% + var(--tab-stretch));
+  height: 100%;
+  margin-left: var(--tab-stretch-offset);
+  background: #2f6bff;
+  border-radius: 22PX;
+  transform: scaleY(var(--tab-scale-y));
+  transform-origin: center;
+  transition: width .2s cubic-bezier(.35, .2, .45, 1), margin-left .2s cubic-bezier(.35, .2, .45, 1), transform .24s cubic-bezier(.35, .2, .45, 1);
+  will-change: width, margin-left, transform;
+}
+
+.workspace-tabs.is-dragging .workspace-tabs__indicator {
+  transition-duration: .12s;
+  transition-timing-function: cubic-bezier(.35, .2, .45, 1);
+}
+
+.workspace-tabs.is-dragging .workspace-tabs__indicator-fill {
+  transition-duration: .12s;
+  transition-timing-function: cubic-bezier(.35, .2, .45, 1);
+}
+
+.workspace-tabs.is-settling .workspace-tabs__indicator-fill.route-0,
+.workspace-tabs.is-settling .workspace-tabs__indicator-fill.route-1 {
+  animation-duration: .42s;
+  animation-timing-function: cubic-bezier(.38, .56, .46, 1);
+  animation-fill-mode: both;
+}
+
+.workspace-tabs.is-settling.is-right .workspace-tabs__indicator-fill.route-0 {
+  animation-name: tab-shape-right-a;
+}
+
+.workspace-tabs.is-settling.is-right .workspace-tabs__indicator-fill.route-1 {
+  animation-name: tab-shape-right-b;
+}
+
+.workspace-tabs.is-settling.is-left .workspace-tabs__indicator-fill.route-0 {
+  animation-name: tab-shape-left-a;
+}
+
+.workspace-tabs.is-settling.is-left .workspace-tabs__indicator-fill.route-1 {
+  animation-name: tab-shape-left-b;
+}
+
+.workspace-tabs__button {
+  position: relative;
+  z-index: 1;
+  width: 72PX;
+  height: 44PX;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4PX;
+  border-radius: 22PX;
+  transition: color .2s cubic-bezier(.25, .1, .25, 1), transform .16s cubic-bezier(.25, .1, .25, 1);
+}
+
+.workspace-tabs__button:active {
+  transform: scale(.98);
+}
+
+.workspace-tabs__label {
+  font-size: 12PX;
+  font-weight: 650;
+}
+
+@mixin right-route {
+  0% {
+    width: calc(100% + var(--tab-stretch));
+    margin-left: 0;
+    transform: scaleY(var(--tab-scale-y));
+  }
+
+  22% {
+    width: calc(100% + 12PX);
+    margin-left: 0;
+    transform: scaleY(.91);
+  }
+
+  48% {
+    width: calc(100% + 20PX);
+    margin-left: -8PX;
+    transform: scaleY(.86);
+  }
+
+  76% {
+    width: calc(100% + 7PX);
+    margin-left: -7PX;
+    transform: scaleY(.95);
+  }
+
+  100% {
+    width: 100%;
+    margin-left: 0;
+    transform: scaleY(1);
+  }
+}
+
+@mixin left-route {
+  0% {
+    width: calc(100% + var(--tab-stretch));
+    margin-left: var(--tab-stretch-offset);
+    transform: scaleY(var(--tab-scale-y));
+  }
+
+  22% {
+    width: calc(100% + 12PX);
+    margin-left: -12PX;
+    transform: scaleY(.91);
+  }
+
+  48% {
+    width: calc(100% + 20PX);
+    margin-left: -12PX;
+    transform: scaleY(.86);
+  }
+
+  76% {
+    width: calc(100% + 7PX);
+    margin-left: 0;
+    transform: scaleY(.95);
+  }
+
+  100% {
+    width: 100%;
+    margin-left: 0;
+    transform: scaleY(1);
+  }
+}
+
+@keyframes tab-shape-right-a { @include right-route; }
+@keyframes tab-shape-right-b { @include right-route; }
+@keyframes tab-shape-left-a { @include left-route; }
+@keyframes tab-shape-left-b { @include left-route; }
+
+@keyframes workspace-tabs-in {
+  from {
+    opacity: 0;
+    transform: translateY(20rpx) scale(.98);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}

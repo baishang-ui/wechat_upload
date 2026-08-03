@@ -1,0 +1,102 @@
+@use '../../styles/tokens' as *;
+
+.recognition-workspace {
+  display: grid;
+  gap: 24rpx;
+}
+
+.recognition-item__body,
+.recognition-item__heading,
+.recognition-item__actions {
+  display: flex;
+  align-items: center;
+}
+
+.recognition-item__body {
+  align-items: flex-start;
+  gap: 22rpx;
+}
+
+.recognition-item__image {
+  width: 142rpx;
+  height: 176rpx;
+  flex: none;
+  border-radius: 18rpx;
+}
+
+.recognition-item__main {
+  min-width: 0;
+  flex: 1;
+}
+
+.recognition-item__heading {
+  justify-content: space-between;
+  gap: 18rpx;
+}
+
+.recognition-item__status,
+.recognition-item__progress,
+.recognition-item__stage,
+.recognition-item__error {
+  display: block;
+}
+
+.recognition-item__status {
+  color: $ui-text-primary;
+  font-size: 27rpx;
+  font-weight: 750;
+}
+
+.recognition-item__progress {
+  color: $ui-primary;
+  font-size: 23rpx;
+  font-weight: 700;
+}
+
+.recognition-item__stage {
+  margin-top: 8rpx;
+  color: $ui-text-secondary;
+  font-size: 22rpx;
+}
+
+.recognition-progress {
+  height: 10rpx;
+  margin-top: 18rpx;
+  overflow: hidden;
+  background: #e7ebf1;
+  border-radius: 999rpx;
+}
+
+.recognition-progress__value {
+  height: 100%;
+  background: $ui-primary;
+  border-radius: inherit;
+  transition: width 300ms cubic-bezier(0.22, 0.7, 0.3, 1);
+}
+
+.recognition-item--ready .recognition-progress__value {
+  background: #158061;
+}
+
+.recognition-item--failed .recognition-progress__value {
+  background: $ui-danger;
+}
+
+.recognition-item__error {
+  margin-top: 12rpx;
+  color: $ui-danger;
+  font-size: 21rpx;
+  line-height: 1.45;
+}
+
+.recognition-item__actions {
+  flex-wrap: wrap;
+  gap: 10rpx;
+  margin-top: 18rpx;
+}
+
+.recognition-item__actions .ui-button {
+  min-height: 60rpx;
+  padding: 0 20rpx;
+  font-size: 22rpx;
+}

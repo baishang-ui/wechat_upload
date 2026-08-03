@@ -1,0 +1,312 @@
+@use '../../styles/tokens' as *;
+
+.workbench-page {
+  min-height: 100vh;
+}
+
+.workbench-content {
+  display: grid;
+  gap: 24rpx;
+  padding-bottom: calc(150rpx + env(safe-area-inset-bottom));
+}
+
+.workbench-title,
+.workbench-meta,
+.workbench-message,
+.workbench-error,
+.workbench-eyebrow,
+.workbench-row__group,
+.workbench-empty-copy,
+.unmatched-item,
+.row-photo__status,
+.row-photo__error,
+.workbench-save-state {
+  display: block;
+}
+
+.workbench-eyebrow {
+  color: $ui-primary;
+  font-size: 20rpx;
+  font-weight: 750;
+  letter-spacing: 2rpx;
+}
+
+.workbench-title {
+  margin-top: 8rpx;
+  color: $ui-text-primary;
+  font-size: 30rpx;
+  font-weight: 750;
+}
+
+.workbench-meta {
+  margin-top: 10rpx;
+  color: $ui-text-secondary;
+  font-size: 23rpx;
+  line-height: 1.55;
+}
+
+.workbench-message {
+  padding: 80rpx 20rpx;
+  color: $ui-text-secondary;
+  text-align: center;
+  font-size: 25rpx;
+}
+
+.workbench-error {
+  padding: 18rpx 20rpx;
+  color: $ui-danger;
+  background: $ui-danger-background;
+  border-radius: 16rpx;
+  font-size: 24rpx;
+}
+
+.workbench-summary .ui-card__body {
+  padding: 34rpx;
+}
+
+.workbench-summary__facts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 2rpx;
+  margin-top: 26rpx;
+  overflow: hidden;
+  background: $ui-card-border;
+  border: 1rpx solid $ui-card-border;
+  border-radius: 16rpx;
+}
+
+.workbench-summary__facts > view {
+  min-width: 0;
+  display: grid;
+  gap: 7rpx;
+  padding: 18rpx;
+  background: $ui-card-background;
+  font-size: 22rpx;
+}
+
+.workbench-summary__facts > view > text:first-child {
+  color: $ui-text-secondary;
+}
+
+.workbench-summary__facts > view > text:last-child {
+  overflow: hidden;
+  color: $ui-text-primary;
+  font-weight: 650;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.workbench-section-heading,
+.workbench-row__heading,
+.row-photo-heading,
+.row-photo__actions,
+.workbench-save-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20rpx;
+}
+
+.workbench-section-heading,
+.workbench-row__heading {
+  align-items: flex-start;
+}
+
+.workbench-row__identity {
+  min-width: 0;
+  flex: 1;
+}
+
+.workbench-row__group {
+  margin-bottom: 8rpx;
+  color: $ui-primary;
+  font-size: 20rpx;
+  font-weight: 750;
+}
+
+.decision-actions {
+  display: flex;
+  flex: none;
+  gap: 8rpx;
+}
+
+.decision-actions .ui-button,
+.row-photo-heading .ui-button {
+  min-width: 76rpx;
+  min-height: 60rpx;
+  padding: 0 16rpx;
+  font-size: 22rpx;
+}
+
+.measurement-scroll {
+  width: 100%;
+  margin-top: 24rpx;
+}
+
+.measurement-row {
+  width: max-content;
+  display: flex;
+  gap: 10rpx;
+  padding-bottom: 8rpx;
+}
+
+.measurement-cell {
+  width: 112rpx;
+  color: $ui-text-secondary;
+  text-align: center;
+  font-size: 21rpx;
+}
+
+.measurement-input {
+  box-sizing: border-box;
+  width: 100%;
+  height: 66rpx;
+  margin-top: 8rpx;
+  padding: 0 10rpx;
+  color: $ui-text-primary;
+  background: $ui-field-background;
+  border: 1rpx solid $ui-field-border;
+  border-radius: 12rpx;
+  font-size: 23rpx;
+}
+
+.workbench-note {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 118rpx;
+  margin-top: 20rpx;
+  padding: 16rpx 18rpx;
+  color: $ui-text-primary;
+  background: $ui-field-background;
+  border: 1rpx solid $ui-field-border;
+  border-radius: 14rpx;
+  font-size: 23rpx;
+}
+
+.workbench-image-grid,
+.row-photo-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12rpx;
+  margin-top: 20rpx;
+}
+
+.workbench-image-card,
+.row-photo {
+  min-width: 0;
+  padding: 10rpx;
+  background: $ui-field-background;
+  border: 1rpx solid $ui-field-border;
+  border-radius: 14rpx;
+}
+
+.workbench-image-card > text {
+  display: block;
+  padding: 9rpx 0 1rpx;
+  color: $ui-danger;
+  font-size: 20rpx;
+  text-align: center;
+}
+
+.workbench-image,
+.row-photo__image {
+  width: 100%;
+  height: 150rpx;
+  display: block;
+  border-radius: 10rpx;
+}
+
+.report-source-block,
+.row-photo-heading {
+  margin-top: 24rpx;
+  padding-top: 20rpx;
+  border-top: 1rpx solid $ui-card-border;
+}
+
+.workbench-empty-copy {
+  margin-top: 18rpx;
+  color: $ui-text-secondary;
+  font-size: 22rpx;
+}
+
+.unmatched-card {
+  border-color: rgba(216, 161, 31, 0.45);
+}
+
+.unmatched-item {
+  margin-top: 14rpx;
+  padding: 14rpx 16rpx;
+  color: #805900;
+  background: #fff8df;
+  border-radius: 12rpx;
+  font-size: 22rpx;
+  line-height: 1.45;
+}
+
+.row-photo--failed {
+  border-color: rgba(185, 61, 73, 0.45);
+}
+
+.row-photo__status {
+  margin-top: 9rpx;
+  color: $ui-text-secondary;
+  font-size: 20rpx;
+}
+
+.row-photo__error {
+  margin-top: 6rpx;
+  color: $ui-danger;
+  font-size: 19rpx;
+  line-height: 1.35;
+}
+
+.row-photo__actions {
+  justify-content: flex-start;
+  margin-top: 9rpx;
+  color: $ui-primary;
+  font-size: 20rpx;
+}
+
+.row-photo__actions > text:last-child {
+  color: $ui-danger;
+}
+
+.workbench-save-bar {
+  position: fixed;
+  right: 24rpx;
+  bottom: calc(24rpx + env(safe-area-inset-bottom));
+  left: 24rpx;
+  z-index: 20;
+  padding: 16rpx 18rpx 16rpx 24rpx;
+  background: rgba(255, 255, 255, 0.94);
+  border: 1rpx solid $ui-card-border;
+  border-radius: 22rpx;
+  box-shadow: 0 18rpx 48rpx rgba(23, 38, 61, 0.18);
+  backdrop-filter: blur(18px);
+}
+
+.workbench-save-state {
+  min-width: 0;
+  overflow: hidden;
+  color: $ui-text-secondary;
+  font-size: 22rpx;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (max-width: 520px) {
+  .workbench-summary__facts,
+  .workbench-image-grid,
+  .row-photo-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .workbench-section-heading {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .workbench-save-state {
+    max-width: 48%;
+  }
+}

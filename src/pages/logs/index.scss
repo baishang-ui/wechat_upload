@@ -1,0 +1,17 @@
+.logs-list {
+  display: grid;
+  gap: 18rpx;
+  padding-bottom: calc(40rpx + env(safe-area-inset-bottom));
+}
+
+.log-copy {
+  color: #394761;
+  font-size: 25rpx;
+}
+
+.logs-empty {
+  padding: 100rpx 0;
+  color: #77839a;
+  text-align: center;
+  font-size: 25rpx;
+}

@@ -78,7 +78,10 @@ flowchart LR
 
 ## 技术栈
 
-- 微信小程序
+- 微信小程序（当前生产基线位于 `miniprogram/`）
+- Taro `4.2.1` + React / React DOM `18.3.1`（渐进迁移源码位于 `src/`）
+- HeroUI `2.8.10` + Framer Motion `11.18.2`（仅 H5 平台实现）
+- Taro WEAPP 适配组件（微信端不打包依赖 DOM 的 HeroUI）
 - TypeScript `^5.5.4`
 - WXML
 - SCSS
@@ -119,7 +122,17 @@ tests/
 docs/superpowers/
   specs/                           已确认的功能设计
   plans/                           对应实施计划
+config/                            Taro 4 的 WEAPP/H5 构建配置
+src/
+  adapters/                        Taro 网络、存储和文件适配器
+  components/                      React 工作区与连续滑动底栏
+  pages/                           Taro React 页面
+  ui/                              WEAPP Taro / H5 HeroUI 双平台组件
 ```
+
+### Taro 迁移状态
+
+Taro 工程当前已迁移应用入口、登录、工作区外壳、质检任务/历史读取、账户退出、基础相机页、连续识别队列、置信度审核编辑器、十样本编辑、本地保存、业务同步和 JSON 导出。采购检验工作台也已改为复用线上正式产品模板和唯一 `rowKey`，并接入行照片、现场验货图片的压缩上传、失败重试、删除标记与正式草稿序列化。识别流程继续复用原生生产基线中已经测试的队列、图片压缩、红黄审核、本地历史、同步与 `inspection-table/v1` 契约；WEAPP 使用 Taro 适配器，H5 使用浏览器下载完成导出。相机自动追踪、历史详情编辑以及微信文件分享等真机专属能力尚未完成功能对照，因此不会切换 `project.config.json` 的源码入口。迁移边界和切换门槛见 `docs/superpowers/specs/2026-08-03-taro-react18-heroui-migration-design.md`。
 
 ## 环境要求
 
@@ -172,6 +185,24 @@ export const RECOGNITION_API_URL = 'https://www.binictools.cn:7876/api/miniprogr
 9. 分别验证拍照、相册选择、文件分享和网络权限。
 
 正式发布前必须重新启用域名校验，并在微信公众平台配置合法 HTTPS 域名。
+
+## Taro React 构建
+
+Taro 构建输出到未纳入版本控制的 `dist/`。开发期间可分别运行：
+
+```bash
+npm run dev:weapp
+npm run dev:h5
+```
+
+执行一次性生产构建：
+
+```bash
+npm run build:weapp
+npm run build:h5
+```
+
+H5 端通过 `.h5.tsx` 平台文件实际使用 HeroUI；WEAPP 端通过同名默认文件使用 `@tarojs/components`。H5 跨域登录需要后端允许凭据请求并正确设置 Cookie 的 `SameSite`、`Secure` 与 CORS 响应头。
 
 ## 认证与请求约定
 
@@ -340,6 +371,7 @@ npm test
 
 ```bash
 npm run typecheck
+npm run typecheck:taro
 ```
 
 测试覆盖领域数据归一化、历史迁移、图片上传与旋转、识别队列、置信度审核、认证、Cookie、接口路径、同步流程、JSON 导出、UI 结构和 README 内容契约。测试文件位于 `tests/`，通过 Node.js 内置测试运行器和 `tsx` 执行。

@@ -18,8 +18,8 @@ import {
   prepareImageForUpload,
 } from './image-upload-service'
 
+export type { ImageCompressionApi } from './image-upload-service'
 export {
-  ImageCompressionApi,
   MAX_ONLINE_IMAGE_BYTES,
   prepareImageForUpload,
 } from './image-upload-service'

@@ -1,0 +1,280 @@
+@use '../../styles/tokens' as *;
+
+.recognition-review {
+  display: grid;
+  gap: 24rpx;
+}
+
+.review-toolbar,
+.review-toolbar__actions,
+.review-overview,
+.review-risk-summary,
+.raw-heading {
+  display: flex;
+  align-items: center;
+}
+
+.review-toolbar,
+.raw-heading {
+  justify-content: space-between;
+  gap: 20rpx;
+}
+
+.review-toolbar__actions {
+  gap: 12rpx;
+}
+
+.review-overview .ui-card__body {
+  display: flex;
+  gap: 24rpx;
+}
+
+.review-overview__image-wrap {
+  width: 150rpx;
+  flex: none;
+  color: $ui-primary;
+  font-size: 21rpx;
+  text-align: center;
+}
+
+.review-overview__image {
+  width: 150rpx;
+  height: 150rpx;
+  display: block;
+  margin-bottom: 8rpx;
+  border-radius: 18rpx;
+}
+
+.review-overview__main {
+  min-width: 0;
+  flex: 1;
+}
+
+.review-title,
+.review-description,
+.review-section-title,
+.review-field__label,
+.review-cell-field__label,
+.sample-cell__number,
+.review-hint,
+.raw-heading__action {
+  display: block;
+}
+
+.review-title,
+.review-section-title {
+  color: $ui-text-primary;
+  font-size: 30rpx;
+  font-weight: 750;
+}
+
+.review-description {
+  margin-top: 10rpx;
+  color: $ui-text-secondary;
+  font-size: 23rpx;
+  line-height: 1.55;
+}
+
+.review-risk-summary {
+  flex-wrap: wrap;
+  gap: 10rpx;
+  margin-top: 18rpx;
+}
+
+.review-risk {
+  padding: 7rpx 13rpx;
+  border-radius: 999rpx;
+  font-size: 21rpx;
+  font-weight: 700;
+}
+
+.review-risk--danger {
+  color: $ui-danger;
+  background: $ui-danger-background;
+}
+
+.review-risk--warning {
+  color: #956400;
+  background: #fff3cb;
+}
+
+.review-field-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18rpx;
+  margin-top: 24rpx;
+}
+
+.review-field,
+.review-cell-field,
+.sample-cell {
+  min-width: 0;
+  padding: 12rpx;
+  border: 2rpx solid transparent;
+  border-radius: 16rpx;
+}
+
+.review-field--wide {
+  grid-column: 1 / -1;
+}
+
+.review-field__label,
+.review-cell-field__label {
+  margin-bottom: 10rpx;
+  color: $ui-text-secondary;
+  font-size: 22rpx;
+  font-weight: 650;
+}
+
+.review-picker,
+.review-textarea,
+.review-cell-input,
+.sample-cell__input {
+  box-sizing: border-box;
+  width: 100%;
+  color: $ui-text-primary;
+  background: $ui-field-background;
+  border: 2rpx solid $ui-field-border;
+  border-radius: 14rpx;
+  font-size: 24rpx;
+}
+
+.review-picker,
+.review-cell-input,
+.sample-cell__input {
+  height: 72rpx;
+  padding: 0 18rpx;
+  line-height: 72rpx;
+}
+
+.review-textarea {
+  min-height: 150rpx;
+  padding: 16rpx 18rpx;
+}
+
+.is-confidence-danger {
+  background: $ui-danger-background;
+  border-color: rgba(185, 61, 73, 0.48);
+}
+
+.is-confidence-warning {
+  background: #fff8df;
+  border-color: rgba(216, 161, 31, 0.5);
+}
+
+.review-hint {
+  margin-top: 8rpx;
+  color: $ui-danger;
+  font-size: 20rpx;
+  line-height: 1.4;
+}
+
+.is-confidence-warning .review-hint {
+  color: #956400;
+}
+
+.review-row {
+  margin-top: 24rpx;
+  padding-top: 24rpx;
+  border-top: 1rpx solid $ui-card-border;
+}
+
+.review-row__meta {
+  display: grid;
+  grid-template-columns: 1.1fr 1fr 1fr;
+  gap: 12rpx;
+}
+
+.sample-scroll {
+  width: 100%;
+  margin-top: 16rpx;
+  white-space: nowrap;
+}
+
+.sample-grid {
+  display: inline-flex;
+  gap: 10rpx;
+  padding-bottom: 8rpx;
+}
+
+.sample-cell {
+  width: 150rpx;
+  flex: none;
+  white-space: normal;
+}
+
+.sample-cell__number {
+  margin-bottom: 8rpx;
+  color: $ui-text-secondary;
+  font-size: 20rpx;
+  text-align: center;
+}
+
+.review-hint--sample {
+  min-height: 54rpx;
+}
+
+.judgement-block {
+  margin-top: 28rpx;
+  padding-top: 24rpx;
+  border-top: 1rpx solid $ui-card-border;
+}
+
+.judgement-cell {
+  width: 190rpx;
+}
+
+.judgement-options {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 5rpx;
+}
+
+.judgement-option {
+  padding: 12rpx 4rpx;
+  color: $ui-text-secondary;
+  background: $ui-field-background;
+  border-radius: 10rpx;
+  font-size: 20rpx;
+  text-align: center;
+}
+
+.judgement-option.is-selected {
+  color: #fff;
+  background: $ui-primary;
+}
+
+.raw-heading__action {
+  color: $ui-primary;
+  font-size: 23rpx;
+}
+
+.raw-content {
+  height: 320rpx;
+  margin-top: 20rpx;
+  padding: 18rpx;
+  box-sizing: border-box;
+  color: $ui-text-secondary;
+  background: $ui-field-background;
+  border-radius: 14rpx;
+  font-family: monospace;
+  font-size: 21rpx;
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 520px) {
+  .review-field-grid,
+  .review-row__meta {
+    grid-template-columns: 1fr;
+  }
+
+  .review-toolbar {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .review-toolbar__actions {
+    justify-content: flex-end;
+  }
+}

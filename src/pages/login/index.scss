@@ -1,0 +1,106 @@
+@use '../../styles/tokens' as *;
+
+.login-page {
+  min-height: 100vh;
+}
+
+.login-content {
+  width: 100%;
+  max-width: 680rpx;
+  margin: 0 auto;
+  padding: 72rpx 28rpx calc(64rpx + env(safe-area-inset-bottom));
+}
+
+.login-intro {
+  margin-bottom: 30rpx;
+  padding: 0 8rpx;
+  animation: login-rise .34s cubic-bezier(.25, .1, .25, 1) both;
+}
+
+.brand-mark,
+.login-title,
+.login-subtitle,
+.login-form-heading,
+.login-form-description {
+  display: block;
+}
+
+.brand-mark {
+  color: $ui-primary;
+  font-size: 22rpx;
+  font-weight: 700;
+  letter-spacing: 4rpx;
+}
+
+.login-title {
+  margin-top: 18rpx;
+  font-size: 42rpx;
+  font-weight: 700;
+  line-height: 1.25;
+}
+
+.login-subtitle {
+  margin-top: 16rpx;
+  color: $ui-text-secondary;
+  font-size: 27rpx;
+  line-height: 1.65;
+}
+
+.login-card {
+  animation: login-rise .34s .04s cubic-bezier(.25, .1, .25, 1) both;
+}
+
+.login-card .ui-card__body {
+  padding: 40rpx 34rpx 36rpx;
+}
+
+.login-form-heading {
+  font-size: 32rpx;
+  font-weight: 700;
+}
+
+.login-form-description {
+  margin-top: 10rpx;
+  color: $ui-text-secondary;
+  font-size: 24rpx;
+}
+
+.login-fields {
+  display: grid;
+  gap: 28rpx;
+  margin: 30rpx 0 32rpx;
+}
+
+.login-error {
+  display: flex;
+  gap: 14rpx;
+  align-items: flex-start;
+  margin: -10rpx 0 24rpx;
+  padding: 18rpx 20rpx;
+  color: $ui-danger;
+  background: $ui-danger-background;
+  border-radius: 16rpx;
+  font-size: 24rpx;
+  line-height: 1.5;
+}
+
+.login-error__dot {
+  width: 12rpx;
+  height: 12rpx;
+  margin-top: 11rpx;
+  flex: none;
+  background: $ui-danger;
+  border-radius: 50%;
+}
+
+@keyframes login-rise {
+  from {
+    opacity: 0;
+    transform: translateY(18rpx);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
