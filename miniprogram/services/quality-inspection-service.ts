@@ -501,6 +501,9 @@ export interface RemoteInspectionHistory {
   updated_at?: string | null
   latest_result?: string | null
   thumbnail_image?: string | null
+  preview_images?: string[]
+  preview_thumbnails?: string[]
+  preview_image_count?: number
   [key: string]: unknown
 }
 
@@ -532,11 +535,25 @@ export interface HistoryViewItem {
   updatedLabel: string
   inspectionDate: string
   imagePath: string
+  imagePaths: string[]
+  imageCount: number
+  imageSummaryComplete: boolean
   productLabel: string
   customer: string
   supplier: string
   model: string
 }
+
+export interface HistoryImageCacheAdapter {
+  userDataPath: string
+  fileExists(filePath: string): Promise<boolean>
+  writeBase64(filePath: string, data: string): Promise<void>
+}
+
+export type HistoryImageMaterializer = (
+  imagePath: string,
+  cacheKey: string,
+) => Promise<string>
 
 interface DraftTaskFallback {
   customer_name?: string | null
@@ -557,7 +574,7 @@ export function listInspectionHistory(
   return request<HistoryListData>({
     method: 'GET',
     path: '/customer-orders/api/purchase-orders/quality-inspections/history-records'
-      + `?page=${page}&page_size=${pageSize}&source_type=all`,
+      + `?page=${page}&page_size=${pageSize}&source_type=all&compact=true`,
   })
 }
 
@@ -589,6 +606,36 @@ function formatHistoryTime(timestamp: number): string {
   return `${month}/${day} ${hour}:${minute}`
 }
 
+function remoteHistoryImageSummary(item: RemoteInspectionHistory): {
+  imagePaths: string[]
+  imageCount: number
+  imageSummaryComplete: boolean
+} {
+  const originals = normalizeServerImageList(item.preview_images)
+  const thumbnails = normalizeServerImageList(item.preview_thumbnails)
+  const previews = originals.length > 0
+    ? originals.map((image, index) => thumbnails[index] || image)
+    : thumbnails
+  const legacyThumbnail = normalizeServerImageList([item.thumbnail_image])[0]
+  const imagePaths = (previews.length > 0 ? previews : [legacyThumbnail].filter(Boolean))
+    .slice(0, TASK_PREVIEW_IMAGE_LIMIT)
+  const declaredCount = Math.max(0, Number(item.preview_image_count) || 0)
+  const hasDeclaredCount = item.preview_image_count !== undefined
+    && item.preview_image_count !== null
+    && Number.isFinite(Number(item.preview_image_count))
+  return {
+    imagePaths,
+    imageCount: Math.max(
+      declaredCount,
+      originals.length,
+      thumbnails.length,
+      legacyThumbnail ? 1 : 0,
+    ),
+    imageSummaryComplete: imagePaths.length >= TASK_PREVIEW_IMAGE_LIMIT
+      || (hasDeclaredCount && imagePaths.length >= Math.min(TASK_PREVIEW_IMAGE_LIMIT, declaredCount)),
+  }
+}
+
 
 export function mergeInspectionHistory(
   local: StoredInspectionRecord[],
@@ -618,6 +665,9 @@ export function mergeInspectionHistory(
       updatedLabel: formatHistoryTime(item.updatedAt),
       inspectionDate: item.record.inspectionDate,
       imagePath: item.imagePath,
+      imagePaths: item.imagePath ? [item.imagePath] : [],
+      imageCount: item.imagePath ? 1 : 0,
+      imageSummaryComplete: true,
       productLabel: PRODUCT_OPTIONS.find(
         (option) => option.value === item.record.productType,
       )?.label ?? '检验报告',
@@ -625,30 +675,121 @@ export function mergeInspectionHistory(
       supplier: item.record.supplier,
       model: item.record.model,
     }))
-  const remoteItems: HistoryViewItem[] = remote.map((item) => ({
-    id: `remote:${item.task_id}:${item.item_id}`,
-    origin: 'remote',
-    taskId: item.task_id,
-    itemId: item.item_id,
-    clientRecordId: asString(item.client_record_id),
-    sourceType: item.source_type,
-    sourceLabel: item.source_type === 'purchase_order' ? '采购质检' : '独立报告',
-    syncStatus: 'synced',
-    syncError: '',
-    updatedAt: remoteTimestamp(item),
-    updatedLabel: formatHistoryTime(remoteTimestamp(item)),
-    inspectionDate: asString(item.latest_inspection_date),
-    imagePath: asString(item.thumbnail_image),
-    productLabel: asString(item.material_name || item.material_code) || '检验报告',
-    customer: asString(item.customer_name || item.contract_no || item.task_no),
-    supplier: asString(item.supplier_name),
-    model: asString(item.spec_desc),
-  }))
+  const remoteItems: HistoryViewItem[] = remote.map((item) => {
+    const imageSummary = remoteHistoryImageSummary(item)
+    return {
+      id: `remote:${item.task_id}:${item.item_id}`,
+      origin: 'remote',
+      taskId: item.task_id,
+      itemId: item.item_id,
+      clientRecordId: asString(item.client_record_id),
+      sourceType: item.source_type,
+      sourceLabel: item.source_type === 'purchase_order' ? '采购质检' : '独立报告',
+      syncStatus: 'synced',
+      syncError: '',
+      updatedAt: remoteTimestamp(item),
+      updatedLabel: formatHistoryTime(remoteTimestamp(item)),
+      inspectionDate: asString(item.latest_inspection_date),
+      imagePath: imageSummary.imagePaths[0] || '',
+      imagePaths: imageSummary.imagePaths,
+      imageCount: imageSummary.imageCount,
+      imageSummaryComplete: imageSummary.imageSummaryComplete,
+      productLabel: asString(item.material_name || item.material_code) || '检验报告',
+      customer: asString(item.customer_name || item.contract_no || item.task_no),
+      supplier: asString(item.supplier_name),
+      model: asString(item.spec_desc),
+    }
+  })
   return [...localItems, ...remoteItems].sort((left, right) => {
     if (left.updatedAt !== right.updatedAt) return right.updatedAt - left.updatedAt
     if (left.origin !== right.origin) return left.origin === 'local' ? -1 : 1
     return left.id.localeCompare(right.id)
   })
+}
+
+function defaultHistoryImageCacheAdapter(): HistoryImageCacheAdapter {
+  const fileSystem = wx.getFileSystemManager()
+  return {
+    userDataPath: wx.env.USER_DATA_PATH,
+    fileExists: (filePath) => new Promise((resolve) => {
+      fileSystem.access({
+        path: filePath,
+        success: () => resolve(true),
+        fail: () => resolve(false),
+      })
+    }),
+    writeBase64: (filePath, data) => new Promise((resolve, reject) => {
+      fileSystem.writeFile({
+        filePath,
+        data,
+        encoding: 'base64',
+        success: () => resolve(),
+        fail: () => reject(new Error('无法缓存记录图片')),
+      })
+    }),
+  }
+}
+
+function historyImageSignature(value: string): string {
+  const sample = `${value.length}:${value.slice(0, 128)}:${value.slice(-128)}`
+  let hash = 2166136261
+  for (let index = 0; index < sample.length; index += 1) {
+    hash ^= sample.charCodeAt(index)
+    hash = Math.imul(hash, 16777619)
+  }
+  return (hash >>> 0).toString(16)
+}
+
+function historyImageExtension(mime: string): string {
+  const subtype = mime.slice('image/'.length).toLowerCase()
+  if (subtype === 'jpeg' || subtype === 'jpg') return 'jpg'
+  if (subtype === 'png' || subtype === 'webp' || subtype === 'gif') return subtype
+  return 'img'
+}
+
+export async function materializeHistoryCardImage(
+  imagePath: string,
+  cacheKey: string,
+  adapter?: HistoryImageCacheAdapter,
+): Promise<string> {
+  const dataUrlHeader = /^data:(image\/[a-z0-9.+-]+);base64,/i.exec(imagePath)
+  if (!dataUrlHeader) return imagePath
+  const base64 = imagePath.slice(dataUrlHeader[0].length)
+  if (!base64) return ''
+
+  const cacheAdapter = adapter ?? defaultHistoryImageCacheAdapter()
+  const safeCacheKey = cacheKey.replace(/[^a-zA-Z0-9_-]/g, '-').slice(0, 80)
+  const extension = historyImageExtension(dataUrlHeader[1])
+  const signature = historyImageSignature(imagePath)
+  const basePath = cacheAdapter.userDataPath.replace(/\/$/, '')
+  const filePath = `${basePath}/history-card-${safeCacheKey}-${signature}.${extension}`
+  try {
+    if (!await cacheAdapter.fileExists(filePath)) {
+      await cacheAdapter.writeBase64(filePath, base64)
+    }
+    return filePath
+  } catch {
+    // 缓存失败时不把大体积 Base64 传入 setData，保留卡片占位状态。
+    return ''
+  }
+}
+
+export async function materializeHistoryCardImages(
+  items: HistoryViewItem[],
+  materialize: HistoryImageMaterializer = (imagePath, cacheKey) => (
+    materializeHistoryCardImage(imagePath, cacheKey)
+  ),
+): Promise<HistoryViewItem[]> {
+  return Promise.all(items.map(async (item) => {
+    const imagePaths = (await Promise.all(item.imagePaths.map((imagePath, index) => (
+      materialize(imagePath, `${item.id}-${index}`).catch(() => '')
+    )))).filter(Boolean)
+    return {
+      ...item,
+      imagePath: imagePaths[0] || '',
+      imagePaths,
+    }
+  }))
 }
 
 
@@ -1009,6 +1150,7 @@ function inspectionItemImages(
   return normalizeServerImageList([
     ...records.flatMap((record) => record.images || []),
     ...(draft?.ai_workbench_images || []),
+    ...(draft?.record_source_images || []),
   ])
 }
 
@@ -1161,6 +1303,69 @@ export async function getInspectionItemDetail(
         }
       : detail.customer_product,
   }
+}
+
+export type HistoryImageDetailLoader = (
+  taskId: number,
+  itemId: number,
+) => Promise<QualityInspectionItemDetailDto>
+
+export async function hydrateMissingHistoryImages(
+  items: HistoryViewItem[],
+  loadDetail: HistoryImageDetailLoader = getInspectionItemDetail,
+  materialize: HistoryImageMaterializer = (imagePath, cacheKey) => (
+    materializeHistoryCardImage(imagePath, cacheKey)
+  ),
+): Promise<HistoryViewItem[]> {
+  const incomplete = items.filter((item) => (
+    item.origin === 'remote'
+    && !item.imageSummaryComplete
+    && item.taskId !== null
+    && item.itemId !== null
+  ))
+  if (incomplete.length === 0) return items
+
+  const hydrated = new Map<string, Pick<HistoryViewItem, 'imagePath' | 'imagePaths' | 'imageCount' | 'imageSummaryComplete'>>()
+  let nextIndex = 0
+  const worker = async (): Promise<void> => {
+    while (nextIndex < incomplete.length) {
+      const item = incomplete[nextIndex]
+      nextIndex += 1
+      if (item.taskId === null || item.itemId === null) continue
+      try {
+        const detail = await loadDetail(item.taskId, item.itemId)
+        const originals = normalizeServerImageList(detail.item.preview_images)
+        const thumbnails = normalizeServerImageList(detail.item.preview_thumbnails)
+        const detailCandidates = originals.map((image, index) => thumbnails[index] || image)
+        const candidates = (detailCandidates.length > 0 ? detailCandidates : item.imagePaths)
+          .slice(0, TASK_PREVIEW_IMAGE_LIMIT)
+        const imagePaths = (await Promise.all(candidates.map((imagePath, index) => (
+          materialize(imagePath, `${item.id}-detail-${index}`).catch(() => '')
+        )))).filter(Boolean)
+        hydrated.set(item.id, {
+          imagePath: imagePaths[0] || '',
+          imagePaths,
+          imageCount: Math.max(
+            item.imageCount,
+            Math.max(0, Number(detail.item.preview_image_count) || 0),
+            originals.length,
+            thumbnails.length,
+          ),
+          imageSummaryComplete: true,
+        })
+      } catch {
+        // 卡片图片是增强信息，单条详情加载失败不应影响历史列表。
+      }
+    }
+  }
+  await Promise.all(
+    Array.from({ length: Math.min(3, incomplete.length) }, () => worker()),
+  )
+  if (hydrated.size === 0) return items
+  return items.map((item) => {
+    const images = hydrated.get(item.id)
+    return images ? { ...item, ...images } : item
+  })
 }
 
 export function saveInspectionDraft(

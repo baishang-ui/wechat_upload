@@ -199,7 +199,7 @@
                           data-row-key="{{row.rowKey}}"
                           data-photo-id="{{photo.id}}"
                           catchtap="removePhoto"
-                        >×</view>
+                        ><hero-icon name="x-mark" size="24rpx" /></view>
                         <view
                           wx:if="{{photo.status === 'failed'}}"
                           class="photo-retry"
@@ -214,7 +214,7 @@
                         data-row-key="{{row.rowKey}}"
                         bindtap="addRowPhotos"
                       >
-                        <text class="photo-add-button__plus">＋</text>
+                        <view class="photo-add-button__plus"><hero-icon name="plus" size="32rpx" /></view>
                         <text>添加照片</text>
                       </button>
                     </view>

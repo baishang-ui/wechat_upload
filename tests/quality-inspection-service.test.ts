@@ -522,6 +522,7 @@ test('getInspectionItemDetail loads shared online data and resolves server image
   assert.deepEqual(detail.item.preview_images, [
     'https://www.binictools.cn:7876/uploads/appearance.jpg',
     'https://www.binictools.cn:7876/uploads/workbench.jpg',
+    'https://www.binictools.cn:7876/uploads/report.jpg',
   ])
   assert.deepEqual(detail.item.inspection_draft?.records?.[0].images, [
     'https://www.binictools.cn:7876/uploads/appearance.jpg',
@@ -972,6 +973,209 @@ test('merged history deduplicates synced local records by task and item', () => 
   assert.equal(merged.length, 1)
   assert.equal(merged[0].origin, 'remote')
   assert.equal(merged[0].imagePath, remote.thumbnail_image)
+  assert.deepEqual(merged[0].imagePaths, [remote.thumbnail_image])
+  assert.equal(merged[0].imageCount, 1)
+  assert.equal(merged[0].imageSummaryComplete, false)
+})
+
+test('merged history resolves and exposes up to three server thumbnails for card stacks', () => {
+  const { mergeInspectionHistory } = require('../miniprogram/services/quality-inspection-service') as typeof import('../miniprogram/services/quality-inspection-service')
+  const remote = {
+    task_id: 30,
+    item_id: 31,
+    source_type: 'purchase_order' as const,
+    preview_images: [
+      '/uploads/one.jpg',
+      '/uploads/two.jpg',
+      '/uploads/three.jpg',
+      '/uploads/four.jpg',
+    ],
+    preview_thumbnails: [
+      '/thumbnails/one.jpg',
+      '/thumbnails/two.jpg',
+      '/thumbnails/three.jpg',
+    ],
+    preview_image_count: 4,
+  }
+
+  const [merged] = mergeInspectionHistory([], [remote])
+
+  assert.deepEqual(merged.imagePaths, [
+    'https://www.binictools.cn:7876/thumbnails/one.jpg',
+    'https://www.binictools.cn:7876/thumbnails/two.jpg',
+    'https://www.binictools.cn:7876/thumbnails/three.jpg',
+  ])
+  assert.equal(merged.imagePath, merged.imagePaths[0])
+  assert.equal(merged.imageCount, 4)
+  assert.equal(merged.imageSummaryComplete, true)
+})
+
+test('history card images cache base64 data URLs before they enter page data', async () => {
+  const {
+    materializeHistoryCardImage,
+    materializeHistoryCardImages,
+    mergeInspectionHistory,
+  } = require('../miniprogram/services/quality-inspection-service') as typeof import('../miniprogram/services/quality-inspection-service')
+  const writes: Array<{ filePath: string; data: string }> = []
+  const adapter = {
+    userDataPath: 'wxfile://usr',
+    fileExists: async () => false,
+    writeBase64: async (filePath: string, data: string) => {
+      writes.push({ filePath, data })
+    },
+  }
+  const [record] = mergeInspectionHistory([], [{
+    task_id: 7,
+    item_id: 8,
+    source_type: 'purchase_order',
+    thumbnail_image: 'data:image/jpeg;base64,dGh1bWI=',
+  }])
+
+  const prepared = await materializeHistoryCardImages([record], (imagePath, cacheKey) => (
+    materializeHistoryCardImage(imagePath, cacheKey, adapter)
+  ))
+
+  assert.equal(writes.length, 1)
+  assert.equal(writes[0].data, 'dGh1bWI=')
+  assert.match(writes[0].filePath, /^wxfile:\/\/usr\/history-card-remote-7-8-0-[a-f0-9]+\.jpg$/)
+  assert.deepEqual(prepared[0].imagePaths, [writes[0].filePath])
+  assert.equal(prepared[0].imagePath, writes[0].filePath)
+  assert.doesNotMatch(JSON.stringify(prepared), /data:image/)
+})
+
+test('history image hydration expands legacy thumbnails from item detail', async () => {
+  const {
+    hydrateMissingHistoryImages,
+    mergeInspectionHistory,
+  } = require('../miniprogram/services/quality-inspection-service') as typeof import('../miniprogram/services/quality-inspection-service')
+  const known = mergeInspectionHistory([], [{
+    task_id: 6,
+    item_id: 6,
+    source_type: 'purchase_order',
+    thumbnail_image: '/thumb/known.jpg',
+  }])[0]
+  const missing = mergeInspectionHistory([], [{
+    task_id: 7,
+    item_id: 8,
+    source_type: 'purchase_order',
+    thumbnail_image: null,
+  }])[0]
+  const calls: string[] = []
+
+  const hydrated = await hydrateMissingHistoryImages(
+    [known, missing],
+    async (taskId, itemId) => {
+      calls.push(`${taskId}:${itemId}`)
+      if (taskId === 6) {
+        return {
+          task: { id: taskId },
+          item: {
+            id: itemId,
+            preview_images: [known.imagePath],
+            preview_image_count: 1,
+          },
+        }
+      }
+      return {
+        task: { id: taskId },
+        item: {
+          id: itemId,
+          preview_images: [
+            'https://files.example.com/report-1.jpg',
+            'https://files.example.com/report-2.jpg',
+            'https://files.example.com/report-3.jpg',
+            'https://files.example.com/report-4.jpg',
+          ],
+          preview_thumbnails: [
+            'https://files.example.com/thumb-1.jpg',
+            'https://files.example.com/thumb-2.jpg',
+            'https://files.example.com/thumb-3.jpg',
+          ],
+          preview_image_count: 4,
+        },
+      }
+    },
+  )
+
+  assert.deepEqual(calls, ['6:6', '7:8'])
+  assert.deepEqual(hydrated[0].imagePaths, [known.imagePath])
+  assert.equal(hydrated[0].imageSummaryComplete, true)
+  assert.deepEqual(hydrated[1].imagePaths, [
+    'https://files.example.com/thumb-1.jpg',
+    'https://files.example.com/thumb-2.jpg',
+    'https://files.example.com/thumb-3.jpg',
+  ])
+  assert.equal(hydrated[1].imagePath, hydrated[1].imagePaths[0])
+  assert.equal(hydrated[1].imageCount, 4)
+  assert.equal(hydrated[1].imageSummaryComplete, true)
+})
+
+test('history image hydration replaces one legacy thumbnail with a three-image detail stack', async () => {
+  const {
+    hydrateMissingHistoryImages,
+    mergeInspectionHistory,
+  } = require('../miniprogram/services/quality-inspection-service') as typeof import('../miniprogram/services/quality-inspection-service')
+  const legacy = mergeInspectionHistory([], [{
+    task_id: 12,
+    item_id: 13,
+    source_type: 'purchase_order',
+    thumbnail_image: 'https://files.example.com/legacy.jpg',
+  }])[0]
+
+  const [hydrated] = await hydrateMissingHistoryImages([legacy], async () => ({
+    task: { id: 12 },
+    item: {
+      id: 13,
+      preview_images: [
+        'https://files.example.com/one.jpg',
+        'https://files.example.com/two.jpg',
+        'https://files.example.com/three.jpg',
+        'https://files.example.com/four.jpg',
+      ],
+      preview_image_count: 4,
+    },
+  }))
+
+  assert.deepEqual(hydrated.imagePaths, [
+    'https://files.example.com/one.jpg',
+    'https://files.example.com/two.jpg',
+    'https://files.example.com/three.jpg',
+  ])
+  assert.equal(hydrated.imageCount, 4)
+  assert.equal(hydrated.imageSummaryComplete, true)
+})
+
+test('history detail hydration materializes base64 report images into short local paths', async () => {
+  const {
+    hydrateMissingHistoryImages,
+    mergeInspectionHistory,
+  } = require('../miniprogram/services/quality-inspection-service') as typeof import('../miniprogram/services/quality-inspection-service')
+  const missing = mergeInspectionHistory([], [{
+    task_id: 7,
+    item_id: 8,
+    source_type: 'purchase_order',
+  }])[0]
+  const materialized: string[] = []
+
+  const [hydrated] = await hydrateMissingHistoryImages(
+    [missing],
+    async () => ({
+      task: { id: 7 },
+      item: {
+        id: 8,
+        preview_images: ['data:image/jpeg;base64,aW1hZ2U='],
+        preview_image_count: 1,
+      },
+    }),
+    async (imagePath, cacheKey) => {
+      materialized.push(imagePath)
+      return `wxfile://usr/${cacheKey}.jpg`
+    },
+  )
+
+  assert.deepEqual(materialized, ['data:image/jpeg;base64,aW1hZ2U='])
+  assert.deepEqual(hydrated.imagePaths, ['wxfile://usr/remote:7:8-detail-0.jpg'])
+  assert.doesNotMatch(JSON.stringify(hydrated), /data:image/)
 })
 
 test('merged history keeps failed local records and sorts newest first', () => {
@@ -1005,7 +1209,7 @@ test('history request explicitly includes all source types', async () => {
   await listInspectionHistory(2, 50, request)
   assert.equal(
     calls[0].path,
-    '/customer-orders/api/purchase-orders/quality-inspections/history-records?page=2&page_size=50&source_type=all',
+    '/customer-orders/api/purchase-orders/quality-inspections/history-records?page=2&page_size=50&source_type=all&compact=true',
   )
 })
 

@@ -7,7 +7,7 @@
         <view class="workbench-modal-eyebrow">{{task.task_no || '待检任务'}}</view>
         <view class="workbench-modal-title">{{currentPage.title || '产品检验'}}</view>
       </view>
-      <view class="workbench-close" bindtap="requestClose" aria-label="关闭" role="button" hover-class="workbench-close--pressed" hover-stay-time="120">×</view>
+      <view class="workbench-close" bindtap="requestClose" aria-label="关闭" role="button" hover-class="workbench-close--pressed" hover-stay-time="120"><hero-icon name="x-mark" size="34rpx" /></view>
     </view>
 
     <scroll-view class="workbench-modal-body" scroll-y enhanced show-scrollbar="{{false}}">
@@ -32,16 +32,16 @@
               </view>
             </view>
             <view class="formal-info-grid">
-              <view class="formal-info-item"><text>报告编号</text><text>{{task.task_no || '—'}}</text></view>
-              <view class="formal-info-item"><text>检验日期</text><text>{{inspectionDate || '—'}}</text></view>
-              <view class="formal-info-item"><text>客户</text><text>{{customerProduct.customer_name || task.customer_name || '—'}}</text></view>
-              <view class="formal-info-item"><text>产品名称</text><text>{{item.material_name || masterProduct.name || '—'}}</text></view>
-              <view class="formal-info-item"><text>物料编码</text><text>{{item.material_code || '—'}}</text></view>
-              <view class="formal-info-item"><text>批号</text><text>{{task.contract_no || '—'}}</text></view>
-              <view class="formal-info-item"><text>规格型号</text><text>{{item.spec_desc || customerProduct.spec_description || '—'}}</text></view>
-              <view class="formal-info-item"><text>订单号</text><text>{{task.contract_no || '—'}}</text></view>
-              <view class="formal-info-item"><text>抽检数量</text><text>{{quantityDisplay || '—'}}</text></view>
-              <view class="formal-info-item"><text>检验模板</text><text>{{templateDisplayName || '—'}}</text></view>
+              <view class="formal-info-item"><text class="formal-info-label">报告编号</text><text class="formal-info-value">{{task.task_no || '—'}}</text></view>
+              <view class="formal-info-item"><text class="formal-info-label">检验日期</text><text class="formal-info-value">{{inspectionDate || '—'}}</text></view>
+              <view class="formal-info-item"><text class="formal-info-label">客户</text><text class="formal-info-value">{{customerProduct.customer_name || task.customer_name || '—'}}</text></view>
+              <view class="formal-info-item"><text class="formal-info-label">产品名称</text><text class="formal-info-value">{{item.material_name || masterProduct.name || '—'}}</text></view>
+              <view class="formal-info-item"><text class="formal-info-label">物料编码</text><text class="formal-info-value">{{item.material_code || '—'}}</text></view>
+              <view class="formal-info-item"><text class="formal-info-label">批号</text><text class="formal-info-value">{{task.contract_no || '—'}}</text></view>
+              <view class="formal-info-item"><text class="formal-info-label">规格型号</text><text class="formal-info-value">{{item.spec_desc || customerProduct.spec_description || '—'}}</text></view>
+              <view class="formal-info-item"><text class="formal-info-label">订单号</text><text class="formal-info-value">{{task.contract_no || '—'}}</text></view>
+              <view class="formal-info-item"><text class="formal-info-label">抽检数量</text><text class="formal-info-value">{{quantityDisplay || '—'}}</text></view>
+              <view class="formal-info-item"><text class="formal-info-label">检验模板</text><text class="formal-info-value">{{templateDisplayName || '—'}}</text></view>
             </view>
           </view>
 
@@ -64,8 +64,8 @@
             <view wx:if="{{recognitionError}}" class="inline-error">{{recognitionError}}</view>
             <view wx:if="{{reportPreviewPaths.length}}" class="report-preview-list">
               <view wx:for="{{reportPreviewPaths}}" wx:key="*this" class="report-preview" data-index="{{index}}" bindtap="previewReportImage">
-                <image src="{{item}}" mode="aspectFill"></image>
-                <text>质检单 {{index + 1}}</text>
+                <image class="report-preview-image" src="{{item}}" mode="aspectFill"></image>
+                <text class="report-preview-label">质检单 {{index + 1}}</text>
               </view>
             </view>
           </view>
@@ -79,9 +79,9 @@
             <view wx:if="{{photoUploadError}}" class="inline-error">{{photoUploadError}}</view>
             <view wx:if="{{inspectionImages.length}}" class="inspection-classification-status {{inspectionClassificationPending ? 'is-pending' : ''}}">
               <view class="inspection-classification-status-main">
-                <text>{{inspectionClassificationPending ? '线上正在识别归类' : '线上归类结果'}}</text>
-                <text wx:if="{{inspectionClassificationPending}}">识别完成后，重新打开订单即可同步到对应检验条目</text>
-                <text wx:else>已关联 {{inspectionClassifiedCount}} / {{inspectionImages.length}} 张，图片显示在对应条目的现场照片中</text>
+                <text class="classification-status-title">{{inspectionClassificationPending ? '线上正在识别归类' : '线上归类结果'}}</text>
+                <text wx:if="{{inspectionClassificationPending}}" class="classification-status-desc">识别完成后，重新打开订单即可同步到对应检验条目</text>
+                <text wx:else class="classification-status-desc">已关联 {{inspectionClassifiedCount}} / {{inspectionImages.length}} 张，图片显示在对应条目的现场照片中</text>
               </view>
             </view>
           </view>
@@ -95,7 +95,7 @@
               <button class="clear-button" bindtap="clearUnmatched">清空</button>
             </view>
             <view wx:for="{{currentPage.unmatched}}" wx:key="rowKey" wx:for-item="unmatchedRow" class="unmatched-item">
-              <view class="unmatched-item-head"><text>{{unmatchedRow.project || '未命名项目'}}</text><text>{{unmatchedRow.rowKey}}</text></view>
+              <view class="unmatched-item-head"><text class="unmatched-item-title">{{unmatchedRow.project || '未命名项目'}}</text><text class="unmatched-item-status">{{unmatchedRow.rowKey}}</text></view>
               <view class="unmatched-measurements">
                 <text wx:for="{{unmatchedRow.measurements}}" wx:key="index" wx:for-item="measurement" wx:for-index="measurementIndex">{{measurement}}{{measurementIndex < unmatchedRow.measurements.length - 1 ? ' / ' : ''}}</text>
               </view>
@@ -139,34 +139,34 @@
               <view class="detail-label detail-label--spaced">实测值</view>
               <view class="measurement-grid">
                 <view wx:for="{{row.measurements}}" wx:key="index" wx:for-item="measurement" wx:for-index="measurementIndex" class="measurement-field">
-                  <text>{{measurementIndex + 1}}</text>
-                  <input value="{{measurement}}" placeholder="—" data-row-key="{{row.rowKey}}" data-measurement-index="{{measurementIndex}}" bindinput="onMeasurementInput" />
+                  <text class="measurement-field-index">{{measurementIndex + 1}}</text>
+                  <input class="workbench-field-input" value="{{measurement}}" placeholder="—" data-row-key="{{row.rowKey}}" data-measurement-index="{{measurementIndex}}" bindinput="onMeasurementInput" />
                 </view>
               </view>
               <view class="field-grid">
                 <view class="form-field form-field--decision">
-                  <text>判定</text>
+                  <text class="form-field-label">判定</text>
                   <view class="decision-switch-control">
                     <switch class="decision-switch" type="switch" color="#1ea978" checked="{{row.decision === 'OK'}}" data-row-key="{{row.rowKey}}" bindchange="onDecisionChange" />
                     <text class="decision-switch-label {{row.decision === 'OK' ? '' : 'is-ng'}}">{{row.decision === 'OK' ? 'OK' : 'NG'}}</text>
                   </view>
                 </view>
                 <view class="form-field">
-                  <text>备注</text>
-                  <input value="{{row.note}}" placeholder="选填" data-row-key="{{row.rowKey}}" data-field="note" bindinput="onRowFieldInput" />
+                  <text class="form-field-label">备注</text>
+                  <input class="workbench-field-input" value="{{row.note}}" placeholder="选填" data-row-key="{{row.rowKey}}" data-field="note" bindinput="onRowFieldInput" />
                 </view>
               </view>
               <view class="photo-section">
                 <view class="detail-label">现场照片 {{row.photoRequired ? '（必填）' : '（选填）'}}</view>
                 <view class="workbench-photo-grid">
                   <view wx:for="{{row.images}}" wx:key="id" wx:for-item="photo" class="workbench-photo {{photo.status === 'failed' ? 'is-failed' : ''}}">
-                    <image src="{{photo.localPath || photo.remoteUrl}}" mode="aspectFill" data-row-key="{{row.rowKey}}" data-photo-id="{{photo.id}}" bindtap="previewPhoto"></image>
+                    <image class="workbench-photo-image" src="{{photo.localPath || photo.remoteUrl}}" mode="aspectFill" data-row-key="{{row.rowKey}}" data-photo-id="{{photo.id}}" bindtap="previewPhoto"></image>
                     <view wx:if="{{photo.status === 'uploading'}}" class="photo-status">上传中</view>
                     <view wx:elif="{{photo.status === 'failed'}}" class="photo-status photo-status--failed">上传失败</view>
-                    <view class="photo-remove" data-row-key="{{row.rowKey}}" data-photo-id="{{photo.id}}" catchtap="removePhoto">×</view>
+                    <view class="photo-remove" data-row-key="{{row.rowKey}}" data-photo-id="{{photo.id}}" catchtap="removePhoto"><hero-icon name="x-mark" size="24rpx" /></view>
                     <view wx:if="{{photo.status === 'failed'}}" class="photo-retry" data-row-key="{{row.rowKey}}" data-photo-id="{{photo.id}}" catchtap="retryPhoto">重试</view>
                   </view>
-                  <view class="photo-add-button site-photo-add-button" role="button" hover-class="site-photo-add-button--pressed" hover-stay-time="120" data-row-key="{{row.rowKey}}" bindtap="addRowPhotos"><text>＋</text><text>添加照片</text></view>
+                  <view class="photo-add-button site-photo-add-button" role="button" hover-class="site-photo-add-button--pressed" hover-stay-time="120" data-row-key="{{row.rowKey}}" bindtap="addRowPhotos"><view class="photo-add-icon"><hero-icon name="plus" size="34rpx" /></view><text>添加照片</text></view>
                 </view>
               </view>
             </view>
@@ -179,28 +179,28 @@
               <view class="formal-final-label">检验结论</view>
               <view class="formal-final-options">
                 <view class="formal-final-option {{finalState.decision === 'OK' ? 'is-active' : ''}}">
-                  <text class="formal-final-checkbox">{{finalState.decision === 'OK' ? '✓' : '□'}}</text>
+                  <hero-icon class="formal-final-checkbox" name="{{finalState.decision === 'OK' ? 'check-circle' : 'stop'}}" size="28rpx" />
                   <text>合格</text>
                 </view>
                 <view class="formal-final-option">
-                  <text class="formal-final-checkbox">□</text>
+                  <hero-icon class="formal-final-checkbox" name="stop" size="28rpx" />
                   <text>让步接收</text>
                 </view>
                 <view class="formal-final-option formal-final-option--ng {{finalState.decision === 'NG' ? 'is-active' : ''}}">
-                  <text class="formal-final-checkbox">{{finalState.decision === 'NG' ? '✓' : '□'}}</text>
+                  <hero-icon class="formal-final-checkbox" name="{{finalState.decision === 'NG' ? 'check-circle' : 'stop'}}" size="28rpx" />
                   <text>不合格</text>
                 </view>
               </view>
               <view class="formal-conclusions">
                 <view class="formal-conclusions-title">异常说明与处理建议：</view>
                 <view wx:for="{{finalState.conclusions}}" wx:key="index" wx:for-item="conclusion" wx:for-index="conclusionIndex" class="formal-conclusion-item">
-                  <text>{{conclusionIndex + 1}}.</text>
-                  <text>{{conclusion}}</text>
+                  <text class="formal-conclusion-index">{{conclusionIndex + 1}}.</text>
+                  <text class="formal-conclusion-text">{{conclusion}}</text>
                 </view>
               </view>
             </view>
             <view class="formal-final-side">
-              <view>总判定</view>
+              <view class="formal-final-label">总判定</view>
               <text class="formal-final-decision {{finalState.decision === 'OK' ? 'is-ok' : finalState.decision === 'NG' ? 'is-ng' : 'is-pending'}}">{{finalState.decision}}</text>
             </view>
           </view>
@@ -212,7 +212,7 @@
     <view class="workbench-modal-actions">
       <view class="workbench-pagination-actions">
         <view class="page-button {{activePage <= 0 || loading ? 'is-disabled' : ''}}" aria-disabled="{{activePage <= 0 || loading}}" role="button" bindtap="goPreviousPage">上一页</view>
-        <view class="page-status"><text>{{pageNumber}} / {{pageTotal}}</text><text wx:if="{{dirty}}">未保存</text></view>
+        <view class="page-status"><text class="page-status-value">{{pageNumber}} / {{pageTotal}}</text><text wx:if="{{dirty}}" class="page-status-dirty">未保存</text></view>
         <view class="page-button {{activePage >= pageTotal - 1 || loading ? 'is-disabled' : ''}}" aria-disabled="{{activePage >= pageTotal - 1 || loading}}" role="button" bindtap="goNextPage">下一页</view>
       </view>
       <view class="save-button {{saving || recognizing || photoUploading || photoDeletingIndex >= 0 || loading ? 'is-disabled' : ''}}" aria-disabled="{{saving || recognizing || photoUploading || photoDeletingIndex >= 0 || loading}}" role="button" bindtap="saveDraft">{{saving ? '保存中…' : '保存草稿'}}</view>

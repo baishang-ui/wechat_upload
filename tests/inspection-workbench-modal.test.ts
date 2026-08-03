@@ -42,6 +42,21 @@ test('inspection workbench modal uses a record-style drawer, page controls, and 
   assert.match(scss, /@keyframes modal-sheet-up/)
 })
 
+test('inspection workbench component styles use classes instead of forbidden tag selectors', () => {
+  const wxml = source('miniprogram/components/inspection-workbench-modal/inspection-workbench-modal.wxml')
+  const scss = source('miniprogram/components/inspection-workbench-modal/inspection-workbench-modal.scss')
+  const forbiddenTagSelector = /(^|[,{>+~]\s*|\s+)(?:view|text|image|input|button|textarea|scroll-view|picker)(?=[:.#\[\s>+~,{])/m
+
+  assert.doesNotMatch(scss, forbiddenTagSelector)
+  assert.match(wxml, /class="formal-info-label"/)
+  assert.match(wxml, /class="formal-info-value"/)
+  assert.match(wxml, /class="classification-status-title"/)
+  assert.match(wxml, /class="classification-status-desc"/)
+  assert.match(wxml, /class="photo-add-icon"/)
+  assert.match(wxml, /class="unmatched-item-title"/)
+  assert.match(wxml, /class="unmatched-item-status"/)
+})
+
 test('inspection workbench modal always uses the Web-aligned online formal template', () => {
   const ts = source('miniprogram/components/inspection-workbench-modal/inspection-workbench-modal.ts')
 

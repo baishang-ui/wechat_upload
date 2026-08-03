@@ -20,7 +20,7 @@ page {
 .login-intro {
   margin-bottom: 30rpx;
   padding: 0 8rpx;
-  animation: login-rise .38s ease-out both;
+  animation: login-rise .38s cubic-bezier(0, 0, .58, 1) both;
 }
 
 .brand-mark {
@@ -53,7 +53,7 @@ page {
   border: 1rpx solid $ui-card-border;
   border-radius: $ui-card-radius;
   box-shadow: $ui-card-shadow;
-  animation: login-rise .38s .04s ease-out both;
+  animation: login-rise .38s .04s cubic-bezier(0, 0, .58, 1) both;
 }
 
 .login-form-heading {
@@ -129,7 +129,7 @@ page {
   font-size: 30rpx;
   font-weight: 600;
   line-height: 1.2;
-  transition: transform .16s ease, background .16s ease;
+  transition: transform .16s cubic-bezier(.25, .1, .25, 1), background .16s cubic-bezier(.25, .1, .25, 1);
 }
 
 .login-button:active {

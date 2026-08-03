@@ -35,7 +35,7 @@
       <view class="field full-field">
         <text class="field-label">产品类型</text>
         <picker mode="selector" range="{{productLabels}}" value="{{productIndex}}" bindchange="onProductChange">
-          <view class="picker-value">{{productLabels[productIndex]}}<text>⌄</text></view>
+          <view class="picker-value">{{productLabels[productIndex]}}<hero-icon name="chevron-down" size="24rpx" /></view>
         </picker>
       </view>
       <view class="field-grid">
@@ -194,7 +194,7 @@
 
     <block wx:else>
       <view class="success-card">
-        <view class="success-icon">✓</view>
+        <view class="success-icon"><hero-icon name="check" size="64rpx" /></view>
         <view class="success-title">识别结果已确认</view>
         <view class="success-desc">本地结果编号</view>
         <view class="record-id">{{recordId}}</view>
@@ -259,7 +259,7 @@
       </view>
 
       <view wx:elif="{{taskItems.length === 0}}" class="task-state card">
-        <view class="task-state-icon is-empty"></view>
+        <view class="task-state-icon is-empty"><hero-icon name="inbox" size="46rpx" /></view>
         <view class="task-state-title">暂无符合条件的任务</view>
         <view class="task-state-desc">可调整搜索词或状态后重新查询。</view>
         <button class="secondary-button task-retry" bindtap="confirmTaskSearch">重新加载</button>
@@ -375,11 +375,7 @@
       </view>
 
       <view wx:elif="{{!historyLoading && historyRecords.length === 0}}" class="history-empty">
-        <view class="empty-icon">
-          <view class="empty-line empty-line--wide"></view>
-          <view class="empty-line"></view>
-          <view class="empty-line"></view>
-        </view>
+        <view class="empty-icon"><hero-icon name="document-text" size="78rpx" /></view>
         <view class="empty-title">还没有质检记录</view>
         <view class="empty-desc">本地保存或服务器已有的质检报告会显示在这里。</view>
         <button class="primary-button empty-action" bindtap="goToScan">去识别</button>
@@ -387,9 +383,21 @@
 
       <view wx:else class="history-list">
         <view wx:for="{{historyRecords}}" wx:key="id" class="history-item history-item--{{item.origin}}" data-id="{{item.id}}" bindtap="openHistory">
-          <image wx:if="{{item.imagePath}}" class="history-thumb" src="{{item.imagePath}}" mode="aspectFill"></image>
+          <view wx:if="{{item.imagePaths.length}}" class="history-thumb-stack {{item.imageCount > 1 ? 'history-thumb-stack--multiple' : 'history-thumb-stack--single'}}">
+            <image
+              wx:for="{{item.imagePaths}}"
+              wx:key="*this"
+              wx:for-item="historyImage"
+              wx:for-index="historyImageIndex"
+              class="history-thumb history-thumb--layer history-thumb--layer-{{historyImageIndex}}"
+              src="{{historyImage}}"
+              mode="aspectFill"
+              lazy-load
+            ></image>
+            <view wx:if="{{item.imageCount > 1}}" class="history-thumb-count">{{item.imageCount}} 张</view>
+          </view>
           <view wx:else class="history-thumb history-thumb--remote">
-            <view class="remote-thumb-icon">云</view>
+            <view class="remote-thumb-icon"><hero-icon name="cloud" size="34rpx" /></view>
             <view class="remote-thumb-text">服务器记录</view>
           </view>
           <view class="history-main">
@@ -424,7 +432,7 @@
             disabled="{{!!historyDeletingId}}"
             catchtap="deleteHistory"
             aria-label="删除识别记录"
-          ><text class="history-delete-icon" wx:if="{{historyDeletingId !== item.id}}">×</text></button>
+          ><hero-icon wx:if="{{historyDeletingId !== item.id}}" name="trash" size="28rpx" /></button>
         </view>
       </view>
     </block>
@@ -441,7 +449,7 @@
           </view>
 
           <view wx:elif="{{accountError}}" class="account-error">
-            <view class="account-error-icon">!</view>
+            <view class="account-error-icon"><hero-icon name="exclamation-circle" size="40rpx" /></view>
             <view class="account-error-title">账户信息加载失败</view>
             <view class="account-error-desc">{{accountError}}</view>
             <button class="account-retry-button" bindtap="loadAccountUser">重新加载</button>
@@ -512,24 +520,32 @@
   bindsaved="onHistoryEditorModalSaved"
 />
 
-<view class="floating-tabs">
-  <view class="tab-indicator {{activeTab === 'tasks' ? 'is-tasks' : activeTab === 'history' ? 'is-history' : activeTab === 'account' ? 'is-account' : ''}}">
-    <view class="tab-indicator-fill {{pressedTab === activeTab ? 'is-pressing' : ''}}"></view>
+<view
+  class="floating-tabs {{tabDragging ? 'is-dragging is-dragging-' + tabDragDirection : ''}} {{tabSettling ? 'is-settling is-settling-' + tabSettlingDirection : ''}}"
+  catchtouchmove="onTabSwipeMove"
+  bindtouchend="onTabSwipeEnd"
+  bindtouchcancel="onTabSwipeCancel"
+>
+  <view class="tab-indicator" style="transform: translate3d({{tabIndicatorOffset}}px, -50%, 0);">
+    <view
+      class="tab-indicator-fill {{pressedTab === activeTab ? 'is-pressing' : ''}}"
+      style="--tab-settle-initial-stretch: {{tabSettleInitialStretch}}px; --tab-settle-pre-stretch: {{tabSettlePreStretch}}px; --tab-settle-peak-stretch: {{tabSettlePeakStretch}}px; --tab-settle-initial-scale-y: {{tabSettleInitialScaleY}}; --tab-settle-pre-scale-y: {{tabSettlePreScaleY}}; --tab-settle-peak-scale-y: {{tabSettlePeakScaleY}}; width: calc(100% + {{tabDragStretch}}px); margin-left: {{tabDragStretchOffset}}px; transform: scaleY({{tabDragScaleY}});"
+    ></view>
   </view>
-  <view class="floating-tab {{activeTab === 'scan' ? 'is-active' : ''}}" data-tab="scan" bindtap="switchTab" bindtouchstart="onTabPressStart" bindtouchend="onTabPressEnd" bindtouchcancel="onTabPressEnd">
-    <view class="scan-tab-icon"><view class="scan-dot"></view></view>
+  <view class="floating-tab {{activeTab === 'scan' ? 'is-active' : ''}}" style="color: {{tabVisualColors.scan}};" data-tab="scan" bindtap="switchTab" bindtouchstart="onTabSwipeStart" bindtouchend="onTabPressEnd" bindtouchcancel="onTabPressEnd">
+    <hero-icon name="viewfinder-circle" size="31rpx" />
     <text>识别</text>
   </view>
-  <view class="floating-tab {{activeTab === 'tasks' ? 'is-active' : ''}}" data-tab="tasks" bindtap="switchTab" bindtouchstart="onTabPressStart" bindtouchend="onTabPressEnd" bindtouchcancel="onTabPressEnd">
-    <view class="tasks-tab-icon"><view></view><view></view></view>
+  <view class="floating-tab {{activeTab === 'tasks' ? 'is-active' : ''}}" style="color: {{tabVisualColors.tasks}};" data-tab="tasks" bindtap="switchTab" bindtouchstart="onTabSwipeStart" bindtouchend="onTabPressEnd" bindtouchcancel="onTabPressEnd">
+    <hero-icon name="clipboard-document-list" size="31rpx" />
     <text>待检</text>
   </view>
-  <view class="floating-tab {{activeTab === 'history' ? 'is-active' : ''}}" data-tab="history" bindtap="switchTab" bindtouchstart="onTabPressStart" bindtouchend="onTabPressEnd" bindtouchcancel="onTabPressEnd">
-    <view class="history-tab-icon"><view></view><view></view><view></view></view>
+  <view class="floating-tab {{activeTab === 'history' ? 'is-active' : ''}}" style="color: {{tabVisualColors.history}};" data-tab="history" bindtap="switchTab" bindtouchstart="onTabSwipeStart" bindtouchend="onTabPressEnd" bindtouchcancel="onTabPressEnd">
+    <hero-icon name="clock" size="31rpx" />
     <text>记录</text>
   </view>
-  <view class="floating-tab {{activeTab === 'account' ? 'is-active' : ''}}" data-tab="account" bindtap="switchTab" bindtouchstart="onTabPressStart" bindtouchend="onTabPressEnd" bindtouchcancel="onTabPressEnd">
-    <view class="account-tab-icon"><view class="account-tab-head"></view><view class="account-tab-body"></view></view>
+  <view class="floating-tab {{activeTab === 'account' ? 'is-active' : ''}}" style="color: {{tabVisualColors.account}};" data-tab="account" bindtap="switchTab" bindtouchstart="onTabSwipeStart" bindtouchend="onTabPressEnd" bindtouchcancel="onTabPressEnd">
+    <hero-icon name="user-circle" size="31rpx" />
     <text>账户</text>
   </view>
 </view>

@@ -455,10 +455,10 @@
   right: 4rpx;
   width: 34rpx;
   height: 34rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   color: #fff;
-  font-size: 28rpx;
-  line-height: 32rpx;
-  text-align: center;
   border-radius: 50%;
   background: rgba(23, 35, 61, .78);
 }
@@ -490,7 +490,6 @@
 
 .photo-add-button__plus {
   margin-bottom: 3rpx;
-  font-size: 32rpx;
 }
 
 .photo-unlimited-tip,

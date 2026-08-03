@@ -108,7 +108,7 @@ Component({
       if (animated) {
         displayStyle = `opacity: ${
           show ? '1' : '0'
-        };transition:opacity 0.5s;`
+        };transition:opacity 0.5s cubic-bezier(.25, .1, .25, 1);`
       } else {
         displayStyle = `display: ${show ? '' : 'none'}`
       }

@@ -7,11 +7,81 @@ const assert: typeof strictAssert = strictAssert
 const root = resolve(__dirname, '..')
 const source = (path: string) => readFileSync(resolve(root, path), 'utf8')
 
+test('all project animation curves use explicit cubic bezier timing', () => {
+  const animationSources = [
+    'miniprogram/app.scss',
+    'miniprogram/styles/_design-tokens.scss',
+    'miniprogram/pages/login/login.scss',
+    'miniprogram/pages/index/index.scss',
+    'miniprogram/pages/inspection-workbench/inspection-workbench.scss',
+    'miniprogram/pages/logs/logs.scss',
+    'miniprogram/pages/document-camera/document-camera.scss',
+    'miniprogram/components/navigation-bar/navigation-bar.scss',
+    'miniprogram/components/navigation-bar/navigation-bar.ts',
+    'miniprogram/components/inspection-workbench-modal/inspection-workbench-modal.scss',
+    'miniprogram/components/history-editor-modal/history-editor-modal.scss',
+    'miniprogram/components/top-toast/top-toast.scss',
+  ]
+
+  animationSources.forEach((path) => {
+    const declarations = source(path).matchAll(/\b(animation|transition)\s*:\s*([^;]+);/g)
+    for (const [, property, value] of declarations) {
+      if (property === 'animation' && value.trim() === 'none') continue
+      assert.match(value, /cubic-bezier\(/, `${path} contains an implicit or keyword timing curve: ${value.trim()}`)
+      assert.doesNotMatch(value, /\b(?:ease|ease-in|ease-out|ease-in-out|linear)\b/)
+    }
+  })
+})
+
 test('login and index pages share the inspection design tokens', () => {
   const loginScss = source('miniprogram/pages/login/login.scss')
   const indexScss = source('miniprogram/pages/index/index.scss')
   assert.match(loginScss, /@import ['"]\.\.\/\.\.\/styles\/design-tokens['"];/)
   assert.match(indexScss, /@import ['"]\.\.\/\.\.\/styles\/design-tokens['"];/)
+})
+
+test('project presentation icons use the shared Heroicons solid component', () => {
+  const app = source('miniprogram/app.json')
+  const iconWxml = source('miniprogram/components/hero-icon/hero-icon.wxml')
+  const iconScss = source('miniprogram/components/hero-icon/hero-icon.scss')
+  const index = source('miniprogram/pages/index/index.wxml')
+  const navigation = source('miniprogram/components/navigation-bar/navigation-bar.wxml')
+  const presentationSources = [
+    index,
+    navigation,
+    source('miniprogram/pages/document-camera/document-camera.wxml'),
+    source('miniprogram/pages/inspection-workbench/inspection-workbench.wxml'),
+    source('miniprogram/components/inspection-workbench-modal/inspection-workbench-modal.wxml'),
+    source('miniprogram/components/history-editor-modal/history-editor-modal.wxml'),
+    source('miniprogram/components/top-toast/top-toast.wxml'),
+  ].join('\n')
+
+  assert.match(app, /"hero-icon": "\/components\/hero-icon\/hero-icon"/)
+  assert.match(iconWxml, /class="hero-icon hero-icon--\{\{name\}\}"/)
+  assert.match(iconScss, /Heroicons 24\/solid, https:\/\/heroicons\.com\//)
+  const solidIconNames = [
+    'viewfinder-circle',
+    'clipboard-document-list',
+    'clock',
+    'user-circle',
+    'chevron-left',
+    'home',
+    'trash',
+    'x-mark',
+    'plus',
+    'check',
+    'exclamation-circle',
+  ]
+  solidIconNames.forEach((name) => {
+    assert.match(iconScss, new RegExp(`\\.hero-icon--${name}`))
+  })
+  assert.match(index, /<hero-icon name="viewfinder-circle"/)
+  assert.match(index, /<hero-icon name="clipboard-document-list"/)
+  assert.match(index, /<hero-icon name="clock"/)
+  assert.match(index, /<hero-icon name="user-circle"/)
+  assert.match(navigation, /<hero-icon name="chevron-left"/)
+  assert.doesNotMatch(presentationSources, /[×＋⌄↶↷]/)
+  assert.doesNotMatch(index, /scan-tab-icon|tasks-tab-icon|history-tab-icon|account-tab-icon/)
 })
 
 test('login page uses the internal card and form hierarchy', () => {
@@ -64,12 +134,12 @@ test('scan workspace exposes recognition queue and confidence review states', ()
   const summary = scss.match(/\.recognition-queue-summary\s*\{([^}]*)\}/)?.[1] || ''
   assert.match(
     summary,
-    /animation:\s*content-rise\s+\.38s\s+\.01s\s+ease-out\s+both;/,
+    /animation:\s*content-rise\s+\.38s\s+\.01s\s+cubic-bezier\(0, 0, \.58, 1\)\s+both;/,
   )
   const riskSummary = scss.match(/\.review-risk-summary\s*\{([^}]*)\}/)?.[1] || ''
   assert.match(
     riskSummary,
-    /animation:\s*content-rise\s+\.38s\s+\.04s\s+ease-out\s+both;/,
+    /animation:\s*content-rise\s+\.38s\s+\.04s\s+cubic-bezier\(0, 0, \.58, 1\)\s+both;/,
   )
   assert.match(scss, /\.api-card\s*\{\s*animation-delay:\s*\.08s;\s*\}/)
   assert.match(scss, /\.form-card\s*\{\s*animation-delay:\s*\.12s;\s*\}/)
@@ -93,7 +163,7 @@ test('record cards expose server-aware delete controls', () => {
   const scss = source('miniprogram/pages/index/index.scss')
   const page = source('miniprogram/pages/index/index.ts')
   assert.match(wxml, /class="history-delete-button"/)
-  assert.match(wxml, /class="history-delete-icon"[^>]*>×<\/text>/)
+  assert.match(wxml, /<hero-icon[^>]*name="trash"[^>]*\/>/)
   assert.doesNotMatch(wxml, />删<\/text>/)
   assert.match(wxml, /loading="\{\{historyDeletingId === item\.id\}\}"/)
   assert.match(wxml, /catchtap="deleteHistory"/)
@@ -118,7 +188,7 @@ test('record cards expose server-aware delete controls', () => {
   assert.match(deleteButton, /max-width:\s*56rpx;/)
   assert.match(deleteButton, /box-sizing:\s*border-box;/)
   assert.match(deleteButton, /border-radius:\s*50%;/)
-  assert.match(scss, /\.history-delete-icon\s*\{/)
+  assert.doesNotMatch(scss, /\.history-delete-icon\s*\{/)
   assert.match(syncRow, /flex-wrap:\s*nowrap;/)
   assert.match(syncStatus, /white-space:\s*nowrap;/)
   assert.match(syncError, /white-space:\s*normal;/)
@@ -127,12 +197,36 @@ test('record cards expose server-aware delete controls', () => {
   assert.match(page, /deleteInspectionHistoriesByServerRecord/)
 })
 
+test('record cards display one image or a tilted stack of up to three thumbnails', () => {
+  const wxml = source('miniprogram/pages/index/index.wxml')
+  const scss = source('miniprogram/pages/index/index.scss')
+  const page = source('miniprogram/pages/index/index.ts')
+
+  assert.match(wxml, /wx:if="\{\{item\.imagePaths\.length\}\}" class="history-thumb-stack/)
+  assert.match(wxml, /wx:for="\{\{item\.imagePaths\}\}"/)
+  assert.match(wxml, /class="history-thumb history-thumb--layer history-thumb--layer-\{\{historyImageIndex\}\}"/)
+  assert.match(wxml, /src="\{\{historyImage\}\}"/)
+  assert.match(wxml, /wx:if="\{\{item\.imageCount > 1\}\}" class="history-thumb-count"/)
+  assert.match(scss, /\.history-thumb-stack--multiple/)
+  assert.match(scss, /\.history-thumb--layer-0\s*\{[^}]*rotate\(/s)
+  assert.match(scss, /\.history-thumb--layer-1\s*\{[^}]*rotate\(/s)
+  assert.match(scss, /\.history-thumb--layer-2\s*\{[^}]*rotate\(/s)
+  assert.match(scss, /\.history-thumb--layer-2\s*\{[^}]*translate\(34rpx,/s)
+  assert.match(page, /hydrateMissingHistoryImages\(historyRecords\)/)
+  assert.match(page, /await materializeHistoryCardImages\(/)
+  assert.match(page, /this\.data\.historyRequestId !== requestId/)
+  assert.match(page, /item\.imageSummaryComplete[\s\S]*?hasSameListData\(item\.imagePaths, hydrated\.imagePaths\)/)
+  assert.doesNotMatch(page, /if \(item\.imagePaths\.length > 0\) return item/)
+  assert.doesNotMatch(page, /if \(!historyChanged && !this\.data\.historyError\) return/)
+})
+
 test('workspace exposes an account tab with current-user details and logout', () => {
   const page = source('miniprogram/pages/index/index.ts')
   const wxml = source('miniprogram/pages/index/index.wxml')
   const scss = source('miniprogram/pages/index/index.scss')
+  const tabSwipe = source('miniprogram/domain/tab-swipe.ts')
 
-  assert.match(page, /type WorkspaceTab = 'scan' \| 'tasks' \| 'history' \| 'account'/)
+  assert.match(tabSwipe, /WORKSPACE_TABS = \['scan', 'tasks', 'history', 'account'\] as const/)
   const authImport = page.match(/import \{([^}]*)\} from '\.\.\/\.\.\/services\/auth-service'/s)?.[1] || ''
   assert.match(authImport, /AuthUser/)
   assert.match(authImport, /getCurrentUser/)
@@ -146,8 +240,62 @@ test('workspace exposes an account tab with current-user details and logout', ()
   assert.match(wxml, /bindtap="confirmLogout"/)
   assert.match(wxml, /data-tab="account"/)
   assert.match(wxml, />账户<\/text>/)
-  assert.match(scss, /grid-template-columns:\s*repeat\(4, minmax\(0, 1fr\)\);/)
-  assert.match(scss, /\.tab-indicator\.is-account\s*\{/)
+  const tabBar = scss.match(/\.floating-tabs\s*\{([^}]*)\}/)?.[1] || ''
+  const tabButton = scss.match(/\.floating-tab\s*\{([^}]*)\}/)?.[1] || ''
+  assert.match(tabBar, /bottom:\s*calc\(28rpx \+ env\(safe-area-inset-bottom\)\);/)
+  assert.match(tabBar, /height:\s*52px;/)
+  assert.match(tabBar, /grid-template-columns:\s*repeat\(4, 72px\);/)
+  assert.match(tabButton, /width:\s*72px;/)
+  assert.match(tabButton, /height:\s*44px;/)
+  assert.match(scss, /\.tab-indicator\s*\{[^}]*height:\s*44px;/s)
+  assert.match(wxml, /data-tab="scan"[^>]*bindtouchstart="onTabSwipeStart"/)
+  assert.match(wxml, /data-tab="tasks"[^>]*bindtouchstart="onTabSwipeStart"/)
+  assert.match(wxml, /class="floating-tabs[^"]*"[^>]*catchtouchmove="onTabSwipeMove"/)
+  assert.match(wxml, /class="floating-tabs[^"]*"[^>]*bindtouchend="onTabSwipeEnd"/)
+  assert.match(wxml, /class="floating-tabs[^"]*"[^>]*bindtouchcancel="onTabSwipeCancel"/)
+  assert.match(wxml, /tabDragging \? 'is-dragging is-dragging-' \+ tabDragDirection/)
+  assert.match(wxml, /tabSettling \? 'is-settling is-settling-' \+ tabSettlingDirection/)
+  assert.match(wxml, /class="tab-indicator"[^>]*translate3d\(\{\{tabIndicatorOffset\}\}px/)
+  assert.match(wxml, /class="tab-indicator-fill[^>]*width:\s*calc\(100% \+ \{\{tabDragStretch\}\}px\)/)
+  assert.match(wxml, /class="tab-indicator-fill[^>]*margin-left:\s*\{\{tabDragStretchOffset\}\}px/)
+  assert.match(wxml, /class="tab-indicator-fill[^>]*scaleY\(\{\{tabDragScaleY\}\}\)/)
+  assert.doesNotMatch(wxml, /tab-settle-shape/)
+  assert.match(wxml, /style="color: \{\{tabVisualColors\.scan\}\};"/)
+  assert.match(wxml, /style="color: \{\{tabVisualColors\.tasks\}\};"/)
+  assert.match(wxml, /style="color: \{\{tabVisualColors\.history\}\};"/)
+  assert.match(wxml, /style="color: \{\{tabVisualColors\.account\}\};"/)
+  assert.match(page, /getTabDragStretch\(deltaX\)/)
+  assert.match(page, /getTabSwitchStretch\(deltaX\)/)
+  assert.match(page, /getTabDragScaleY\(tabDragStretch\)/)
+  assert.match(page, /getTabVisualColors/)
+  assert.match(page, /resolveContinuousTabDrag/)
+  assert.match(page, /resolveTabDragDirection\(movementX \|\| deltaX, gesture\.direction\)/)
+  assert.match(page, /suppressNextTap/)
+  assert.doesNotMatch(scss, /\.floating-tabs\.is-dragging \.tab-indicator\s*\{[^}]*transition:\s*none;/s)
+  const indicatorFillRules = scss.match(/\.tab-indicator-fill\s*\{[\s\S]*?\n\}\n\n@keyframes glass-bar-in/)?.[0] || ''
+  assert.match(indicatorFillRules, /height:\s*100%;/)
+  assert.match(indicatorFillRules, /transition:[^;]*width[^;]*margin-left/s)
+  assert.match(indicatorFillRules, /transition:[^;]*transform/s)
+  assert.match(scss, /@keyframes tab-leading-settle-right\s*\{[\s\S]*?0%\s*\{[\s\S]*?var\(--tab-settle-initial-stretch\)[\s\S]*?24%\s*\{[\s\S]*?var\(--tab-settle-pre-stretch\)[\s\S]*?46%\s*\{[\s\S]*?var\(--tab-settle-peak-stretch\)[\s\S]*?width:\s*100%;[\s\S]*?scaleY\(1\)/)
+  assert.match(scss, /@keyframes tab-leading-settle-left\s*\{[\s\S]*?var\(--tab-settle-initial-stretch\)[\s\S]*?var\(--tab-settle-pre-stretch\)[\s\S]*?var\(--tab-settle-peak-stretch\)[\s\S]*?margin-left:\s*0;/)
+  assert.doesNotMatch(scss, /@keyframes tab-indicator-settle|--tab-settle-start-offset/)
+  assert.doesNotMatch(scss, /tab-settle-shape|tab-trailing-settle/)
+  assert.match(page, /tabDragStretchOffset:\s*gesture\.direction === 'left' \? -tabDragStretch : 0/)
+  assert.match(page, /if \(touchedTab !== this\.data\.activeTab\)/)
+  assert.match(page, /gesture\.startX \+= dragResult\.consumedX/)
+  assert.match(page, /const settleMetrics = getTabSettleMetrics\(deltaX\)/)
+  assert.match(page, /this\.activateTab\(\s*dragResult\.targetTab,\s*gesture\.direction,\s*settleMetrics,\s*settleMetrics\.preStretch,\s*settleMetrics\.preScaleY/)
+  assert.match(page, /const targetTab = event\.currentTarget\.dataset\.tab as WorkspaceTab/)
+  assert.match(page, /const direction: TabDragDirection = getTabIndicatorOffset\(targetTab\)[\s\S]*?\? 'left'[\s\S]*?: 'right'/)
+  assert.match(page, /const settleMetrics = getTabSettleMetrics\(deltaX\)\s*this\.activateTab\(targetTab, direction, settleMetrics\)/)
+  assert.doesNotMatch(page, /TAB_CLICK_DEFORMATION_MS|tabClickSwitchTimers/)
+  assert.match(page, /const continuesCurrentRoute = shouldSettle[\s\S]*?shouldContinueTabSettleRoute\([\s\S]*?this\.data\.tabSettlingDirection,[\s\S]*?settlingDirection,[\s\S]*?this\.data\.tabSettling/)
+  assert.match(page, /if \(continuesCurrentRoute\) \{[\s\S]*?tabIndicatorOffset,[\s\S]*?finishActivation[\s\S]*?return/)
+  assert.match(page, /const TAB_SETTLE_DURATION_MS = 500/)
+  assert.match(scss, /\.tab-indicator\s*\{[^}]*transition:\s*transform \.5s cubic-bezier\(\.38, \.56, \.46, 1\)/s)
+  assert.equal((scss.match(/animation: tab-leading-settle-(?:left|right) \.5s/g) || []).length, 2)
+  assert.match(scss, /\.floating-tabs\.is-dragging \.tab-indicator-fill\s*\{[^}]*transition-duration:\s*\.12s;[^}]*cubic-bezier\(\.35, \.2, \.45, 1\)/s)
+  assert.equal((scss.match(/animation: tab-leading-settle-(?:left|right) \.5s cubic-bezier\(\.48, \.08, \.52, 1\)/g) || []).length, 2)
   assert.match(scss, /\.account-logout-button\s*\{/)
 })
 
@@ -269,7 +417,7 @@ test('task and history lists initialize once and use only pull-down refresh afte
   assert.match(page, /workspaceScrollTop:\s*1[\s\S]*?workspaceScrollTop:\s*0/)
   assert.match(scss, /\.pull-refresh-indicator\s*\{[\s\S]*?width:\s*100%;[\s\S]*?height:\s*112rpx;[\s\S]*?pointer-events:\s*none;/)
   assert.doesNotMatch(scss.match(/\.pull-refresh-indicator\s*\{[^}]*\}/)?.[0] || '', /position:\s*fixed/)
-  assert.match(scss, /\.pull-refresh-indicator\.is-pulling\s*\{[\s\S]*?pull-refresh-fade-in 160ms ease-out both;[\s\S]*?animation-delay:\s*140ms;/)
+  assert.match(scss, /\.pull-refresh-indicator\.is-pulling\s*\{[\s\S]*?pull-refresh-fade-in 160ms cubic-bezier\(0, 0, \.58, 1\) both;[\s\S]*?animation-delay:\s*140ms;/)
   assert.match(scss, /\.pull-refresh-ring\s*\{[\s\S]*?border:\s*\d+rpx solid[\s\S]*?border-top-color:[\s\S]*?border-right-color:/)
   assert.doesNotMatch(scss, /\.pull-refresh-icon|\.pull-refresh-core|\.pull-refresh-halo|pull-refresh-glow/)
   assert.doesNotMatch(scss, /\.pull-refresh-ring::after/)
@@ -280,7 +428,7 @@ test('task and history lists initialize once and use only pull-down refresh afte
   assert.doesNotMatch(scss, /pull-refresh-float/)
   assert.match(page, /function hasSameListData\([\s\S]*?JSON\.stringify\(left\) === JSON\.stringify\(right\)/)
   assert.match(page, /const historyChanged = !hasSameListData\(this\.data\.historyRecords, historyRecords\)/)
-  assert.match(page, /if \(!historyChanged && !this\.data\.historyError\) return/)
+  assert.match(page, /if \(historyChanged \|\| this\.data\.historyError\) \{[\s\S]*?this\.setData/)
   assert.match(page, /const keepCurrentPages = resetList && preserveLoadedPages && !queryChanged/)
   assert.match(page, /const itemsChanged = !hasSameListData\(this\.data\.taskItems, taskItems\)/)
   assert.match(page, /if \(Object\.keys\(updates\)\.length > 0\) this\.setData\(updates\)/)
@@ -469,7 +617,7 @@ test('review actions keep return, export, and save controls in one balanced row'
 
 test('quality orders use the same all-source and all-status default scope as the web workbench', () => {
   const page = source('miniprogram/pages/index/index.ts')
-  const activateTab = page.match(/activateTab\(activeTab: WorkspaceTab\) \{([\s\S]*?)\n    \},\n    switchTab/)?.[1] || ''
+  const activateTab = page.match(/activateTab\(\s*activeTab: WorkspaceTab,[\s\S]*?\n    \) \{([\s\S]*?)\n    \},\n    switchTab/)?.[1] || ''
   const loadTasks = page.match(/loadTasks\(reset = false, preserveLoadedPages = false\): Promise<void> \{([\s\S]*?)\n    \},\n    loadMoreTasks/)?.[1] || ''
   const openTask = page.match(/openTask\(event: WechatMiniprogram\.TouchEvent\) \{([\s\S]*?)\n    \},\n    selectTaskItem/)?.[1] || ''
 

@@ -27,6 +27,7 @@
   "sitemapLocation": "sitemap.json",
   "lazyCodeLoading": "requiredComponents",
   "usingComponents": {
+    "hero-icon": "/components/hero-icon/hero-icon",
     "top-toast": "/components/top-toast/top-toast"
   }
 }

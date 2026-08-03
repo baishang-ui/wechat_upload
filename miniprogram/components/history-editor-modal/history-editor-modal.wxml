@@ -7,7 +7,7 @@
         <view class="history-modal-eyebrow">{{origin === 'remote' ? '云端质检记录' : '本地质检记录'}} · {{displayId || recordId || '未编号'}}</view>
         <view class="history-modal-title">质检记录详情</view>
       </view>
-      <view class="history-close" bindtap="requestClose" aria-label="关闭" role="button" hover-class="history-close--pressed" hover-stay-time="120">×</view>
+      <view class="history-close" bindtap="requestClose" aria-label="关闭" role="button" hover-class="history-close--pressed" hover-stay-time="120"><hero-icon name="x-mark" size="34rpx" /></view>
     </view>
 
     <scroll-view wx:if="{{drawerMounted}}" class="history-modal-body" scroll-y enhanced show-scrollbar="{{false}}">

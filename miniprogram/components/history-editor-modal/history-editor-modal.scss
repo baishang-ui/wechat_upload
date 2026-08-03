@@ -23,11 +23,11 @@
   background: rgba(15, 28, 53, .42);
   -webkit-backdrop-filter: blur(12rpx);
   backdrop-filter: blur(12rpx);
-  animation: history-modal-mask-in .24s ease-out both;
+  animation: history-modal-mask-in .24s cubic-bezier(0, 0, .58, 1) both;
 }
 
 .history-modal-layer.is-closing .history-modal-mask {
-  animation: history-modal-mask-out .24s ease-in both;
+  animation: history-modal-mask-out .24s cubic-bezier(.42, 0, 1, 1) both;
 }
 
 .history-modal-panel {
@@ -122,7 +122,7 @@
   font-weight: 400;
   line-height: 1;
   text-align: center;
-  transition: color .18s ease, background .18s ease, transform .18s ease;
+  transition: color .18s cubic-bezier(.25, .1, .25, 1), background .18s cubic-bezier(.25, .1, .25, 1), transform .18s cubic-bezier(.25, .1, .25, 1);
 }
 
 .history-close--pressed {
@@ -336,7 +336,7 @@
   padding: 0;
   overflow: hidden;
   background: rgba(255, 255, 255, .9);
-  transition: border-color .2s ease, box-shadow .2s ease;
+  transition: border-color .2s cubic-bezier(.25, .1, .25, 1), box-shadow .2s cubic-bezier(.25, .1, .25, 1);
 }
 
 .inspection-item-card.is-expanded {
@@ -390,7 +390,7 @@
   padding: 4rpx 24rpx 26rpx;
   border-top: 1rpx solid #e6edf7;
   background: rgba(249, 252, 255, .78);
-  animation: history-item-details-in .2s ease-out both;
+  animation: history-item-details-in .2s cubic-bezier(0, 0, .58, 1) both;
 }
 
 .detail-label--spaced {

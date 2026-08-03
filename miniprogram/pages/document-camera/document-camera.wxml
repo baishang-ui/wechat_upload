@@ -135,7 +135,7 @@
         aria-label="向左旋转照片"
         aria-disabled="{{captureProcessing}}"
       >
-        <text class="preview-rotate-icon">↶</text>
+        <view class="preview-rotate-icon"><hero-icon name="arrow-uturn-left" size="36rpx" /></view>
         <text class="preview-rotate-label">向左旋转</text>
       </view>
       <view
@@ -149,7 +149,7 @@
         aria-label="向右旋转照片"
         aria-disabled="{{captureProcessing}}"
       >
-        <text class="preview-rotate-icon">↷</text>
+        <view class="preview-rotate-icon"><hero-icon name="arrow-uturn-right" size="36rpx" /></view>
         <text class="preview-rotate-label">向右旋转</text>
       </view>
     </view>

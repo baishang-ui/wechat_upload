@@ -59,10 +59,10 @@ function clearRuntimeTimers(runtime: ToastRuntime): void {
 }
 
 function toastPresentation(type: TopToastType): { icon: string; title: string } {
-  if (type === 'success') return { icon: '✓', title: '操作成功' }
-  if (type === 'error') return { icon: '!', title: '操作失败' }
-  if (type === 'warning') return { icon: '!', title: '请注意' }
-  return { icon: 'i', title: '提示' }
+  if (type === 'success') return { icon: 'check', title: '操作成功' }
+  if (type === 'error') return { icon: 'exclamation-circle', title: '操作失败' }
+  if (type === 'warning') return { icon: 'exclamation-triangle', title: '请注意' }
+  return { icon: 'information-circle', title: '提示' }
 }
 
 Component({

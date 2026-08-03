@@ -25,6 +25,21 @@ import {
   RecognitionReviewHints,
 } from '../../domain/recognition-review'
 import {
+  getTabDragScaleY,
+  getTabDragStretch,
+  getTabIndicatorOffset,
+  getTabSwitchStretch,
+  getTabVisualColors,
+  isHorizontalTabSwipe,
+  resolveContinuousTabDrag,
+  resolveTabDragDirection,
+  shouldContinueTabSettleRoute,
+  TabDragDirection,
+  TAB_SWIPE_ACTIVATION_PX,
+  TAB_SWIPE_STEP_PX,
+  WorkspaceTab,
+} from '../../domain/tab-swipe'
+import {
   createMockRecord,
   InspectionRecord,
   InspectionRowField,
@@ -59,8 +74,10 @@ import {
   deleteRemoteInspectionRecord,
   getInspectionTask,
   HistoryViewItem,
+  hydrateMissingHistoryImages,
   listInspectionHistory,
   listInspectionTasks,
+  materializeHistoryCardImages,
   mergeInspectionHistory,
   QualityInspectionTaskDto,
   TASK_PAGE_SIZE,
@@ -75,8 +92,6 @@ interface HistoryEditorSavedPayload {
   record: StoredInspectionRecord
 }
 
-type WorkspaceTab = 'scan' | 'tasks' | 'history' | 'account'
-
 const productLabels = PRODUCT_OPTIONS.map((option) => option.label)
 const measurementHeaders = Array.from({ length: MEASUREMENT_COUNT }, (_, index) => index + 1)
 const RECOGNITION_PROGRESS_TICK_MS = 300
@@ -87,6 +102,44 @@ const attachedWorkspaceComponents = new WeakSet<object>()
 const recognitionStageTimers = new WeakMap<object, Set<ReturnType<typeof setTimeout>>>()
 const taskListRequests = new WeakMap<object, Promise<void>>()
 const historyListRequests = new WeakMap<object, Promise<void>>()
+const tabSettleTimers = new WeakMap<object, ReturnType<typeof setTimeout>>()
+const TAB_SETTLE_DURATION_MS = 500
+
+interface TabSwipeGesture {
+  startX: number
+  startY: number
+  latestX: number
+  direction: TabDragDirection
+  dragging: boolean
+  cancelled: boolean
+  suppressNextTap: boolean
+}
+
+const tabSwipeGestures = new WeakMap<object, TabSwipeGesture>()
+
+interface TabSettleMetrics {
+  preStretch: number
+  peakStretch: number
+  preScaleY: number
+  peakScaleY: number
+}
+
+function getTabSettleMetrics(deltaX: number): TabSettleMetrics {
+  const preStretch = getTabDragStretch(deltaX)
+  const peakStretch = getTabSwitchStretch(deltaX)
+  return {
+    preStretch,
+    peakStretch,
+    preScaleY: getTabDragScaleY(preStretch),
+    peakScaleY: getTabDragScaleY(peakStretch),
+  }
+}
+
+function clearTabSettleTimer(component: object): void {
+  const timer = tabSettleTimers.get(component)
+  if (timer) clearTimeout(timer)
+  tabSettleTimers.delete(component)
+}
 
 function scheduleRecognitionStage(component: object, callback: () => void): void {
   if (!attachedWorkspaceComponents.has(component)) return
@@ -231,6 +284,21 @@ Component({
     historyEditorTaskId: 0,
     historyEditorItemId: 0,
     pressedTab: '' as WorkspaceTab | '',
+    tabDragging: false,
+    tabDragDirection: 'right' as TabDragDirection,
+    tabDragStretch: 0,
+    tabDragStretchOffset: 0,
+    tabDragScaleY: 1,
+    tabSettling: false,
+    tabSettlingDirection: 'right' as TabDragDirection,
+    tabSettleInitialStretch: 0,
+    tabSettlePreStretch: 0,
+    tabSettlePeakStretch: 0,
+    tabSettleInitialScaleY: 1,
+    tabSettlePreScaleY: 1,
+    tabSettlePeakScaleY: 1,
+    tabIndicatorOffset: 0,
+    tabVisualColors: getTabVisualColors(0),
     workspaceScrollTop: 0,
     currentUser: null as AuthUser | null,
     accountInitial: '账',
@@ -267,6 +335,8 @@ Component({
     detached() {
       attachedWorkspaceComponents.delete(this)
       clearRecognitionStageTimers(this)
+      tabSwipeGestures.delete(this)
+      clearTabSettleTimer(this)
       this.stopAllRecognitionProgress()
     },
   },
@@ -335,14 +405,44 @@ Component({
         historyRequestId: requestId,
       })
       const request = listInspectionHistory()
-        .then((data) => {
+        .then(async (data) => {
           if (this.data.historyRequestId !== requestId) return
-          const historyRecords = mergeInspectionHistory(loadInspectionHistory(), data.items)
+          const historyRecords = await materializeHistoryCardImages(
+            mergeInspectionHistory(loadInspectionHistory(), data.items),
+          )
+          if (this.data.historyRequestId !== requestId) return
           const historyChanged = !hasSameListData(this.data.historyRecords, historyRecords)
-          if (!historyChanged && !this.data.historyError) return
-          this.setData({
-            ...(historyChanged ? { historyRecords } : {}),
-            historyError: '',
+          if (historyChanged || this.data.historyError) {
+            this.setData({
+              ...(historyChanged ? { historyRecords } : {}),
+              historyError: '',
+            })
+          }
+          void hydrateMissingHistoryImages(historyRecords).then((hydratedRecords) => {
+            if (
+              !attachedWorkspaceComponents.has(this)
+              || this.data.historyRequestId !== requestId
+            ) return
+            const hydratedById = new Map(hydratedRecords.map((item) => [item.id, item]))
+            const nextRecords = this.data.historyRecords.map((item) => {
+              const hydrated = hydratedById.get(item.id)
+              if (!hydrated || !hydrated.imageSummaryComplete) return item
+              if (
+                item.imageSummaryComplete
+                && item.imageCount === hydrated.imageCount
+                && hasSameListData(item.imagePaths, hydrated.imagePaths)
+              ) return item
+              return {
+                ...item,
+                imagePath: hydrated.imagePath,
+                imagePaths: hydrated.imagePaths,
+                imageCount: hydrated.imageCount,
+                imageSummaryComplete: true,
+              }
+            })
+            if (!hasSameListData(this.data.historyRecords, nextRecords)) {
+              this.setData({ historyRecords: nextRecords })
+            }
           })
         })
         .catch((error: Error) => {
@@ -410,34 +510,256 @@ Component({
       if (this.data.historyPulling) updates.historyPulling = false
       if (Object.keys(updates).length > 0) this.setData(updates)
     },
-    activateTab(activeTab: WorkspaceTab) {
+    activateTab(
+      activeTab: WorkspaceTab,
+      settlingDirection: TabDragDirection | '' = '',
+      settlingMetrics?: TabSettleMetrics,
+      settlingInitialStretch = 0,
+      settlingInitialScaleY = 1,
+    ) {
       const tabChanged = activeTab !== this.data.activeTab
-      this.setData({
-        activeTab,
-        ...(tabChanged ? { workspaceScrollTop: 1 } : {}),
-        ...(activeTab === 'scan'
-          ? { selectedTaskId: 0, selectedItemId: 0 }
-          : {}),
-      }, () => {
+      const tabIndicatorOffset = getTabIndicatorOffset(activeTab)
+      const shouldSettle = tabChanged
+        && settlingDirection !== ''
+        && settlingMetrics !== undefined
+      const continuesCurrentRoute = shouldSettle
+        && shouldContinueTabSettleRoute(
+          this.data.activeTab,
+          activeTab,
+          this.data.tabSettlingDirection,
+          settlingDirection,
+          this.data.tabSettling,
+        )
+      if (continuesCurrentRoute) {
+        this.setData({
+          activeTab,
+          pressedTab: '',
+          tabDragging: false,
+          tabDragStretch: 0,
+          tabDragStretchOffset: 0,
+          tabDragScaleY: 1,
+          tabIndicatorOffset,
+          tabVisualColors: getTabVisualColors(tabIndicatorOffset),
+          workspaceScrollTop: 1,
+          ...(activeTab === 'scan'
+            ? { selectedTaskId: 0, selectedItemId: 0 }
+            : {}),
+        }, () => {
+          this.setData({ workspaceScrollTop: 0 }, () => this.loadActiveListOnce())
+        })
+        return
+      }
+      const finishActivation = () => {
         if (!tabChanged) {
           this.loadActiveListOnce()
           return
         }
         this.setData({ workspaceScrollTop: 0 }, () => this.loadActiveListOnce())
+      }
+      clearTabSettleTimer(this)
+      this.setData({
+        activeTab,
+        pressedTab: '',
+        tabDragging: false,
+        tabDragDirection: settlingDirection || 'right',
+        tabDragStretch: 0,
+        tabDragStretchOffset: 0,
+        tabDragScaleY: 1,
+        tabSettling: false,
+        tabSettlingDirection: settlingDirection || 'right',
+        tabSettleInitialStretch: shouldSettle ? settlingInitialStretch : 0,
+        tabSettlePreStretch: shouldSettle ? settlingMetrics.preStretch : 0,
+        tabSettlePeakStretch: shouldSettle ? settlingMetrics.peakStretch : 0,
+        tabSettleInitialScaleY: shouldSettle ? settlingInitialScaleY : 1,
+        tabSettlePreScaleY: shouldSettle ? settlingMetrics.preScaleY : 1,
+        tabSettlePeakScaleY: shouldSettle ? settlingMetrics.peakScaleY : 1,
+        tabIndicatorOffset,
+        tabVisualColors: getTabVisualColors(tabIndicatorOffset),
+        ...(tabChanged ? { workspaceScrollTop: 1 } : {}),
+        ...(activeTab === 'scan'
+          ? { selectedTaskId: 0, selectedItemId: 0 }
+          : {}),
+      }, () => {
+        if (shouldSettle) {
+          this.setData({ tabSettling: true }, () => {
+            const timer = setTimeout(() => {
+              tabSettleTimers.delete(this)
+              if (attachedWorkspaceComponents.has(this)) {
+                this.setData({
+                  tabSettling: false,
+                  tabSettleInitialStretch: 0,
+                  tabSettlePreStretch: 0,
+                  tabSettlePeakStretch: 0,
+                  tabSettleInitialScaleY: 1,
+                  tabSettlePreScaleY: 1,
+                  tabSettlePeakScaleY: 1,
+                })
+              }
+            }, TAB_SETTLE_DURATION_MS)
+            tabSettleTimers.set(this, timer)
+            finishActivation()
+          })
+          return
+        }
+        finishActivation()
       })
     },
     switchTab(event: WechatMiniprogram.TouchEvent) {
-      this.activateTab(event.currentTarget.dataset.tab as WorkspaceTab)
-    },
-    onTabPressStart(event: WechatMiniprogram.TouchEvent) {
-      const touchedTab = event.currentTarget.dataset.tab as WorkspaceTab
-      this.setData({ pressedTab: touchedTab === this.data.activeTab ? touchedTab : '' })
+      const gesture = tabSwipeGestures.get(this)
+      if (gesture?.suppressNextTap) {
+        tabSwipeGestures.delete(this)
+        return
+      }
+      const targetTab = event.currentTarget.dataset.tab as WorkspaceTab
+      if (targetTab === this.data.activeTab) {
+        this.activateTab(targetTab)
+        return
+      }
+      const direction: TabDragDirection = getTabIndicatorOffset(targetTab)
+        < getTabIndicatorOffset(this.data.activeTab)
+        ? 'left'
+        : 'right'
+      const deltaX = direction === 'left' ? -TAB_SWIPE_STEP_PX : TAB_SWIPE_STEP_PX
+      const settleMetrics = getTabSettleMetrics(deltaX)
+      this.activateTab(targetTab, direction, settleMetrics)
     },
     onTabPressEnd() {
       this.setData({ pressedTab: '' })
     },
+    onTabSwipeStart(event: WechatMiniprogram.TouchEvent) {
+      const touch = event.touches[0]
+      if (!touch) return
+      const touchedTab = event.currentTarget.dataset.tab as WorkspaceTab
+      if (touchedTab !== this.data.activeTab) {
+        tabSwipeGestures.delete(this)
+        this.setData({ pressedTab: '' })
+        return
+      }
+      clearTabSettleTimer(this)
+      this.setData({
+        pressedTab: touchedTab,
+        tabSettling: false,
+        tabSettleInitialStretch: 0,
+        tabSettlePreStretch: 0,
+        tabSettlePeakStretch: 0,
+        tabSettleInitialScaleY: 1,
+        tabSettlePreScaleY: 1,
+        tabSettlePeakScaleY: 1,
+      })
+      tabSwipeGestures.set(this, {
+        startX: touch.clientX,
+        startY: touch.clientY,
+        latestX: touch.clientX,
+        direction: 'right',
+        dragging: false,
+        cancelled: false,
+        suppressNextTap: false,
+      })
+    },
+    onTabSwipeMove(event: WechatMiniprogram.TouchEvent) {
+      const gesture = tabSwipeGestures.get(this)
+      const touch = event.touches[0]
+      if (!gesture || !touch || gesture.cancelled) return
+      const deltaX = touch.clientX - gesture.startX
+      const deltaY = touch.clientY - gesture.startY
+      if (!gesture.dragging) {
+        if (
+          Math.abs(deltaY) >= TAB_SWIPE_ACTIVATION_PX
+          && Math.abs(deltaY) >= Math.abs(deltaX)
+        ) {
+          gesture.cancelled = true
+          const offset = getTabIndicatorOffset(this.data.activeTab)
+          this.setData({
+            pressedTab: '',
+            tabDragging: false,
+            tabDragDirection: gesture.direction,
+            tabDragStretch: 0,
+            tabDragStretchOffset: 0,
+            tabIndicatorOffset: offset,
+            tabVisualColors: getTabVisualColors(offset),
+          })
+          return
+        }
+        if (!isHorizontalTabSwipe(deltaX, deltaY)) return
+        gesture.dragging = true
+      }
+      const movementX = touch.clientX - gesture.latestX
+      gesture.direction = resolveTabDragDirection(movementX || deltaX, gesture.direction)
+      gesture.latestX = touch.clientX
+      const dragResult = resolveContinuousTabDrag(this.data.activeTab, deltaX)
+      if (dragResult.targetTab !== this.data.activeTab) {
+        const settleMetrics = getTabSettleMetrics(deltaX)
+        gesture.startX += dragResult.consumedX
+        gesture.suppressNextTap = true
+        this.activateTab(
+          dragResult.targetTab,
+          gesture.direction,
+          settleMetrics,
+          settleMetrics.preStretch,
+          settleMetrics.preScaleY,
+        )
+        return
+      }
+      const tabIndicatorOffset = getTabIndicatorOffset(this.data.activeTab)
+      const tabDragStretch = getTabDragStretch(deltaX)
+      this.setData({
+        pressedTab: '',
+        tabDragging: true,
+        tabDragDirection: gesture.direction,
+        tabDragStretch,
+        tabDragStretchOffset: gesture.direction === 'left' ? -tabDragStretch : 0,
+        tabDragScaleY: getTabDragScaleY(tabDragStretch),
+        tabIndicatorOffset,
+        tabVisualColors: getTabVisualColors(tabIndicatorOffset),
+      })
+    },
+    onTabSwipeEnd() {
+      const gesture = tabSwipeGestures.get(this)
+      if (!gesture) return
+      if (!gesture.dragging || gesture.cancelled) {
+        tabSwipeGestures.delete(this)
+        const offset = getTabIndicatorOffset(this.data.activeTab)
+        this.setData({
+          pressedTab: '',
+          tabDragging: false,
+          tabDragDirection: gesture.direction,
+          tabDragStretch: 0,
+          tabDragStretchOffset: 0,
+          tabDragScaleY: 1,
+          tabIndicatorOffset: offset,
+          tabVisualColors: getTabVisualColors(offset),
+        })
+        return
+      }
+      gesture.suppressNextTap = true
+      const offset = getTabIndicatorOffset(this.data.activeTab)
+      this.setData({
+        pressedTab: '',
+        tabDragging: false,
+        tabDragDirection: gesture.direction,
+        tabDragStretch: 0,
+        tabDragStretchOffset: 0,
+        tabDragScaleY: 1,
+        tabIndicatorOffset: offset,
+        tabVisualColors: getTabVisualColors(offset),
+      })
+    },
+    onTabSwipeCancel() {
+      tabSwipeGestures.delete(this)
+      const offset = getTabIndicatorOffset(this.data.activeTab)
+      this.setData({
+        pressedTab: '',
+        tabDragging: false,
+        tabDragDirection: 'right',
+        tabDragStretch: 0,
+        tabDragStretchOffset: 0,
+        tabDragScaleY: 1,
+        tabIndicatorOffset: offset,
+        tabVisualColors: getTabVisualColors(offset),
+      })
+    },
     goToScan() {
-      this.setData({ activeTab: 'scan' })
+      this.activateTab('scan')
     },
     showHistory() {
       this.activateTab('history')
