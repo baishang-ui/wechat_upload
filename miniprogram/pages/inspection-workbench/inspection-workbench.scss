@@ -15,12 +15,18 @@
 .unmatched-review,
 .state-card {
   margin-bottom: 22rpx;
-  padding: 28rpx;
+  padding: 32rpx;
   border: 1rpx solid $ui-card-border;
   border-radius: $ui-card-radius;
   background: $ui-card-background;
   box-shadow: $ui-card-shadow;
+  animation: workbench-surface-in $ui-motion-duration-enter cubic-bezier(.2, .8, .2, 1) both;
 }
+
+.workbench-source { animation: workbench-surface-in $ui-motion-duration-enter $ui-motion-stagger cubic-bezier(.2, .8, .2, 1) both; }
+.recognition-card { animation-delay: .08s; }
+.table-card { animation-delay: .12s; }
+.unmatched-review { animation-delay: .16s; }
 
 .product-card__header,
 .section-heading,
@@ -42,7 +48,7 @@
 .product-card__eyebrow {
   margin-bottom: 8rpx;
   color: $ui-primary;
-  font-size: 23rpx;
+  font-size: $ui-font-caption;
   font-weight: 700;
   letter-spacing: 1rpx;
 }
@@ -59,10 +65,10 @@
   flex: none;
   padding: 9rpx 18rpx;
   color: $ui-primary;
-  font-size: 23rpx;
+  font-size: 26rpx;
   font-weight: 600;
   border-radius: 999rpx;
-  background: #edf3ff;
+  background: $ui-primary-soft;
 }
 
 .product-meta-grid {
@@ -85,12 +91,12 @@
 
 .product-meta-label {
   color: $ui-text-secondary;
-  font-size: 23rpx;
+  font-size: $ui-font-label;
 }
 
 .product-meta-value {
   overflow: hidden;
-  font-size: 27rpx;
+  font-size: 30rpx;
   line-height: 1.45;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -99,18 +105,18 @@
 .workbench-source {
   position: relative;
   margin-bottom: 22rpx;
-  padding: 22rpx 24rpx;
+  padding: 26rpx 28rpx;
   gap: 18rpx;
-  border: 1rpx solid #cfe0ff;
-  border-radius: 20rpx;
-  background: #edf3ff;
+  border: 1rpx solid transparent;
+  border-radius: $ui-field-radius;
+  background: $ui-primary-soft;
 }
 
 .workbench-source__dot {
   width: 18rpx;
   height: 18rpx;
   flex: none;
-  border: 5rpx solid rgba(47, 107, 255, .18);
+  border: 5rpx solid $ui-primary-soft;
   border-radius: 50%;
   background: $ui-primary;
   background-clip: padding-box;
@@ -122,14 +128,14 @@
 }
 
 .workbench-source__title {
-  font-size: 27rpx;
+  font-size: 30rpx;
   font-weight: 700;
 }
 
 .workbench-source__meta {
   margin-top: 5rpx;
   color: $ui-text-secondary;
-  font-size: 22rpx;
+  font-size: $ui-font-caption;
 }
 
 .section-title {
@@ -141,7 +147,7 @@
 .state-description {
   margin-top: 8rpx;
   color: $ui-text-secondary;
-  font-size: 24rpx;
+  font-size: 27rpx;
   line-height: 1.55;
 }
 
@@ -154,30 +160,47 @@
 .state-button,
 .save-button {
   margin: 0;
-  border-radius: 18rpx;
-  font-size: 27rpx;
+  border-radius: $ui-button-radius;
+  font-size: $ui-font-control;
   font-weight: 600;
 }
 
 .recognition-button {
   min-width: 0;
-  height: 82rpx;
+  height: $ui-control-height-large;
   flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12rpx;
   color: $ui-primary;
-  background: #edf3ff;
+  background: $ui-surface-secondary;
 }
 
 .recognition-button--primary,
 .save-button {
-  color: #fff;
-  background: linear-gradient(135deg, $ui-primary, #5a8cff);
+  color: $ui-on-primary;
+  background: $ui-primary;
+  transition: transform .25s cubic-bezier(.25, .1, .25, 1), background .1s cubic-bezier(0, 0, .58, 1);
+}
+
+.recognition-button:active,
+.state-button:active,
+.save-button:active {
+  transform: scale(.97);
+}
+
+.recognition-button--primary:active,
+.state-button:active,
+.save-button:active {
+  background: $ui-primary-pressed;
 }
 
 .inline-error {
   margin-top: 18rpx;
   padding: 18rpx 20rpx;
   color: $ui-danger;
-  font-size: 24rpx;
+  font-size: 27rpx;
   border-radius: 14rpx;
   background: $ui-danger-background;
 }
@@ -191,12 +214,13 @@
 
 .report-preview {
   position: relative;
-  width: 136rpx;
-  height: 136rpx;
+  width: 156rpx;
+  height: 156rpx;
   flex: none;
   overflow: hidden;
   border-radius: 16rpx;
   background: $ui-field-background;
+  animation: workbench-preview-in $ui-motion-duration-medium cubic-bezier(.2, .8, .2, 1) both;
 }
 
 .report-preview image {
@@ -211,7 +235,7 @@
   left: 0;
   padding: 7rpx;
   color: #fff;
-  font-size: 20rpx;
+  font-size: 23rpx;
   text-align: center;
   background: rgba(23, 35, 61, .72);
 }
@@ -234,7 +258,7 @@
 .inspection-table {
   width: max-content;
   min-width: 100%;
-  background: #fff;
+  background: $ui-card-background;
 }
 
 .inspection-table__header,
@@ -248,10 +272,10 @@
   position: sticky;
   top: 0;
   z-index: 4;
-  color: #42516d;
-  font-size: 22rpx;
+  color: $ui-text-secondary;
+  font-size: 25rpx;
   font-weight: 700;
-  background: #f5f8fd;
+  background: $ui-surface-secondary;
 }
 
 .inspection-group-title {
@@ -261,12 +285,12 @@
   width: 2720rpx;
   padding: 16rpx 24rpx;
   box-sizing: border-box;
-  color: #254986;
-  font-size: 25rpx;
+  color: $ui-primary;
+  font-size: 28rpx;
   font-weight: 700;
-  border-top: 1rpx solid #dbe6f7;
-  border-bottom: 1rpx solid #dbe6f7;
-  background: #eaf1fc;
+  border-top: 1rpx solid $ui-card-border;
+  border-bottom: 1rpx solid $ui-card-border;
+  background: $ui-primary-soft;
 }
 
 .table-cell {
@@ -312,14 +336,14 @@
   position: sticky;
   left: 0;
   z-index: 2;
-  border-right: 2rpx solid #d6e1f3;
-  background: #fff;
-  box-shadow: 8rpx 0 14rpx rgba(47, 70, 108, .05);
+  border-right: 2rpx solid $ui-card-border;
+  background: $ui-card-background;
+  box-shadow: $ui-field-shadow;
 }
 
 .inspection-table__header .table-cell--sticky {
   z-index: 5;
-  background: #f5f8fd;
+  background: $ui-surface-secondary;
 }
 
 .table-project-cell {
@@ -328,7 +352,7 @@
 }
 
 .table-project-name {
-  font-size: 25rpx;
+  font-size: 28rpx;
   font-weight: 700;
   line-height: 1.45;
 }
@@ -336,15 +360,15 @@
 .table-project-mode {
   margin-top: 10rpx;
   color: $ui-text-secondary;
-  font-size: 20rpx;
+  font-size: 23rpx;
   line-height: 1.35;
 }
 
 .table-text-cell {
   align-items: flex-start;
   justify-content: flex-start;
-  color: #42516d;
-  font-size: 23rpx;
+  color: $ui-text-secondary;
+  font-size: 26rpx;
   line-height: 1.5;
   white-space: normal;
 }
@@ -356,20 +380,28 @@
 .table-input,
 .table-textarea {
   width: 100%;
-  min-height: 68rpx;
-  padding: 12rpx;
+  min-height: $ui-control-height;
+  padding: 14rpx;
   box-sizing: border-box;
   color: $ui-text-primary;
-  font-size: 23rpx;
+  font-size: 26rpx;
   text-align: center;
   border: 1rpx solid $ui-field-border;
-  border-radius: 12rpx;
+  border-radius: $ui-field-radius;
   background: $ui-field-background;
+  transition: border-color .16s cubic-bezier(0, 0, .58, 1), box-shadow .16s cubic-bezier(0, 0, .58, 1), background .16s cubic-bezier(0, 0, .58, 1);
+}
+
+.table-input:focus,
+.table-textarea:focus {
+  background: $ui-card-background;
+  border-color: $ui-primary;
+  box-shadow: $ui-focus-ring;
 }
 
 .table-decision-switch {
   width: 100%;
-  min-height: 68rpx;
+  min-height: $ui-control-height;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -384,8 +416,8 @@
 
 .table-decision-label {
   margin-top: -10rpx;
-  color: #16865f;
-  font-size: 20rpx;
+  color: $ui-success;
+  font-size: 23rpx;
   font-weight: 700;
   line-height: 28rpx;
 }
@@ -395,7 +427,7 @@
 }
 
 .table-textarea {
-  min-height: 76rpx;
+  min-height: $ui-control-height;
   text-align: left;
   line-height: 1.45;
 }
@@ -417,7 +449,7 @@
 .photo-add-button {
   position: relative;
   width: 100%;
-  height: 92rpx;
+  height: 112rpx;
   margin: 0;
   overflow: hidden;
   border-radius: 12rpx;
@@ -439,8 +471,12 @@
   bottom: 0;
   left: 0;
   padding: 5rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6rpx;
   color: #fff;
-  font-size: 18rpx;
+  font-size: 21rpx;
   text-align: center;
   background: rgba(23, 35, 61, .72);
 }
@@ -453,8 +489,8 @@
   position: absolute;
   top: 4rpx;
   right: 4rpx;
-  width: 34rpx;
-  height: 34rpx;
+  width: 52rpx;
+  height: 52rpx;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -470,7 +506,7 @@
   left: 0;
   padding: 5rpx;
   color: #fff;
-  font-size: 18rpx;
+  font-size: 21rpx;
   text-align: center;
   background: $ui-danger;
 }
@@ -482,10 +518,10 @@
   flex-direction: column;
   justify-content: center;
   color: $ui-primary;
-  font-size: 19rpx;
+  font-size: 22rpx;
   line-height: 1.2;
-  border: 1rpx dashed #9ab8f4;
-  background: #f3f7ff;
+  border: 1rpx dashed $ui-primary;
+  background: $ui-primary-soft;
 }
 
 .photo-add-button__plus {
@@ -496,33 +532,36 @@
 .photo-not-required {
   margin-top: 10rpx;
   color: $ui-text-secondary;
-  font-size: 19rpx;
+  font-size: 22rpx;
 }
 
 .unmatched-review {
-  border-color: #f0dca8;
-  background: #fffdf7;
+  border-color: $ui-warning-border;
+  background: $ui-warning-background;
 }
 
 .text-button {
   flex: none;
   margin: 0;
-  padding: 10rpx 18rpx;
-  color: #9a6412;
-  font-size: 23rpx;
+  min-height: 72rpx;
+  padding: 0 22rpx;
+  display: flex;
+  align-items: center;
+  color: $ui-warning;
+  font-size: 26rpx;
   line-height: 1.4;
   border-radius: 999rpx;
-  background: #fff2d3;
+  background: $ui-warning-background;
 }
 
 .unmatched-empty {
   margin-top: 22rpx;
   padding: 26rpx;
   color: $ui-text-secondary;
-  font-size: 24rpx;
+  font-size: 27rpx;
   text-align: center;
   border-radius: 16rpx;
-  background: rgba(255, 255, 255, .7);
+  background: $ui-surface-secondary;
 }
 
 .unmatched-list {
@@ -534,9 +573,9 @@
 
 .unmatched-item {
   padding: 20rpx;
-  border: 1rpx solid #f0dca8;
+  border: 1rpx solid $ui-warning-border;
   border-radius: 16rpx;
-  background: #fff;
+  background: $ui-card-background;
 }
 
 .unmatched-item__head {
@@ -554,13 +593,13 @@
 .unmatched-item__key,
 .unmatched-item__reason {
   color: $ui-text-secondary;
-  font-size: 21rpx;
+  font-size: $ui-font-caption;
 }
 
 .unmatched-item__measurements {
   margin-top: 12rpx;
-  color: #42516d;
-  font-size: 23rpx;
+  color: $ui-text-secondary;
+  font-size: 26rpx;
   line-height: 1.5;
 }
 
@@ -573,8 +612,14 @@
   text-align: center;
 }
 
+.state-spinner {
+  margin-bottom: 20rpx;
+  display: flex;
+  justify-content: center;
+}
+
 .state-card--error {
-  border-color: #f3c7cc;
+  border-color: $ui-danger-border;
 }
 
 .state-title {
@@ -584,14 +629,14 @@
 
 .state-button {
   width: 240rpx;
-  height: 76rpx;
+  height: $ui-control-height;
   margin: 26rpx auto 0;
-  color: #fff;
+  color: $ui-on-primary;
   background: $ui-primary;
 }
 
 .bottom-spacer {
-  height: calc(150rpx + env(safe-area-inset-bottom));
+  height: calc(170rpx + env(safe-area-inset-bottom));
 }
 
 .workbench-bottom-bar {
@@ -600,12 +645,15 @@
   bottom: 0;
   left: 0;
   z-index: 20;
-  padding: 18rpx 24rpx calc(18rpx + env(safe-area-inset-bottom));
+  padding: 20rpx 28rpx calc(20rpx + env(safe-area-inset-bottom));
   justify-content: space-between;
   gap: 24rpx;
-  border-top: 1rpx solid $ui-card-border;
-  background: rgba(255, 255, 255, .96);
-  box-shadow: 0 -12rpx 36rpx rgba(38, 67, 111, .1);
+  border-top: 1rpx solid $ui-glass-border;
+  background: $ui-glass-background;
+  box-shadow: $ui-glass-shadow;
+  -webkit-backdrop-filter: blur($ui-glass-blur) saturate($ui-glass-saturation);
+  backdrop-filter: blur($ui-glass-blur) saturate($ui-glass-saturation);
+  animation: workbench-bar-in $ui-motion-duration-medium cubic-bezier(.2, .8, .2, 1) both;
 }
 
 .bottom-save-state {
@@ -615,7 +663,7 @@
 
 .bottom-save-title {
   overflow: hidden;
-  font-size: 24rpx;
+  font-size: 27rpx;
   font-weight: 600;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -624,13 +672,17 @@
 .bottom-save-tip {
   margin-top: 5rpx;
   color: $ui-text-secondary;
-  font-size: 19rpx;
+  font-size: 22rpx;
 }
 
 .save-button {
-  width: 220rpx;
-  height: 80rpx;
+  width: 240rpx;
+  height: $ui-control-height-large;
   flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12rpx;
 }
 
 @media (max-width: 360px) {
@@ -649,5 +701,62 @@
 
   .recognition-button {
     width: 100%;
+  }
+}
+
+@keyframes workbench-surface-in {
+  from {
+    opacity: 0;
+    transform: translateY(18rpx) scale(.992);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes workbench-preview-in {
+  from {
+    opacity: 0;
+    transform: scale(.94);
+  }
+
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes workbench-bar-in {
+  from {
+    opacity: 0;
+    transform: translateY(100%);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .product-card,
+  .workbench-source,
+  .recognition-card,
+  .table-card,
+  .unmatched-review,
+  .state-card,
+  .report-preview,
+  .workbench-bottom-bar,
+  .recognition-button,
+  .state-button,
+  .save-button,
+  .table-input,
+  .table-textarea {
+    animation-duration: .01ms !important;
+    animation-delay: 0s !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .01ms !important;
   }
 }

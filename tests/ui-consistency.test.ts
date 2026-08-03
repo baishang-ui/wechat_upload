@@ -40,6 +40,155 @@ test('login and index pages share the inspection design tokens', () => {
   assert.match(indexScss, /@import ['"]\.\.\/\.\.\/styles\/design-tokens['"];/)
 })
 
+test('global presentation styles share semantic surface and interaction tokens', () => {
+  const tokens = source('miniprogram/styles/_design-tokens.scss')
+  const presentationStyles = [
+    'miniprogram/pages/document-camera/document-camera.scss',
+    'miniprogram/pages/logs/logs.scss',
+    'miniprogram/components/navigation-bar/navigation-bar.scss',
+    'miniprogram/components/top-toast/top-toast.scss',
+  ]
+
+  ;[
+    '$ui-surface-secondary',
+    '$ui-surface-tertiary',
+    '$ui-surface-hover',
+    '$ui-primary-soft',
+    '$ui-success-border',
+    '$ui-warning',
+    '$ui-warning-background',
+    '$ui-warning-border',
+    '$ui-danger-background-pressed',
+    '$ui-danger-border',
+    '$ui-overlay-background',
+    '$ui-overlay-surface',
+    '$ui-sheet-background',
+    '$ui-overlay-shadow',
+    '$ui-glass-background',
+    '$ui-glass-border',
+    '$ui-glass-highlight-strong',
+    '$ui-glass-highlight-medium',
+    '$ui-glass-highlight-soft',
+    '$ui-bottom-glass-brightness',
+    '$ui-diffuse-glow',
+    '$ui-diffuse-glow-strong',
+    '$ui-glass-shadow',
+    '$ui-glass-blur',
+    '$ui-glass-saturation',
+    '$ui-button-radius',
+    '$ui-field-radius',
+    '$ui-disabled-opacity',
+  ].forEach((token) => assert.match(tokens, new RegExp(`\\${token}:`)))
+  assert.match(tokens, /\$ui-glass-blur:\s*18rpx;/)
+  assert.match(tokens, /\$ui-glass-saturation:\s*132%;/)
+
+  presentationStyles.forEach((path) => {
+    assert.match(source(path), /@import ['"]\.\.\/\.\.\/styles\/design-tokens['"];/)
+  })
+
+  const indexScss = source('miniprogram/pages/index/index.scss')
+  const primaryButton = indexScss.match(/\.primary-button\s*\{([^}]*)\}/)?.[1] || ''
+  assert.match(primaryButton, /background:\s*\$ui-primary;/)
+  assert.doesNotMatch(primaryButton, /linear-gradient/)
+  assert.match(indexScss, /\.primary-button:active\s*\{[^}]*transform:\s*scale\(\.97\);/s)
+})
+
+test('drawer components use HeroUI-style semantic surfaces and interaction states', () => {
+  const historyScss = source('miniprogram/components/history-editor-modal/history-editor-modal.scss')
+  const workbenchScss = source('miniprogram/components/inspection-workbench-modal/inspection-workbench-modal.scss')
+  const toastScss = source('miniprogram/components/top-toast/top-toast.scss')
+  const indexScss = source('miniprogram/pages/index/index.scss')
+
+  for (const scss of [historyScss, workbenchScss]) {
+    assert.match(scss, /-modal-panel\s*\{[^}]*background:\s*\$ui-sheet-background;/s)
+    assert.match(scss, /\.modal-state-card--error\s*\{[^}]*border-color:\s*\$ui-danger-border;[^}]*background:\s*\$ui-danger-background;/s)
+    assert.match(scss, /\.form-field:focus-within\s*\{[^}]*border-color:\s*\$ui-primary;[^}]*box-shadow:\s*\$ui-focus-ring;/s)
+    assert.match(scss, /\.measurement-field:focus-within\s*\{[^}]*border-color:\s*\$ui-primary;[^}]*box-shadow:\s*\$ui-focus-ring;/s)
+  }
+
+  assert.match(historyScss, /\.inspection-item-card\.is-expanded\s*\{[^}]*border-color:\s*\$ui-primary;[^}]*box-shadow:\s*\$ui-focus-ring;/s)
+  assert.match(historyScss, /\.judgement-toggle\s*\{[^}]*border:\s*1rpx solid \$ui-success-border;[^}]*background:\s*\$ui-success-background;/s)
+  assert.match(historyScss, /\.judgement-toggle\.is-ng\s*\{[^}]*border-color:\s*\$ui-danger-border;[^}]*background:\s*\$ui-danger-background;/s)
+  assert.match(workbenchScss, /\.unmatched-item\s*\{[^}]*border-color:\s*\$ui-warning-border;[^}]*background:\s*\$ui-warning-background;/s)
+  assert.match(workbenchScss, /\.formal-final-option\.is-active\s*\{[^}]*border-color:\s*\$ui-success-border;[^}]*background:\s*\$ui-success-background;/s)
+  assert.match(workbenchScss, /\.formal-final-option--ng\.is-active\s*\{[^}]*border-color:\s*\$ui-danger-border;[^}]*background:\s*\$ui-danger-background;/s)
+  assert.match(toastScss, /\.top-toast--success \.top-toast__title\s*\{\s*color:\s*\$ui-success;\s*\}/)
+  assert.match(toastScss, /\.top-toast--success \.top-toast__icon\s*\{\s*background:\s*\$ui-success;\s*\}/)
+  assert.match(toastScss, /\.top-toast--error \.top-toast__title\s*\{\s*color:\s*\$ui-danger;\s*\}/)
+  assert.match(toastScss, /\.top-toast--warning \.top-toast__title\s*\{\s*color:\s*\$ui-warning;\s*\}/)
+  assert.doesNotMatch(
+    toastScss,
+    /\.top-toast--(?:success|error|warning) \.top-toast__surface\s*\{[^}]*background:/s,
+  )
+  assert.match(indexScss, /\.history-delete-visual\s*\{[^}]*border:\s*1rpx solid \$ui-danger-border;[^}]*background:\s*\$ui-danger-background;/s)
+})
+
+test('mobile controls share readable type and finger-friendly sizing tokens', () => {
+  const tokens = source('miniprogram/styles/_design-tokens.scss')
+  const appScss = source('miniprogram/app.scss')
+  const navigationScss = source('miniprogram/components/navigation-bar/navigation-bar.scss')
+  const loginScss = source('miniprogram/pages/login/login.scss')
+  const indexScss = source('miniprogram/pages/index/index.scss')
+  const historyScss = source('miniprogram/components/history-editor-modal/history-editor-modal.scss')
+  const workbenchScss = source('miniprogram/components/inspection-workbench-modal/inspection-workbench-modal.scss')
+
+  ;[
+    '$ui-touch-target',
+    '$ui-control-height',
+    '$ui-control-height-large',
+    '$ui-font-body',
+    '$ui-font-control',
+    '$ui-font-label',
+    '$ui-font-caption',
+  ].forEach((token) => assert.match(tokens, new RegExp(`\\${token}:`)))
+
+  assert.match(appScss, /page\s*\{[^}]*font-size:\s*\$ui-font-body;/s)
+  assert.match(navigationScss, /--height:\s*44px;/)
+  assert.match(loginScss, /\.login-input\s*\{[^}]*height:\s*\$ui-control-height-large;/s)
+  assert.match(loginScss, /\.login-button\s*\{[^}]*height:\s*\$ui-control-height-large;/s)
+  assert.match(indexScss, /\.floating-tab\s*\{[^}]*height:\s*48px;/s)
+
+  for (const scss of [historyScss, workbenchScss]) {
+    assert.match(scss, /\.(?:history|workbench)-close\s*\{[^}]*width:\s*\$ui-touch-target;[^}]*height:\s*\$ui-touch-target;/s)
+  }
+
+  assert.match(historyScss, /\.export-button,\s*\n\.save-button\s*\{[^}]*height:\s*\$ui-control-height;/s)
+  assert.match(workbenchScss, /\.recognition-button,\s*\n\.page-button,\s*\n\.save-button\s*\{[^}]*height:\s*\$ui-control-height;/s)
+})
+
+test('global motion uses shared pacing and supports reduced motion', () => {
+  const tokens = source('miniprogram/styles/_design-tokens.scss')
+  const motionStyles = [
+    'miniprogram/pages/login/login.scss',
+    'miniprogram/pages/index/index.scss',
+    'miniprogram/pages/logs/logs.scss',
+    'miniprogram/pages/document-camera/document-camera.scss',
+    'miniprogram/pages/inspection-workbench/inspection-workbench.scss',
+    'miniprogram/components/navigation-bar/navigation-bar.scss',
+    'miniprogram/components/top-toast/top-toast.scss',
+    'miniprogram/components/history-editor-modal/history-editor-modal.scss',
+    'miniprogram/components/inspection-workbench-modal/inspection-workbench-modal.scss',
+  ]
+
+  ;[
+    '$ui-motion-duration-fast',
+    '$ui-motion-duration-medium',
+    '$ui-motion-duration-enter',
+    '$ui-motion-stagger',
+  ].forEach((token) => assert.match(tokens, new RegExp(`\\${token}:`)))
+
+  motionStyles.forEach((path) => {
+    assert.match(source(path), /@media \(prefers-reduced-motion:\s*reduce\)/, path)
+  })
+
+  assert.match(source('miniprogram/components/navigation-bar/navigation-bar.scss'), /navigation-material-in/)
+  assert.match(source('miniprogram/pages/document-camera/document-camera.scss'), /camera-control-in/)
+  assert.match(source('miniprogram/pages/inspection-workbench/inspection-workbench.scss'), /workbench-surface-in/)
+  assert.match(source('miniprogram/pages/logs/logs.scss'), /log-item-in/)
+  assert.match(source('miniprogram/components/history-editor-modal/history-editor-modal.scss'), /history-content-in/)
+  assert.match(source('miniprogram/components/inspection-workbench-modal/inspection-workbench-modal.scss'), /modal-content-in/)
+})
+
 test('project presentation icons use the shared Heroicons solid component', () => {
   const app = source('miniprogram/app.json')
   const iconWxml = source('miniprogram/components/hero-icon/hero-icon.wxml')
@@ -107,6 +256,22 @@ test('pending inspection page exposes unified toolbar, state and task metadata c
   assert.match(wxml, /class="task-card-contract">采购合同：\{\{task\.contract_no \|\| '—'\}\}<\/view>/)
 })
 
+test('workspace cards use HeroUI-style Card, Chip, Tabs and Avatar patterns', () => {
+  const scss = source('miniprogram/pages/index/index.scss')
+
+  assert.match(scss, /\.task-status-row\s*\{[^}]*padding:\s*6rpx;[^}]*border-radius:\s*\$ui-field-radius;[^}]*background:\s*\$ui-surface-secondary;/s)
+  assert.match(scss, /\.task-status-chip\s*\{[^}]*flex:\s*1;[^}]*background:\s*transparent;/s)
+  assert.match(scss, /\.task-status-chip\.is-active\s*\{[^}]*color:\s*\$ui-text-primary;[^}]*background:\s*\$ui-card-background;[^}]*box-shadow:\s*\$ui-card-shadow;/s)
+  assert.match(scss, /\.history-item\s*\{[^}]*border:\s*1rpx solid \$ui-card-border;[^}]*border-radius:\s*\$ui-card-radius;[^}]*background:\s*\$ui-card-background;[^}]*box-shadow:\s*\$ui-card-shadow;/s)
+  assert.match(scss, /\.local-pill\s*\{[^}]*border:\s*1rpx solid \$ui-success-border;[^}]*background:\s*\$ui-success-background;/s)
+  assert.match(scss, /\.account-avatar\s*\{[^}]*border-radius:\s*\$ui-card-radius;[^}]*box-shadow:\s*\$ui-card-shadow;/s)
+  assert.match(scss, /\.account-avatar--fallback\s*\{[^}]*color:\s*\$ui-primary;[^}]*background:\s*\$ui-primary-soft;/s)
+  assert.match(scss, /\.history-source--purchase_order\s*\{[^}]*color:\s*\$ui-primary;[^}]*background:\s*\$ui-primary-soft;/s)
+  assert.match(scss, /\.history-source--standalone\s*\{[^}]*color:\s*\$ui-text-primary;[^}]*background:\s*\$ui-surface-tertiary;/s)
+  assert.match(scss, /\.task-item-photo-count\s*\{[^}]*color:\s*\$ui-text-tertiary;/s)
+  assert.match(scss, /\.history-error-bar\s*\{[^}]*border:\s*1rpx solid \$ui-warning-border;/s)
+})
+
 test('recognized report fields and matching messages identify the purchase contract explicitly', () => {
   const page = source('miniprogram/pages/index/index.ts')
   const wxml = source('miniprogram/pages/index/index.wxml')
@@ -158,14 +323,15 @@ test('recognition queue add buttons remain full-width and single-line', () => {
   assert.match(buttons, /white-space:\s*nowrap;/)
 })
 
-test('record cards expose server-aware delete controls', () => {
+test('record cards keep names clear of server-aware delete controls', () => {
   const wxml = source('miniprogram/pages/index/index.wxml')
   const scss = source('miniprogram/pages/index/index.scss')
   const page = source('miniprogram/pages/index/index.ts')
   assert.match(wxml, /class="history-delete-button"/)
   assert.match(wxml, /<hero-icon[^>]*name="trash"[^>]*\/>/)
   assert.doesNotMatch(wxml, />删<\/text>/)
-  assert.match(wxml, /loading="\{\{historyDeletingId === item\.id\}\}"/)
+  assert.match(wxml, /historyDeletingId !== item\.id[\s\S]*?<ui-spinner wx:else[^>]*color="danger"[^>]*label="正在删除记录"/)
+  assert.doesNotMatch(wxml, /loading="\{\{historyDeletingId === item\.id\}\}"/)
   assert.match(wxml, /catchtap="deleteHistory"/)
   assert.doesNotMatch(
     wxml,
@@ -173,21 +339,36 @@ test('record cards expose server-aware delete controls', () => {
   )
   assert.match(scss, /\.history-delete-button\s*\{/)
   const cardMain = scss.match(/\.history-main\s*\{([^}]*)\}/)?.[1] || ''
-  const cardRow = scss.match(/\.history-row\s*\{([^}]*)\}/)?.[1] || ''
+  const cardHeader = scss.match(/\.history-card-header\s*\{([^}]*)\}/)?.[1] || ''
+  const cardContent = scss.match(/\.history-card-content\s*\{([^}]*)\}/)?.[1] || ''
+  const customer = scss.match(/\.history-customer\s*\{([^}]*)\}/)?.[1] || ''
   const deleteButton = scss.match(/\.history-delete-button\s*\{([^}]*)\}/)?.[1] || ''
+  const deleteVisual = scss.match(/\.history-delete-visual\s*\{([^}]*)\}/)?.[1] || ''
   const syncRow = scss.match(/\.history-sync-row\s*\{([^}]*)\}/)?.[1] || ''
   const syncStatus = scss.match(/\.history-sync-status\s*\{([^}]*)\}/)?.[1] || ''
   const syncError = scss.match(/\.history-sync-error\s*\{([^}]*)\}/)?.[1] || ''
   assert.match(cardMain, /padding-right:\s*0;/)
-  assert.match(cardRow, /padding-right:\s*72rpx;/)
-  assert.match(deleteButton, /top:\s*18rpx;/)
-  assert.doesNotMatch(deleteButton, /bottom:/)
-  assert.match(deleteButton, /width:\s*56rpx;/)
-  assert.match(deleteButton, /height:\s*56rpx;/)
-  assert.match(deleteButton, /min-width:\s*56rpx;/)
-  assert.match(deleteButton, /max-width:\s*56rpx;/)
+  assert.match(cardHeader, /display:\s*flex;/)
+  assert.match(cardHeader, /align-items:\s*center;/)
+  assert.match(cardHeader, /gap:\s*12rpx;/)
+  assert.match(cardContent, /min-width:\s*0;/)
+  assert.doesNotMatch(customer, /padding-right:/)
+  assert.match(customer, /-webkit-line-clamp:\s*2;/)
+  assert.doesNotMatch(deleteButton, /position:\s*absolute;/)
+  assert.match(wxml, /class="history-card-header">[\s\S]*?class="history-heading-tags"[\s\S]*?class="history-delete-button"[\s\S]*?class="history-card-content">/)
+  const historyHeader = wxml.match(/<view class="history-card-header">([\s\S]*?)<view class="history-card-content">/)?.[1] || ''
+  assert.doesNotMatch(historyHeader, /history-date/)
+  assert.match(deleteButton, /width:\s*\$ui-touch-target;/)
+  assert.match(deleteButton, /height:\s*\$ui-touch-target;/)
+  assert.match(deleteButton, /min-width:\s*\$ui-touch-target;/)
+  assert.match(deleteButton, /max-width:\s*\$ui-touch-target;/)
   assert.match(deleteButton, /box-sizing:\s*border-box;/)
   assert.match(deleteButton, /border-radius:\s*50%;/)
+  assert.match(deleteButton, /background:\s*transparent;/)
+  assert.match(deleteVisual, /width:\s*64rpx;/)
+  assert.match(deleteVisual, /height:\s*64rpx;/)
+  assert.match(deleteVisual, /border-radius:\s*50%;/)
+  assert.match(wxml, /<hero-icon[^>]*name="trash"[^>]*size="30rpx"[^>]*\/>/)
   assert.doesNotMatch(scss, /\.history-delete-icon\s*\{/)
   assert.match(syncRow, /flex-wrap:\s*nowrap;/)
   assert.match(syncStatus, /white-space:\s*nowrap;/)
@@ -201,19 +382,28 @@ test('record cards display one image or a tilted stack of up to three thumbnails
   const wxml = source('miniprogram/pages/index/index.wxml')
   const scss = source('miniprogram/pages/index/index.scss')
   const page = source('miniprogram/pages/index/index.ts')
+  const loadHistory = page.match(/loadHistory\(\): Promise<void> \{([\s\S]*?)\n    \},\n    async loadHistoryImagesInBackground/)?.[1] || ''
+  const loadHistoryImages = page.match(/async loadHistoryImagesInBackground\([\s\S]*?\): Promise<void> \{([\s\S]*?)\n    \},\n    loadActiveListOnce/)?.[1] || ''
 
   assert.match(wxml, /wx:if="\{\{item\.imagePaths\.length\}\}" class="history-thumb-stack/)
   assert.match(wxml, /wx:for="\{\{item\.imagePaths\}\}"/)
   assert.match(wxml, /class="history-thumb history-thumb--layer history-thumb--layer-\{\{historyImageIndex\}\}"/)
   assert.match(wxml, /src="\{\{historyImage\}\}"/)
   assert.match(wxml, /wx:if="\{\{item\.imageCount > 1\}\}" class="history-thumb-count"/)
+  assert.match(wxml, /wx:elif="\{\{item\.imageCount > 0\}\}" class="history-thumb history-thumb--placeholder skeleton-block"/)
+  assert.match(scss, /\.history-thumb--placeholder\s*\{[^}]*overflow:\s*hidden;/s)
   assert.match(scss, /\.history-thumb-stack--multiple/)
   assert.match(scss, /\.history-thumb--layer-0\s*\{[^}]*rotate\(/s)
   assert.match(scss, /\.history-thumb--layer-1\s*\{[^}]*rotate\(/s)
   assert.match(scss, /\.history-thumb--layer-2\s*\{[^}]*rotate\(/s)
   assert.match(scss, /\.history-thumb--layer-2\s*\{[^}]*translate\(34rpx,/s)
-  assert.match(page, /hydrateMissingHistoryImages\(historyRecords\)/)
-  assert.match(page, /await materializeHistoryCardImages\(/)
+  assert.match(page, /const HISTORY_IMAGE_BATCH_SIZE = 4/)
+  assert.match(page, /const HISTORY_IMAGE_BATCH_DELAY_MS = 24/)
+  assert.match(loadHistory, /deferHistoryCardImages\(/)
+  assert.match(loadHistory, /void this\.loadHistoryImagesInBackground\(historyRecords, requestId\)/)
+  assert.doesNotMatch(loadHistory, /await materializeHistoryCardImages|hydrateMissingHistoryImages/)
+  assert.match(loadHistoryImages, /await waitForHistoryImageTurn\(\)[\s\S]*?await materializeHistoryCardImages\(batch\)/)
+  assert.match(loadHistoryImages, /await hydrateMissingHistoryImages\(this\.data\.historyRecords\)/)
   assert.match(page, /this\.data\.historyRequestId !== requestId/)
   assert.match(page, /item\.imageSummaryComplete[\s\S]*?hasSameListData\(item\.imagePaths, hydrated\.imagePaths\)/)
   assert.doesNotMatch(page, /if \(item\.imagePaths\.length > 0\) return item/)
@@ -243,11 +433,12 @@ test('workspace exposes an account tab with current-user details and logout', ()
   const tabBar = scss.match(/\.floating-tabs\s*\{([^}]*)\}/)?.[1] || ''
   const tabButton = scss.match(/\.floating-tab\s*\{([^}]*)\}/)?.[1] || ''
   assert.match(tabBar, /bottom:\s*calc\(28rpx \+ env\(safe-area-inset-bottom\)\);/)
-  assert.match(tabBar, /height:\s*52px;/)
-  assert.match(tabBar, /grid-template-columns:\s*repeat\(4, 72px\);/)
-  assert.match(tabButton, /width:\s*72px;/)
-  assert.match(tabButton, /height:\s*44px;/)
-  assert.match(scss, /\.tab-indicator\s*\{[^}]*height:\s*44px;/s)
+  assert.match(tabBar, /height:\s*56px;/)
+  assert.match(tabBar, /width:\s*316px;/)
+  assert.match(tabBar, /grid-template-columns:\s*repeat\(4, 74px\);/)
+  assert.match(tabButton, /width:\s*74px;/)
+  assert.match(tabButton, /height:\s*48px;/)
+  assert.match(scss, /\.tab-indicator\s*\{[^}]*height:\s*48px;/s)
   assert.match(wxml, /data-tab="scan"[^>]*bindtouchstart="onTabSwipeStart"/)
   assert.match(wxml, /data-tab="tasks"[^>]*bindtouchstart="onTabSwipeStart"/)
   assert.match(wxml, /class="floating-tabs[^"]*"[^>]*catchtouchmove="onTabSwipeMove"/)
@@ -291,12 +482,69 @@ test('workspace exposes an account tab with current-user details and logout', ()
   assert.doesNotMatch(page, /TAB_CLICK_DEFORMATION_MS|tabClickSwitchTimers/)
   assert.match(page, /const continuesCurrentRoute = shouldSettle[\s\S]*?shouldContinueTabSettleRoute\([\s\S]*?this\.data\.tabSettlingDirection,[\s\S]*?settlingDirection,[\s\S]*?this\.data\.tabSettling/)
   assert.match(page, /if \(continuesCurrentRoute\) \{[\s\S]*?tabIndicatorOffset,[\s\S]*?finishActivation[\s\S]*?return/)
-  assert.match(page, /const TAB_SETTLE_DURATION_MS = 500/)
-  assert.match(scss, /\.tab-indicator\s*\{[^}]*transition:\s*transform \.5s cubic-bezier\(\.38, \.56, \.46, 1\)/s)
-  assert.equal((scss.match(/animation: tab-leading-settle-(?:left|right) \.5s/g) || []).length, 2)
-  assert.match(scss, /\.floating-tabs\.is-dragging \.tab-indicator-fill\s*\{[^}]*transition-duration:\s*\.12s;[^}]*cubic-bezier\(\.35, \.2, \.45, 1\)/s)
-  assert.equal((scss.match(/animation: tab-leading-settle-(?:left|right) \.5s cubic-bezier\(\.48, \.08, \.52, 1\)/g) || []).length, 2)
+  assert.match(page, /const TAB_SETTLE_DURATION_MS = 400/)
+  assert.match(scss, /\.floating-tabs\s*\{[^}]*animation:\s*glass-bar-in \.32s cubic-bezier\(\.2, \.8, \.2, 1\) both;/s)
+  assert.match(scss, /\.tab-indicator\s*\{[^}]*transition:\s*transform \.4s cubic-bezier\(\.38, \.56, \.46, 1\)/s)
+  assert.equal((scss.match(/animation: tab-leading-settle-(?:left|right) \.4s/g) || []).length, 2)
+  assert.match(scss, /\.floating-tabs\.is-dragging \.tab-indicator-fill\s*\{[^}]*transition-duration:\s*\.1s;[^}]*cubic-bezier\(\.35, \.2, \.45, 1\)/s)
+  assert.equal((scss.match(/animation: tab-leading-settle-(?:left|right) \.4s cubic-bezier\(\.48, \.08, \.52, 1\)/g) || []).length, 2)
   assert.match(scss, /\.account-logout-button\s*\{/)
+})
+
+test('bottom navigation uses a theme-aware diagonal gradient outline', () => {
+  const scss = source('miniprogram/pages/index/index.scss')
+  const tabBar = scss.match(/\.floating-tabs\s*\{([^}]*)\}/)?.[1] || ''
+  const outline = scss.match(/\.floating-tabs::before\s*\{([\s\S]*?)\n\}/)?.[1] || ''
+
+  assert.match(tabBar, /border:\s*0;/)
+  assert.match(tabBar, /border-radius:\s*999rpx;/)
+  assert.doesNotMatch(tabBar, /border:\s*1rpx solid \$ui-glass-border;/)
+  assert.match(outline, /background:\s*conic-gradient\(\s*from 0deg at 50% 50%,/s)
+  assert.match(outline, /\$ui-glass-highlight-soft 80deg,[\s\S]*\$ui-glass-highlight-strong 100deg,/)
+  assert.match(outline, /\$ui-glass-highlight-soft 260deg,[\s\S]*\$ui-glass-highlight-strong 280deg,/)
+  assert.doesNotMatch(outline, /radial-gradient\(/)
+  assert.doesNotMatch(outline, /linear-gradient\(\s*135deg,/)
+  assert.match(outline, /\$ui-glass-highlight-strong/)
+  assert.match(outline, /\$ui-glass-highlight-medium/)
+  assert.match(outline, /\$ui-glass-highlight-soft/)
+  assert.doesNotMatch(outline, /\$ui-primary/)
+  assert.match(outline, /mask-composite:\s*exclude;/)
+  assert.match(tabBar, /-webkit-backdrop-filter:\s*blur\(\$ui-glass-blur\) saturate\(\$ui-glass-saturation\) brightness\(\$ui-bottom-glass-brightness\);/)
+  assert.match(tabBar, /backdrop-filter:\s*blur\(\$ui-glass-blur\) saturate\(\$ui-glass-saturation\) brightness\(\$ui-bottom-glass-brightness\);/)
+  assert.match(scss, /\.tab-indicator-fill\s*\{[^}]*border-radius:\s*999rpx;/s)
+})
+
+test('account settings persist an accessible accent and light or dark appearance', () => {
+  const page = source('miniprogram/pages/index/index.ts')
+  const wxml = source('miniprogram/pages/index/index.wxml')
+  const scss = source('miniprogram/pages/index/index.scss')
+  const tokens = source('miniprogram/styles/_design-tokens.scss')
+
+  assert.match(page, /loadUiPreferences\(\)/)
+  assert.match(page, /saveUiPreferences\(nextPreferences\)/)
+  assert.match(page, /selectUiThemeMode/)
+  assert.match(page, /selectUiThemeColor/)
+  assert.match(wxml, /<page-meta page-style="\{\{uiThemePageStyle\}\}"/)
+  assert.match(wxml, /class="account-settings-card card"/)
+  assert.match(wxml, /role="radiogroup"[^>]*aria-label="显示模式"/)
+  assert.match(wxml, /data-mode="\{\{themeModeOption\.value\}\}"[^>]*bindtap="selectUiThemeMode"/)
+  assert.match(wxml, /role="radiogroup"[^>]*aria-label="主题色"/)
+  assert.match(wxml, /data-color="\{\{themeColorOption\.value\}\}"[^>]*bindtap="selectUiThemeColor"/)
+  assert.match(wxml, /aria-checked="\{\{uiPreferences\.mode === themeModeOption\.value\}\}"/)
+  assert.match(wxml, /aria-checked="\{\{uiPreferences\.color === themeColorOption\.value\}\}"/)
+  assert.match(scss, /\.account-theme-mode-option\s*\{[^}]*min-height:\s*\$ui-touch-target;/s)
+  assert.match(scss, /\.account-theme-color-option\s*\{[^}]*min-height:\s*\$ui-touch-target;/s)
+  assert.match(scss, /\.account-theme-mode-option\.is-active\s*\{[^}]*box-shadow:\s*\$ui-card-shadow;/s)
+  assert.match(tokens, /\$ui-primary:\s*var\(--ui-primary, #5695e0\);/)
+  assert.match(tokens, /\$ui-page-background:\s*var\(--ui-page-background, #f7f7f8\);/)
+  assert.match(tokens, /\$ui-field-background:\s*var\(--ui-field-background, #fcfcfc\);/)
+
+  for (const route of ['login', 'logs', 'document-camera', 'inspection-workbench']) {
+    const routeWxml = source(`miniprogram/pages/${route}/${route}.wxml`)
+    const routePage = source(`miniprogram/pages/${route}/${route}.ts`)
+    assert.match(routeWxml, /<page-meta page-style="\{\{uiThemePageStyle\}\}"/)
+    assert.match(routePage, /loadUiThemePageData\(\)/)
+  }
 })
 
 test('task and history lists expose animated loading skeletons', () => {
@@ -403,9 +651,9 @@ test('task and history lists initialize once and use only pull-down refresh afte
   assert.match(wxml, /bindrefresherpulling="onListPulling"/)
   assert.match(wxml, /bindrefresherrestore="onListPullRefreshRestore"/)
   assert.match(wxml, /bindrefresherabort="onListPullRefreshRestore"/)
-  assert.match(page, /onListPulling\(\)[\s\S]*?taskPulling:\s*true[\s\S]*?historyPulling:\s*true/)
+  assert.match(page, /onListPulling\(event:[\s\S]*?taskPulling:\s*true[\s\S]*?historyPulling:\s*true/)
   assert.match(page, /onListPullRefreshRestore\(\)[\s\S]*?taskPulling\s*=\s*false[\s\S]*?historyPulling\s*=\s*false/)
-  assert.match(wxml, /slot="refresher"[\s\S]*?class="pull-refresh-indicator \{\{[\s\S]*?taskPulling[\s\S]*?historyPulling[\s\S]*?is-pulling[\s\S]*?taskPullRefreshing[\s\S]*?historyPullRefreshing[\s\S]*?is-refreshing[\s\S]*?pull-refresh-visual[\s\S]*?pull-refresh-ring/)
+  assert.match(wxml, /slot="refresher"[\s\S]*?class="pull-refresh-indicator \{\{[\s\S]*?taskPulling[\s\S]*?historyPulling[\s\S]*?is-pulling[\s\S]*?taskPullRefreshing[\s\S]*?historyPullRefreshing[\s\S]*?is-refreshing[\s\S]*?pull-refresh-visual[\s\S]*?<ui-spinner[^>]*label="\{\{[\s\S]*?正在刷新列表[\s\S]*?下拉刷新列表/)
   assert.doesNotMatch(wxml, /pull-refresh-loading-indicator/)
   assert.doesNotMatch(wxml, /pull-refresh-icon|pull-refresh-core|pull-refresh-halo/)
   assert.match(wxml, /slot="refresher"[\s\S]*?style="transform: translate3d\(0, \{\{navigationBarHeight\}\}px, 0\);"/)
@@ -414,20 +662,24 @@ test('task and history lists initialize once and use only pull-down refresh afte
   assert.match(wxml, /activeTab === 'tasks'[\s\S]*?taskPullRefreshing[\s\S]*?activeTab === 'history'[\s\S]*?historyPullRefreshing/)
   assert.doesNotMatch(wxml, /pull-refresh-motion\.wxs|pullMotion\./)
   assert.doesNotMatch(page, /pullRefreshOpacity|pullRefreshOffset|pullRefreshProgress/)
+  assert.match(page, /pullRefreshRotationForDistance\(event\.detail\.dy \|\| 0\)/)
+  assert.match(page, /pullRefreshRotation:\s*rotation/)
+  assert.match(page, /onListPullRefreshRestore\(\)[\s\S]*?pullRefreshRotation\s*=\s*0/)
+  assert.match(wxml, /<ui-spinner[^>]*spinning="\{\{[\s\S]*?taskPullRefreshing[\s\S]*?historyPullRefreshing[\s\S]*?rotation="\{\{pullRefreshRotation\}\}"/)
   assert.match(page, /workspaceScrollTop:\s*1[\s\S]*?workspaceScrollTop:\s*0/)
   assert.match(scss, /\.pull-refresh-indicator\s*\{[\s\S]*?width:\s*100%;[\s\S]*?height:\s*112rpx;[\s\S]*?pointer-events:\s*none;/)
   assert.doesNotMatch(scss.match(/\.pull-refresh-indicator\s*\{[^}]*\}/)?.[0] || '', /position:\s*fixed/)
   assert.match(scss, /\.pull-refresh-indicator\.is-pulling\s*\{[\s\S]*?pull-refresh-fade-in 160ms cubic-bezier\(0, 0, \.58, 1\) both;[\s\S]*?animation-delay:\s*140ms;/)
-  assert.match(scss, /\.pull-refresh-ring\s*\{[\s\S]*?border:\s*\d+rpx solid[\s\S]*?border-top-color:[\s\S]*?border-right-color:/)
+  assert.match(scss, /\.pull-refresh-visual\s*\{[\s\S]*?border:\s*1rpx solid \$ui-glass-border;[\s\S]*?background:\s*\$ui-glass-background;[\s\S]*?backdrop-filter:\s*blur\(12rpx\) saturate\(\$ui-glass-saturation\);/)
   assert.doesNotMatch(scss, /\.pull-refresh-icon|\.pull-refresh-core|\.pull-refresh-halo|pull-refresh-glow/)
-  assert.doesNotMatch(scss, /\.pull-refresh-ring::after/)
-  assert.match(scss, /\.pull-refresh-indicator \.pull-refresh-ring\s*\{[\s\S]*?pull-refresh-spin[\s\S]*?paused/)
-  assert.match(scss, /\.pull-refresh-indicator\.is-refreshing \.pull-refresh-ring\s*\{[\s\S]*?animation-play-state:\s*running;/)
+  assert.doesNotMatch(wxml, /pull-refresh-ring/)
+  assert.doesNotMatch(scss, /pull-refresh-ring|pull-refresh-spin/)
+  assert.match(scss, /\.pull-refresh-indicator\.is-refreshing \.pull-refresh-visual\s*\{[\s\S]*?transform:\s*scale\(1\);/)
   assert.match(scss, /@keyframes pull-refresh-fade-in/)
   assert.doesNotMatch(scss, /pull-refresh-visual-in/)
   assert.doesNotMatch(scss, /pull-refresh-float/)
   assert.match(page, /function hasSameListData\([\s\S]*?JSON\.stringify\(left\) === JSON\.stringify\(right\)/)
-  assert.match(page, /const historyChanged = !hasSameListData\(this\.data\.historyRecords, historyRecords\)/)
+  assert.match(page, /const historyChanged = !hasSameListData\(this\.data\.historyRecords, deferredRecords\)/)
   assert.match(page, /if \(historyChanged \|\| this\.data\.historyError\) \{[\s\S]*?this\.setData/)
   assert.match(page, /const keepCurrentPages = resetList && preserveLoadedPages && !queryChanged/)
   assert.match(page, /const itemsChanged = !hasSameListData\(this\.data\.taskItems, taskItems\)/)
@@ -443,10 +695,9 @@ test('all top navigation bars use the shared glass material', () => {
   const indexWxml = source('miniprogram/pages/index/index.wxml')
   const logsWxml = source('miniprogram/pages/logs/logs.wxml')
 
-  assert.match(navigationScss, /background:\s*rgba\(246,\s*249,\s*252,\s*\.48\)/)
-  const navigationBlur = navigationScss.match(/backdrop-filter:\s*blur\((\d+rpx)\)\s+saturate\(132%\)/)?.[1]
-  assert.ok(navigationBlur)
-  assert.match(navigationScss, new RegExp(`-webkit-backdrop-filter:\\s*blur\\(${navigationBlur}\\)\\s+saturate\\(132%\\)`))
+  assert.match(navigationScss, /background:\s*\$ui-glass-background/)
+  assert.match(navigationScss, /-webkit-backdrop-filter:\s*blur\(\$ui-glass-blur\)\s+saturate\(\$ui-glass-saturation\)/)
+  assert.match(navigationScss, /backdrop-filter:\s*blur\(\$ui-glass-blur\)\s+saturate\(\$ui-glass-saturation\)/)
   assert.match(navigationScss, /border-bottom:/)
 
   assert.match(loginJson, /"navigationStyle"\s*:\s*"custom"/)
@@ -454,8 +705,27 @@ test('all top navigation bars use the shared glass material', () => {
   assert.match(loginWxml, /<navigation-bar[^>]*title="账号登录"[^>]*back="\{\{false\}\}"/)
 
   for (const wxml of [loginWxml, indexWxml, logsWxml]) {
-    assert.match(wxml, /background="rgba\(246, 249, 252, \.48\)"/)
+    assert.match(wxml, /<page-meta page-style="\{\{uiThemePageStyle\}\}"/)
+    assert.match(wxml, /color="\{\{uiNavigationTextColor\}\}"/)
+    assert.match(wxml, /background="\{\{uiNavigationBackground\}\}"/)
   }
+})
+
+test('top and bottom bars share one glass surface recipe', () => {
+  const navigation = source('miniprogram/components/navigation-bar/navigation-bar.scss')
+  const index = source('miniprogram/pages/index/index.scss')
+  const workbench = source('miniprogram/pages/inspection-workbench/inspection-workbench.scss')
+  const historyModal = source('miniprogram/components/history-editor-modal/history-editor-modal.scss')
+  const workbenchModal = source('miniprogram/components/inspection-workbench-modal/inspection-workbench-modal.scss')
+  const optionalBrightness = '(?:\\s+brightness\\(\\$ui-bottom-glass-brightness\\))?'
+  const glassRecipe = new RegExp(`background:\\s*\\$ui-glass-background;[^}]*-webkit-backdrop-filter:\\s*blur\\(\\$ui-glass-blur\\)\\s+saturate\\(\\$ui-glass-saturation\\)${optionalBrightness};[^}]*backdrop-filter:\\s*blur\\(\\$ui-glass-blur\\)\\s+saturate\\(\\$ui-glass-saturation\\)${optionalBrightness};`, 's')
+  const glassRule = (selector: string) => new RegExp(`${selector}\\s*\\{[^}]*${glassRecipe.source}`, 's')
+
+  assert.match(navigation, glassRule('\\.weui-navigation-bar__inner'))
+  assert.match(index, glassRule('\\.floating-tabs'))
+  assert.match(workbench, glassRule('\\.workbench-bottom-bar'))
+  assert.match(historyModal, glassRule('\\.history-modal-actions'))
+  assert.match(workbenchModal, glassRule('\\.workbench-modal-actions'))
 })
 
 test('glass navigation remains fixed with spacing derived from the unified height', () => {
@@ -474,17 +744,18 @@ test('glass navigation remains fixed with spacing derived from the unified heigh
   assert.match(navigationScss, /left:\s*0;/)
   assert.match(navigationScss, /right:\s*0;/)
 
-  assert.match(indexWxml, /^<navigation-bar[^>]*>[^]*?<scroll-view[^>]*class="page-scroll"/)
+  assert.match(indexWxml, /^<page-meta[^>]*\/>\s*<navigation-bar[^>]*>[^]*?<scroll-view[^>]*class="page-scroll"/)
   assert.match(logsWxml, /<navigation-bar[^>]*>[^]*?<scroll-view[^>]*class="scrollarea"/)
 
   const indexShell = indexScss.match(/\.page-shell\s*\{([^}]*)\}/)?.[1] || ''
   assert.match(navigationScss, /height:\s*calc\(var\(--height\) \+ env\(safe-area-inset-top\) \+ 8px\)/)
   assert.match(navigationScss, /padding-top:\s*calc\(env\(safe-area-inset-top\) \+ 8px\)/)
   assert.match(navigationTs, /const SAFE_AREA_TOP_EXTRA = 8[^]*const adjustedSafeAreaTop = safeAreaTop \+ SAFE_AREA_TOP_EXTRA/)
+  assert.match(navigationTs, /const NAVIGATION_CONTENT_HEIGHT = 44/)
   assert.doesNotMatch(navigationTs, /isDevtools \|\| isAndroid \?/)
-  assert.match(indexShell, /padding:\s*calc\(36px \+ env\(safe-area-inset-top\) \+ 8px \+ 32rpx\)/)
-  assert.match(loginScss, /padding:\s*calc\(36px \+ env\(safe-area-inset-top\) \+ 8px \+ 72rpx\)/)
-  assert.match(logsScss, /padding-top:\s*calc\(36px \+ env\(safe-area-inset-top\) \+ 8px\)/)
+  assert.match(indexShell, /padding:\s*calc\(44px \+ env\(safe-area-inset-top\) \+ 8px \+ 32rpx\)/)
+  assert.match(loginScss, /padding:\s*calc\(44px \+ env\(safe-area-inset-top\) \+ 8px \+ 72rpx\)/)
+  assert.match(logsScss, /padding-top:\s*calc\(44px \+ env\(safe-area-inset-top\) \+ 8px\)/)
 
   assert.match(navigationTs, /const windowInfo = wx\.getWindowInfo\(\)/)
   assert.match(navigationTs, /const deviceInfo = wx\.getDeviceInfo\(\)/)
@@ -500,11 +771,13 @@ test('glass navigation remains fixed with spacing derived from the unified heigh
 
 test('all glass navigation variants share one content height', () => {
   const navigationScss = source('miniprogram/components/navigation-bar/navigation-bar.scss')
+  const navigationTs = source('miniprogram/components/navigation-bar/navigation-bar.ts')
   const baseHeight = navigationScss.match(/\.weui-navigation-bar\s*\{[^}]*--height:\s*(\d+px)/)?.[1]
   const androidHeight = navigationScss.match(/\.weui-navigation-bar \.android\s*\{[^}]*--height:\s*(\d+px)/)?.[1]
 
-  assert.equal(baseHeight, '36px')
+  assert.equal(baseHeight, '44px')
   assert.equal(androidHeight, baseHeight)
+  assert.match(navigationTs, /const NAVIGATION_CONTENT_HEIGHT = 44/)
 })
 
 test('all image pickers request original files without client-side compression', () => {
@@ -584,12 +857,12 @@ test('review text inputs keep identical text metrics before and after focus', ()
   assert.match(reviewEditorCard, /animation-name:\s*review-editor-fade;/)
   assert.doesNotMatch(reviewEditorFade, /transform:/)
 
-  assert.match(fieldInput, /height:\s*48rpx;/)
-  assert.match(fieldInput, /line-height:\s*48rpx;/)
+  assert.match(fieldInput, /height:\s*64rpx;/)
+  assert.match(fieldInput, /line-height:\s*64rpx;/)
   assert.match(fieldInput, /padding:\s*0;/)
   assert.match(fieldInput, /box-sizing:\s*border-box;/)
-  assert.match(tableInput, /height:\s*48rpx;/)
-  assert.match(tableInput, /line-height:\s*48rpx;/)
+  assert.match(tableInput, /height:\s*64rpx;/)
+  assert.match(tableInput, /line-height:\s*64rpx;/)
   assert.match(tableInput, /padding:\s*0;/)
   assert.match(tableInput, /box-sizing:\s*border-box;/)
   assert.match(field, /overflow:\s*hidden;/)
@@ -609,9 +882,9 @@ test('review actions keep return, export, and save controls in one balanced row'
   assert.match(actions, /bindtap="exportCurrentRecord"/)
   assert.match(actions, /bindtap="submitRecord"/)
   assert.match(layout, /grid-template-columns:\s*repeat\(3, minmax\(0, 1fr\)\);/)
-  assert.match(buttons, /height:\s*88rpx;/)
+  assert.match(buttons, /height:\s*\$ui-control-height-large;/)
   assert.match(buttons, /margin-top:\s*0;/)
-  assert.match(buttons, /font-size:\s*26rpx;/)
+  assert.match(buttons, /font-size:\s*\$ui-font-control;/)
   assert.match(buttons, /white-space:\s*nowrap;/)
 })
 
@@ -659,19 +932,29 @@ test('pending task items show shared backend inspection data and photos', () => 
 
   assert.match(wxml, /taskItem\.inspection_summary\.filled/)
   assert.match(wxml, /taskItem\.inspection_summary\.ng/)
-  assert.match(wxml, /线上检测：已录入/)
-  assert.match(wxml, /线上检测：暂无检测数据/)
+  assert.match(wxml, /'已填 ' \+ taskItem\.inspection_summary\.filled/)
+  assert.match(wxml, /'未录入'/)
+  assert.doesNotMatch(wxml, /线上检测：|暂无检测数据/)
   assert.match(wxml, /wx:for="\{\{taskItem\.preview_thumbnails\}\}"/)
   assert.match(wxml, /src="\{\{taskPhoto\}\}"/)
   assert.match(wxml, /data-url="\{\{taskItem\.preview_images\[taskPhotoIndex\]\}\}"/)
   assert.match(wxml, /catchtap="previewTaskItemPhoto"/)
   assert.match(wxml, /lazy-load="\{\{true\}\}"/)
   assert.match(wxml, /taskItem\.preview_image_count/)
-  assert.match(wxml, /完整图片进入检验后加载/)
+  assert.match(wxml, /还有 \{\{taskItem\.preview_image_count - taskItem\.preview_images\.length\}\} 张/)
+  assert.doesNotMatch(wxml, /完整图片进入检验后加载/)
+  assert.match(wxml, /class="task-item-action">[\s\S]*?<text>检验<\/text>[\s\S]*?name="chevron-left"/)
   assert.match(wxml, /taskOpeningId === task\.id/)
   assert.match(page, /previewTaskItemPhoto/)
   assert.match(page, /wx\.previewImage\(\{ current, urls \}\)/)
   assert.match(scss, /\.task-item-inspection-summary/)
+  assert.match(scss, /\.task-item-inspection-progress/)
+  assert.match(scss, /\.task-item-name\s*\{[^}]*text-overflow:\s*ellipsis;[^}]*white-space:\s*nowrap;/s)
+  assert.match(wxml, /class="task-item \{\{[\s\S]*?class="task-item-header"[\s\S]*?class="task-item-content"/)
+  assert.match(wxml, /class="task-item \{\{[\s\S]*?role="button"[\s\S]*?aria-label="检验 \{\{taskItem\.material_name/)
+  assert.match(scss, /\.task-item-list\s*\{[^}]*display:\s*flex;[^}]*gap:\s*14rpx;[^}]*background:\s*\$ui-surface-secondary;/s)
+  assert.match(scss, /\.task-item\s*\{[^}]*border:\s*1rpx solid \$ui-card-border;[^}]*border-radius:\s*\$ui-card-radius;[^}]*background:\s*\$ui-card-background;[^}]*box-shadow:\s*\$ui-field-shadow;/s)
+  assert.doesNotMatch(scss.match(/\.task-item-action\s*\{[^}]*\}/)?.[0] || '', /position:/)
   assert.match(scss, /\.task-item-inspection-result\.is-ng/)
   assert.match(scss, /\.task-item-photo-scroll/)
   assert.match(scss, /\.task-item-photo/)
@@ -757,22 +1040,22 @@ test('history detail preserves the pending workbench drawer structure and field 
     const closeButton = drawer.scss.match(
       new RegExp(`\\.${drawer.prefix}-close\\s*\\{([^}]*)\\}`),
     )?.[1] || ''
-    assert.match(closeButton, /width:\s*58rpx;/)
-    assert.match(closeButton, /height:\s*58rpx;/)
+    assert.match(closeButton, /width:\s*\$ui-touch-target;/)
+    assert.match(closeButton, /height:\s*\$ui-touch-target;/)
     assert.match(closeButton, /border-radius:\s*50%;/)
   }
 
   const historyFieldContainers = historyScss.match(
     /\.form-field\s*\{([^}]*)\}/,
   )?.[1] || ''
-  assert.match(historyFieldContainers, /padding:\s*13rpx 15rpx;/)
+  assert.match(historyFieldContainers, /padding:\s*17rpx 18rpx;/)
   assert.match(historyFieldContainers, /border:\s*1rpx solid \$ui-field-border;/)
-  assert.match(historyFieldContainers, /border-radius:\s*14rpx;/)
-  assert.match(historyFieldContainers, /background:\s*#fff;/)
+  assert.match(historyFieldContainers, /border-radius:\s*\$ui-field-radius;/)
+  assert.match(historyFieldContainers, /background:\s*\$ui-field-background;/)
 
   const historySummary = historyScss.match(/\.inspection-item-summary\s*\{([^}]*)\}/)?.[1] || ''
-  assert.match(historySummary, /min-height:\s*118rpx;/)
-  assert.match(historySummary, /padding:\s*23rpx 24rpx;/)
+  assert.match(historySummary, /min-height:\s*136rpx;/)
+  assert.match(historySummary, /padding:\s*27rpx 28rpx;/)
 
   const historyTitleWrap = historyScss.match(/\.inspection-item-title-wrap\s*\{([^}]*)\}/)?.[1] || ''
   assert.match(historyTitleWrap, /padding-right:\s*18rpx;/)
@@ -786,8 +1069,8 @@ test('history detail preserves the pending workbench drawer structure and field 
   assert.match(historyMeasurements, /gap:\s*12rpx;/)
 
   const historyMeasurementField = historyScss.match(/\.measurement-field\s*\{([^}]*)\}/)?.[1] || ''
-  assert.match(historyMeasurementField, /padding:\s*9rpx 11rpx;/)
-  assert.match(historyMeasurementField, /border-radius:\s*13rpx;/)
+  assert.match(historyMeasurementField, /padding:\s*11rpx 14rpx;/)
+  assert.match(historyMeasurementField, /border-radius:\s*\$ui-field-radius;/)
   assert.match(historyMeasurementField, /background:\s*\$ui-field-background;/)
 
   assert.match(historyWxml, /class="form-field detail-field/)

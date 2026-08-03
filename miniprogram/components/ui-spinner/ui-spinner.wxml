@@ -1,0 +1,15 @@
+<view
+  class="ui-spinner ui-spinner--{{size}} ui-spinner--{{color}} {{showLabel ? 'ui-spinner--with-label' : ''}} {{spinning ? 'is-spinning' : 'is-controlled'}}"
+  role="status"
+  aria-live="polite"
+  aria-label="{{label || '加载中'}}"
+>
+  <view class="ui-spinner__icon" aria-hidden="true">
+    <view class="ui-spinner__track"></view>
+    <view class="ui-spinner__rotor" style="--ui-spinner-start-rotation: {{rotation}}deg; transform: rotate({{rotation}}deg);">
+      <view class="ui-spinner__arc ui-spinner__arc--soft"></view>
+      <view class="ui-spinner__arc ui-spinner__arc--strong"></view>
+    </view>
+  </view>
+  <text wx:if="{{showLabel && label}}" class="ui-spinner__label">{{label}}</text>
+</view>

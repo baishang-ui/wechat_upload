@@ -28,6 +28,7 @@
   "lazyCodeLoading": "requiredComponents",
   "usingComponents": {
     "hero-icon": "/components/hero-icon/hero-icon",
+    "ui-spinner": "/components/ui-spinner/ui-spinner",
     "top-toast": "/components/top-toast/top-toast"
   }
 }

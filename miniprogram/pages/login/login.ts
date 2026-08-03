@@ -1,5 +1,6 @@
 import { getCurrentUser, login } from '../../services/auth-service'
 import { ServerClientError } from '../../services/server-client'
+import { loadUiThemePageData } from '../../services/ui-preferences-service'
 
 interface NavigationHeightChangeEvent {
   detail: { height: number }
@@ -11,14 +12,16 @@ interface LoginInputEvent {
 
 Page({
   data: {
-    navigationBarHeight: 91,
+    navigationBarHeight: 99,
     username: '',
     password: '',
     submitting: false,
     errorMessage: '',
+    ...loadUiThemePageData(),
   },
 
   async onLoad() {
+    this.setData(loadUiThemePageData())
     try {
       await getCurrentUser()
       wx.reLaunch({ url: '/pages/index/index' })

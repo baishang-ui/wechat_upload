@@ -7,11 +7,12 @@
         <view class="history-modal-eyebrow">{{origin === 'remote' ? '云端质检记录' : '本地质检记录'}} · {{displayId || recordId || '未编号'}}</view>
         <view class="history-modal-title">质检记录详情</view>
       </view>
-      <view class="history-close" bindtap="requestClose" aria-label="关闭" role="button" hover-class="history-close--pressed" hover-stay-time="120"><hero-icon name="x-mark" size="34rpx" /></view>
+      <view class="history-close" bindtap="requestClose" aria-label="关闭" role="button" hover-class="history-close--pressed" hover-stay-time="120"><hero-icon name="x-mark" size="40rpx" /></view>
     </view>
 
     <scroll-view wx:if="{{drawerMounted}}" class="history-modal-body" scroll-y enhanced show-scrollbar="{{false}}">
       <view wx:if="{{loading}}" class="modal-state-card">
+        <view class="state-spinner"><ui-spinner size="lg" label="正在加载质检记录" /></view>
         <view class="modal-state-title">正在加载质检记录</view>
         <view class="modal-state-description">正在读取检验信息和已有数据，请稍候。</view>
       </view>
@@ -167,8 +168,8 @@
     </scroll-view>
 
     <view wx:if="{{drawerMounted && !loading && !loadError}}" class="history-modal-actions">
-      <view class="export-button {{exporting || saving ? 'is-disabled' : ''}}" role="button" aria-disabled="{{exporting || saving}}" bindtap="exportRecord">{{exporting ? '导出中…' : '导出 JSON'}}</view>
-      <view class="save-button {{saving || exporting ? 'is-disabled' : ''}}" role="button" aria-disabled="{{saving || exporting}}" bindtap="saveRecord">{{saving ? '保存中…' : '保存修改'}}</view>
+      <view class="export-button {{exporting || saving ? 'is-disabled' : ''}}" role="button" aria-disabled="{{exporting || saving}}" bindtap="exportRecord"><ui-spinner wx:if="{{exporting}}" size="sm" color="current" label="正在导出记录" /><text>{{exporting ? '导出中…' : '导出 JSON'}}</text></view>
+      <view class="save-button {{saving || exporting ? 'is-disabled' : ''}}" role="button" aria-disabled="{{saving || exporting}}" bindtap="saveRecord"><ui-spinner wx:if="{{saving}}" size="sm" color="current" label="正在保存修改" /><text>{{saving ? '保存中…' : '保存修改'}}</text></view>
     </view>
 
   </view>

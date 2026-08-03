@@ -1,7 +1,25 @@
+@import './styles/design-tokens';
+
 page {
   font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif;
+  font-size: $ui-font-body;
+  background: $ui-page-background;
+  color: $ui-text-primary;
+  -webkit-font-smoothing: antialiased;
+  transition: color $ui-motion-duration-medium cubic-bezier(.25, .1, .25, 1), background $ui-motion-duration-medium cubic-bezier(.25, .1, .25, 1);
+}
+
+button {
+  font-family: inherit;
+  font-size: $ui-font-control;
 }
 
 button::after {
   border: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  page {
+    transition-duration: .01ms !important;
+  }
 }

@@ -1,4 +1,5 @@
-<navigation-bar title="账号登录" back="{{false}}" color="#17233d" background="rgba(246, 249, 252, .48)" bindheightchange="onNavigationHeightChange"></navigation-bar>
+<page-meta page-style="{{uiThemePageStyle}}" />
+<navigation-bar title="账号登录" back="{{false}}" color="{{uiNavigationTextColor}}" background="{{uiNavigationBackground}}" bindheightchange="onNavigationHeightChange"></navigation-bar>
 <top-toast />
 
 <view class="login-page" style="padding-top: calc({{navigationBarHeight}}px + 72rpx);">
@@ -45,10 +46,12 @@
 
       <button
         class="login-button"
-        loading="{{submitting}}"
         disabled="{{submitting}}"
         bindtap="submitLogin"
-      >登录</button>
+      >
+        <ui-spinner wx:if="{{submitting}}" size="sm" color="current" label="正在登录" />
+        <text>{{submitting ? '正在登录…' : '登录'}}</text>
+      </button>
     </view>
   </view>
 </view>

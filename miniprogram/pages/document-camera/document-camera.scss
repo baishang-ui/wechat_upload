@@ -1,3 +1,5 @@
+@import '../../styles/design-tokens';
+
 .document-camera-page {
   position: fixed;
   inset: 0;
@@ -133,8 +135,8 @@
 
 .camera-close,
 .camera-topbar-placeholder {
-  width: 112rpx;
-  height: 66rpx;
+  width: 128rpx;
+  height: $ui-control-height;
   box-sizing: border-box;
 }
 
@@ -150,7 +152,7 @@
   backdrop-filter: blur(18px);
   transform: scale(1);
   transform-origin: center;
-  transition: transform 160ms cubic-bezier(.22, .8, .28, 1), background 160ms cubic-bezier(.25, .1, .25, 1), border-color 160ms cubic-bezier(.25, .1, .25, 1);
+  transition: transform 250ms cubic-bezier(.22, .8, .28, 1), background 100ms cubic-bezier(0, 0, .58, 1), border-color 100ms cubic-bezier(0, 0, .58, 1);
 }
 
 .camera-close-label {
@@ -158,11 +160,11 @@
   top: 50%;
   left: 50%;
   width: 100%;
-  height: 28rpx;
+  height: 32rpx;
   color: inherit;
-  font-size: 25rpx;
+  font-size: 28rpx;
   font-weight: 600;
-  line-height: 28rpx;
+  line-height: 32rpx;
   letter-spacing: 1rpx;
   text-align: center;
   transform: translate(-50%, -50%);
@@ -172,7 +174,7 @@
 .camera-close--pressed {
   border-color: rgba(255, 255, 255, 0.16);
   background: rgba(5, 10, 19, 0.72);
-  transform: scale(0.94);
+  transform: scale(.97);
 }
 
 .camera-close::after {
@@ -181,7 +183,7 @@
 
 .camera-title {
   color: #fff;
-  font-size: 30rpx;
+  font-size: 34rpx;
   font-weight: 700;
   letter-spacing: 1rpx;
   text-shadow: 0 2rpx 14rpx rgba(0, 0, 0, 0.55);
@@ -202,17 +204,18 @@
   display: flex;
   align-items: center;
   max-width: calc(100% - 64rpx);
-  min-height: 64rpx;
-  padding: 14rpx 22rpx;
+  min-height: 76rpx;
+  padding: 16rpx 24rpx;
   border: 1rpx solid rgba(255, 255, 255, 0.16);
   border-radius: 999rpx;
   background: rgba(8, 15, 29, 0.55);
   color: rgba(255, 255, 255, 0.96);
-  font-size: 24rpx;
+  font-size: 27rpx;
   white-space: nowrap;
   box-shadow: 0 12rpx 30rpx rgba(0, 0, 0, 0.2);
   backdrop-filter: blur(20px);
   transition: border-color 180ms cubic-bezier(.25, .1, .25, 1), background 180ms cubic-bezier(.25, .1, .25, 1);
+  animation: camera-guidance-in $ui-motion-duration-enter .06s cubic-bezier(.2, .8, .2, 1) both;
 }
 
 .camera-guidance--ready {
@@ -247,7 +250,7 @@
   top: calc(env(safe-area-inset-top) + 218rpx);
   width: calc(100% - 88rpx);
   color: #fecaca;
-  font-size: 23rpx;
+  font-size: 26rpx;
   line-height: 1.5;
 }
 
@@ -260,6 +263,7 @@
   display: flex;
   flex-direction: column;
   align-items: center;
+  animation: camera-control-in $ui-motion-duration-enter .12s cubic-bezier(.2, .8, .2, 1) both;
 }
 
 .camera-mode-switch {
@@ -278,8 +282,8 @@
   z-index: 1;
   top: 6rpx;
   left: 6rpx;
-  width: 168rpx;
-  height: 58rpx;
+  width: 184rpx;
+  height: 76rpx;
   transform: translate3d(0, 0, 0);
   transition: transform .34s cubic-bezier(.22, .8, .28, 1);
   will-change: transform;
@@ -312,15 +316,15 @@
 .camera-mode-option {
   position: relative;
   z-index: 2;
-  width: 168rpx;
-  height: 58rpx;
+  width: 184rpx;
+  height: 76rpx;
   box-sizing: border-box;
   padding: 0 18rpx;
   border-radius: 999rpx;
   color: rgba(255, 255, 255, 0.68);
-  font-size: 24rpx;
+  font-size: 27rpx;
   font-weight: 600;
-  line-height: 58rpx;
+  line-height: 76rpx;
   text-align: center;
   transition: color .34s cubic-bezier(.22, .8, .28, 1);
 }
@@ -332,7 +336,7 @@
 .camera-tip,
 .camera-capture-label {
   color: rgba(255, 255, 255, 0.78);
-  font-size: 23rpx;
+  font-size: 26rpx;
   text-shadow: 0 2rpx 12rpx rgba(0, 0, 0, 0.54);
 }
 
@@ -363,7 +367,7 @@
 }
 
 .camera-shutter--disabled {
-  opacity: 0.78;
+  opacity: $ui-disabled-opacity;
 }
 
 .shutter-progress {
@@ -381,6 +385,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
+  color: #3ee6a3;
   width: 122rpx;
   height: 122rpx;
   border-radius: 50%;
@@ -414,15 +419,6 @@
   text-shadow: 0 0 20rpx rgba(62, 230, 163, 0.54);
 }
 
-.camera-shutter-spinner {
-  width: 66rpx;
-  height: 66rpx;
-  border: 7rpx solid rgba(255, 255, 255, 0.24);
-  border-top-color: #3ee6a3;
-  border-radius: 50%;
-  animation: shutterSpin 0.8s cubic-bezier(0, 0, 1, 1) infinite;
-}
-
 .document-preview {
   z-index: 5;
   overflow: hidden;
@@ -448,6 +444,7 @@
   right: 40rpx;
   bottom: calc(env(safe-area-inset-bottom) + 228rpx);
   left: 40rpx;
+  animation: camera-preview-in $ui-motion-duration-enter .08s cubic-bezier(.2, .8, .2, 1) both;
 }
 
 .document-preview-title {
@@ -472,6 +469,7 @@
   display: flex;
   justify-content: center;
   gap: 20rpx;
+  animation: camera-preview-in $ui-motion-duration-enter .12s cubic-bezier(.2, .8, .2, 1) both;
 }
 
 .preview-rotate-button {
@@ -479,11 +477,11 @@
   align-items: center;
   justify-content: center;
   min-width: 210rpx;
-  height: 68rpx;
+  height: $ui-control-height;
   padding: 0 26rpx;
   box-sizing: border-box;
   border: 1rpx solid rgba(255, 255, 255, 0.22);
-  border-radius: 34rpx;
+  border-radius: $ui-button-radius;
   background: rgba(9, 15, 27, 0.72);
   color: #fff;
   backdrop-filter: blur(16px);
@@ -495,7 +493,7 @@
 }
 
 .preview-rotate-label {
-  font-size: 26rpx;
+  font-size: 28rpx;
   font-weight: 650;
   line-height: 1;
 }
@@ -517,17 +515,18 @@
   left: 40rpx;
   display: flex;
   gap: 20rpx;
+  animation: camera-preview-in $ui-motion-duration-enter .16s cubic-bezier(.2, .8, .2, 1) both;
 }
 
 .preview-secondary-button,
 .preview-primary-button {
   position: relative;
   flex: 1;
-  height: 92rpx;
+  height: $ui-control-height-large;
   margin: 0;
   box-sizing: border-box;
   overflow: hidden;
-  border-radius: 18rpx;
+  border-radius: $ui-button-radius;
   transform: scale(1);
   transform-origin: center;
   transition: transform 140ms cubic-bezier(.22, .8, .28, 1), opacity 140ms cubic-bezier(.25, .1, .25, 1);
@@ -540,7 +539,7 @@
   width: 100%;
   height: 34rpx;
   color: inherit;
-  font-size: 30rpx;
+  font-size: 32rpx;
   font-weight: 700;
   line-height: 34rpx;
   text-align: center;
@@ -561,9 +560,8 @@
 }
 
 .preview-primary-button {
-  background: #3ee6a3;
-  color: #06251a;
-  box-shadow: 0 10rpx 30rpx rgba(62, 230, 163, 0.32);
+  background: $ui-primary;
+  color: $ui-on-primary;
 }
 
 @keyframes trackingPulse {
@@ -576,6 +574,60 @@
   50% { transform: scale(1.025); }
 }
 
-@keyframes shutterSpin {
-  to { transform: rotate(360deg); }
+@keyframes camera-control-in {
+  from {
+    opacity: 0;
+    transform: translateY(18rpx) scale(.98);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes camera-guidance-in {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) translateY(-10rpx) scale(.98);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0) scale(1);
+  }
+}
+
+@keyframes camera-preview-in {
+  from {
+    opacity: 0;
+    transform: translateY(20rpx);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .camera-guidance,
+  .camera-controls,
+  .camera-mode-indicator,
+  .camera-mode-indicator-fill,
+  .camera-mode-option,
+  .camera-shutter,
+  .camera-shutter--countdown,
+  .camera-guidance-dot--aligning,
+  .document-preview-copy,
+  .document-preview-rotate-actions,
+  .document-preview-actions,
+  .preview-rotate-button,
+  .preview-secondary-button,
+  .preview-primary-button {
+    animation-duration: .01ms !important;
+    animation-delay: 0s !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .01ms !important;
+  }
 }

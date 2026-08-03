@@ -1,18 +1,56 @@
+@import '../../styles/design-tokens';
+
 page {
   height: 100vh;
   display: flex;
   flex-direction: column;
+  color: $ui-text-primary;
+  background: $ui-page-background;
 }
 .scrollarea {
   flex: 1;
   box-sizing: border-box;
-  padding-top: calc(36px + env(safe-area-inset-top) + 8px);
+  padding-top: calc(44px + env(safe-area-inset-top) + 8px);
   overflow-y: hidden;
 }
 .log-item {
-  margin-top: 20rpx;
-  text-align: center;
+  margin: 24rpx 32rpx 0;
+  padding: 26rpx 28rpx;
+  color: $ui-text-secondary;
+  border: 1rpx solid $ui-card-border;
+  border-radius: $ui-field-radius;
+  background: $ui-card-background;
+  box-shadow: $ui-card-shadow;
+  text-align: left;
+  font-size: $ui-font-body;
+  line-height: 1.55;
+  animation: log-item-in $ui-motion-duration-enter cubic-bezier(.2, .8, .2, 1) both;
 }
+
+.log-item:nth-child(2) { animation-delay: $ui-motion-stagger; }
+.log-item:nth-child(3) { animation-delay: .08s; }
+.log-item:nth-child(4) { animation-delay: .12s; }
 .log-item:last-child {
   padding-bottom: env(safe-area-inset-bottom);
+}
+
+@keyframes log-item-in {
+  from {
+    opacity: 0;
+    transform: translateY(14rpx) scale(.99);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .log-item {
+    animation-duration: .01ms !important;
+    animation-delay: 0s !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .01ms !important;
+  }
 }

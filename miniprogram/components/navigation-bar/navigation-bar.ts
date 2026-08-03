@@ -1,4 +1,4 @@
-const NAVIGATION_CONTENT_HEIGHT = 36
+const NAVIGATION_CONTENT_HEIGHT = 44
 const SAFE_AREA_TOP_EXTRA = 8
 
 Component({
@@ -19,7 +19,7 @@ Component({
     },
     background: {
       type: String,
-      value: 'rgba(246, 249, 252, .48)'
+      value: 'rgba(252, 252, 252, .58)'
     },
     color: {
       type: String,

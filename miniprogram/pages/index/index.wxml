@@ -1,4 +1,5 @@
-<navigation-bar title="{{activeTab === 'scan' ? '检验报告识别' : activeTab === 'tasks' ? '采购待检任务' : activeTab === 'history' ? '识别记录' : '账户'}}" back="{{false}}" color="#17233d" background="rgba(246, 249, 252, .48)" bindheightchange="onNavigationHeightChange"></navigation-bar>
+<page-meta page-style="{{uiThemePageStyle}}" />
+<navigation-bar title="{{activeTab === 'scan' ? '检验报告识别' : activeTab === 'tasks' ? '采购待检任务' : activeTab === 'history' ? '识别记录' : '账户'}}" back="{{false}}" color="{{uiNavigationTextColor}}" background="{{uiNavigationBackground}}" bindheightchange="onNavigationHeightChange"></navigation-bar>
 <top-toast />
 
 <view wx:if="{{activeTab === 'scan' && screen === 'review'}}" class="review-native-page">
@@ -35,7 +36,7 @@
       <view class="field full-field">
         <text class="field-label">产品类型</text>
         <picker mode="selector" range="{{productLabels}}" value="{{productIndex}}" bindchange="onProductChange">
-          <view class="picker-value">{{productLabels[productIndex]}}<hero-icon name="chevron-down" size="24rpx" /></view>
+          <view class="picker-value">{{productLabels[productIndex]}}<hero-icon name="chevron-down" size="28rpx" /></view>
         </picker>
       </view>
       <view class="field-grid">
@@ -73,7 +74,7 @@
             <view class="table-cell cell-spec"></view>
             <view wx:for="{{record.sampleJudgements}}" wx:key="index" wx:for-item="judgement" wx:for-index="sampleIndex" class="table-cell cell-value judgement-cell {{reviewHints.sampleJudgements[sampleIndex].cssClass}}">
               <view class="judgement-switch-control">
-                <switch class="judgement-switch" type="switch" color="#1ea978" checked="{{judgement === 'OK'}}" data-sample-index="{{sampleIndex}}" bindchange="onJudgementChange" />
+                <switch class="judgement-switch" type="switch" color="#17c964" checked="{{judgement === 'OK'}}" data-sample-index="{{sampleIndex}}" bindchange="onJudgementChange" />
                 <text class="judgement {{judgement === 'OK' ? '' : 'judgement--ng'}}">{{judgement === 'OK' ? 'OK' : 'NG'}}</text>
               </view>
             </view>
@@ -93,8 +94,8 @@
 
     <view class="bottom-actions">
       <button class="secondary-button" bindtap="backToRecognitionQueue">返回队列</button>
-      <button class="export-button review-export" loading="{{exporting}}" disabled="{{exporting}}" bindtap="exportCurrentRecord">导出 JSON</button>
-      <button class="primary-button" loading="{{submitting}}" disabled="{{submitting}}" bindtap="submitRecord">{{editingRecordId ? '保存更新' : '确认保存'}}</button>
+      <button class="export-button review-export" disabled="{{exporting}}" bindtap="exportCurrentRecord"><ui-spinner wx:if="{{exporting}}" size="sm" color="current" label="正在导出记录" /><text>{{exporting ? '导出中…' : '导出 JSON'}}</text></button>
+      <button class="primary-button" disabled="{{submitting}}" bindtap="submitRecord"><ui-spinner wx:if="{{submitting}}" size="sm" color="current" label="正在保存记录" /><text>{{submitting ? '保存中…' : editingRecordId ? '保存更新' : '确认保存'}}</text></button>
     </view>
     <view class="bottom-safe-spacer"></view>
   </view>
@@ -112,7 +113,7 @@
   refresher-enabled="{{activeTab === 'tasks' || activeTab === 'history'}}"
   refresher-default-style="none"
   refresher-threshold="72"
-  refresher-background="#f3f6f8"
+  refresher-background="{{uiRefresherBackground}}"
   refresher-triggered="{{(activeTab === 'tasks' && taskPullRefreshing) || (activeTab === 'history' && historyPullRefreshing)}}"
   bindrefresherpulling="onListPulling"
   bindrefresherrefresh="onListPullDownRefresh"
@@ -125,7 +126,12 @@
     style="transform: translate3d(0, {{navigationBarHeight}}px, 0);"
   >
     <view class="pull-refresh-visual">
-      <view class="pull-refresh-ring"></view>
+      <ui-spinner
+        size="md"
+        label="{{(activeTab === 'tasks' && taskPullRefreshing) || (activeTab === 'history' && historyPullRefreshing) ? '正在刷新列表' : '下拉刷新列表'}}"
+        spinning="{{(activeTab === 'tasks' && taskPullRefreshing) || (activeTab === 'history' && historyPullRefreshing)}}"
+        rotation="{{pullRefreshRotation}}"
+      />
     </view>
   </view>
   <view class="page-shell" style="padding-top: calc({{navigationBarHeight}}px + 32rpx);">
@@ -154,7 +160,7 @@
           <view class="queue-item-main">
             <view class="queue-item-head">
               <view class="queue-item-title">{{queueItem.sourceType === 'purchase_order' ? '采购待检报告' : '独立检验报告'}}</view>
-              <view class="queue-status queue-status--{{queueItem.status}}">{{queueItem.status === 'queued' ? '等待识别' : queueItem.status === 'preparing' ? '图片处理中' : queueItem.status === 'recognizing' ? '正在识别' : queueItem.status === 'ready' ? '待审核' : queueItem.status === 'skipped' ? '已跳过' : '识别失败'}}</view>
+              <view class="queue-status queue-status--{{queueItem.status}}"><ui-spinner wx:if="{{queueItem.status === 'preparing' || queueItem.status === 'recognizing'}}" size="sm" color="current" label="{{queueItem.status === 'preparing' ? '图片处理中' : '正在识别'}}" /><text>{{queueItem.status === 'queued' ? '等待识别' : queueItem.status === 'preparing' ? '图片处理中' : queueItem.status === 'recognizing' ? '正在识别' : queueItem.status === 'ready' ? '待审核' : queueItem.status === 'skipped' ? '已跳过' : '识别失败'}}</text></view>
             </view>
             <view class="queue-item-stage">{{queueItem.error || queueItem.stage}}</view>
             <view class="queue-progress">
@@ -202,7 +208,7 @@
           <button class="secondary-button" bindtap="showHistory">查看记录</button>
           <button class="primary-button" bindtap="resetFlow">继续识别</button>
         </view>
-        <button class="export-button success-export" loading="{{exporting}}" disabled="{{exporting}}" bindtap="exportCurrentRecord">导出 JSON</button>
+        <button class="export-button success-export" disabled="{{exporting}}" bindtap="exportCurrentRecord"><ui-spinner wx:if="{{exporting}}" size="sm" color="current" label="正在导出记录" /><text>{{exporting ? '导出中…' : '导出 JSON'}}</text></button>
       </view>
     </block>
     </block>
@@ -235,6 +241,7 @@
       </view>
 
       <view wx:if="{{taskLoading && taskItems.length === 0}}" class="task-skeleton-list">
+        <view class="loading-region-heading"><ui-spinner size="md" label="正在加载任务" show-label="{{true}}" /></view>
         <view class="task-skeleton-card skeleton-card card">
           <view class="skeleton-line skeleton-kicker"></view>
           <view class="skeleton-line skeleton-title"></view>
@@ -280,7 +287,7 @@
             <view class="task-status-badge {{task.status === 'completed' ? 'is-completed' : ''}}">{{task.status === 'completed' ? '已完成' : '待检'}}</view>
           </view>
           <view wx:if="{{selectedTaskId === task.id}}" class="task-item-list">
-            <view wx:if="{{taskOpeningId === task.id}}" class="task-item-syncing">正在同步线上产品…</view>
+            <view wx:if="{{taskOpeningId === task.id}}" class="task-item-syncing"><ui-spinner size="sm" label="正在同步线上产品" /><text>正在同步线上产品…</text></view>
             <view wx:if="{{(!task.items || task.items.length === 0) && taskOpeningId !== task.id}}" class="task-item-empty">该任务暂无质检明细</view>
             <view
               wx:for="{{task.items}}"
@@ -289,41 +296,51 @@
               class="task-item {{selectedItemId === taskItem.id ? 'is-selected' : ''}}"
               data-task-id="{{task.id}}"
               data-item-id="{{taskItem.id}}"
+              role="button"
+              aria-label="检验 {{taskItem.material_name || taskItem.material_code || '未命名物料'}}"
               bindtap="selectTaskItem"
             >
-              <view class="task-item-name">{{taskItem.material_name || taskItem.material_code || '未命名物料'}}</view>
-              <view class="task-item-meta">{{taskItem.spec_desc || '无规格'}} · {{taskItem.quantity || 0}} {{taskItem.unit || 'Pcs'}}</view>
-              <view class="task-item-inspection-summary">
-                <text wx:if="{{taskItem.inspection_summary && taskItem.inspection_summary.total}}">线上检测：已录入 {{taskItem.inspection_summary.filled}}/{{taskItem.inspection_summary.total}} 项</text>
-                <text wx:else>线上检测：暂无检测数据</text>
-                <text wx:if="{{taskItem.inspection_summary && taskItem.inspection_summary.ng}}" class="task-item-inspection-result is-ng">NG {{taskItem.inspection_summary.ng}} 项</text>
-                <text wx:elif="{{taskItem.inspection_summary && taskItem.inspection_summary.ok}}" class="task-item-inspection-result is-ok">OK {{taskItem.inspection_summary.ok}} 项</text>
-              </view>
-              <scroll-view wx:if="{{taskItem.preview_images && taskItem.preview_images.length}}" class="task-item-photo-scroll" scroll-x enhanced show-scrollbar="{{false}}">
-                <view class="task-item-photo-list">
-                  <image
-                    wx:for="{{taskItem.preview_thumbnails}}"
-                    wx:key="*this"
-                    wx:for-item="taskPhoto"
-                    wx:for-index="taskPhotoIndex"
-                    class="task-item-photo"
-                    src="{{taskPhoto}}"
-                    mode="aspectFill"
-                    lazy-load="{{true}}"
-                    data-task-id="{{task.id}}"
-                    data-item-id="{{taskItem.id}}"
-                    data-url="{{taskItem.preview_images[taskPhotoIndex]}}"
-                    catchtap="previewTaskItemPhoto"
-                  ></image>
+              <view class="task-item-header">
+                <view class="task-item-copy">
+                  <view class="task-item-name">{{taskItem.material_name || taskItem.material_code || '未命名物料'}}</view>
+                  <view class="task-item-meta">{{taskItem.spec_desc || '无规格'}} · {{taskItem.quantity || 0}} {{taskItem.unit || 'Pcs'}}</view>
                 </view>
-              </scroll-view>
-              <view wx:if="{{taskItem.preview_image_count > taskItem.preview_images.length}}" class="task-item-photo-count">共 {{taskItem.preview_image_count}} 张，完整图片进入检验后加载</view>
-              <view class="task-item-action">进入检验</view>
+                <view class="task-item-action">
+                  <text>检验</text>
+                  <view class="task-item-action-icon"><hero-icon name="chevron-left" size="24rpx" /></view>
+                </view>
+              </view>
+              <view class="task-item-content">
+                <view class="task-item-inspection-summary">
+                  <text class="task-item-inspection-progress {{taskItem.inspection_summary && taskItem.inspection_summary.total ? '' : 'is-empty'}}">{{taskItem.inspection_summary && taskItem.inspection_summary.total ? '已填 ' + taskItem.inspection_summary.filled + '/' + taskItem.inspection_summary.total : '未录入'}}</text>
+                  <text wx:if="{{taskItem.inspection_summary && taskItem.inspection_summary.ng}}" class="task-item-inspection-result is-ng">NG {{taskItem.inspection_summary.ng}} 项</text>
+                  <text wx:elif="{{taskItem.inspection_summary && taskItem.inspection_summary.ok}}" class="task-item-inspection-result is-ok">OK {{taskItem.inspection_summary.ok}} 项</text>
+                </view>
+                <scroll-view wx:if="{{taskItem.preview_images && taskItem.preview_images.length}}" class="task-item-photo-scroll" scroll-x enhanced show-scrollbar="{{false}}">
+                  <view class="task-item-photo-list">
+                    <image
+                      wx:for="{{taskItem.preview_thumbnails}}"
+                      wx:key="*this"
+                      wx:for-item="taskPhoto"
+                      wx:for-index="taskPhotoIndex"
+                      class="task-item-photo"
+                      src="{{taskPhoto}}"
+                      mode="aspectFill"
+                      lazy-load="{{true}}"
+                      data-task-id="{{task.id}}"
+                      data-item-id="{{taskItem.id}}"
+                      data-url="{{taskItem.preview_images[taskPhotoIndex]}}"
+                      catchtap="previewTaskItemPhoto"
+                    ></image>
+                  </view>
+                </scroll-view>
+                <view wx:if="{{taskItem.preview_image_count > taskItem.preview_images.length}}" class="task-item-photo-count">还有 {{taskItem.preview_image_count - taskItem.preview_images.length}} 张</view>
+              </view>
             </view>
           </view>
         </view>
         <view class="task-list-footer">
-          <text wx:if="{{taskLoading}}">正在加载任务…</text>
+          <view wx:if="{{taskLoading}}" class="task-list-loading"><ui-spinner size="sm" label="正在加载更多任务" /><text>正在加载任务…</text></view>
           <text wx:elif="{{taskItems.length >= taskTotal}}">已加载全部 {{taskTotal}} 个任务</text>
           <text wx:else>上拉加载更多</text>
         </view>
@@ -345,6 +362,7 @@
       </view>
 
       <view wx:if="{{historyLoading && historyRecords.length === 0}}" class="history-skeleton-list">
+        <view class="loading-region-heading"><ui-spinner size="md" label="正在加载记录" show-label="{{true}}" /></view>
         <view class="history-skeleton-card skeleton-card">
           <view class="history-skeleton-thumb skeleton-block"></view>
           <view class="history-skeleton-main">
@@ -396,43 +414,54 @@
             ></image>
             <view wx:if="{{item.imageCount > 1}}" class="history-thumb-count">{{item.imageCount}} 张</view>
           </view>
+          <view wx:elif="{{item.imageCount > 0}}" class="history-thumb history-thumb--placeholder skeleton-block"></view>
           <view wx:else class="history-thumb history-thumb--remote">
             <view class="remote-thumb-icon"><hero-icon name="cloud" size="34rpx" /></view>
             <view class="remote-thumb-text">服务器记录</view>
           </view>
           <view class="history-main">
-            <view class="history-row">
+            <view class="history-card-header">
               <view class="history-heading-tags">
                 <text class="history-product">{{item.productLabel}}</text>
                 <text class="history-source history-source--{{item.sourceType}}">{{item.sourceLabel}}</text>
               </view>
-              <text class="history-date">{{item.updatedLabel}}</text>
-            </view>
-            <view class="history-customer">{{item.customer || '未填写客户'}}</view>
-            <view class="history-meta">{{item.model || '未填写规格'}} · {{item.inspectionDate || '无日期'}}</view>
-            <view class="history-id">{{item.origin === 'remote' ? '服务器' : '本地'}} · {{item.id}}</view>
-            <view class="history-sync-row">
-              <view class="history-sync-status sync-{{item.syncStatus}}">
-                <view wx:if="{{item.syncStatus === 'syncing'}}" class="sync-spinner"></view>
-                <text>{{item.syncStatus === 'synced' ? '已同步' : item.syncStatus === 'syncing' ? '同步中' : item.syncStatus === 'failed' ? '同步失败' : '仅本地'}}</text>
-              </view>
               <button
-                wx:if="{{item.origin === 'local' && item.syncStatus === 'failed'}}"
-                class="history-retry-button"
+                class="history-delete-button"
                 data-id="{{item.id}}"
-                catchtap="retryHistorySync"
-              >重试同步</button>
+                disabled="{{!!historyDeletingId}}"
+                catchtap="deleteHistory"
+                aria-label="删除识别记录"
+              >
+                <view wx:if="{{historyDeletingId !== item.id}}" class="history-delete-visual">
+                  <hero-icon name="trash" size="30rpx" />
+                </view>
+                <ui-spinner wx:else size="sm" color="danger" label="正在删除记录" />
+              </button>
             </view>
-            <view wx:if="{{item.origin === 'local' && item.syncError && (item.syncStatus === 'failed' || item.syncStatus === 'local')}}" class="history-sync-error">{{item.syncError}}</view>
+            <view class="history-card-content">
+              <view class="history-customer">{{item.customer || '未填写客户'}}</view>
+              <view class="history-meta">{{item.model || '未填写规格'}} · {{item.inspectionDate || '无日期'}}</view>
+              <view class="history-card-context">
+                <text class="history-date">{{item.updatedLabel}}</text>
+                <text class="history-id">{{item.origin === 'remote' ? '服务器' : '本地'}} · {{item.id}}</text>
+              </view>
+            </view>
+            <view class="history-card-footer">
+              <view class="history-sync-row">
+                <view class="history-sync-status sync-{{item.syncStatus}}">
+                  <ui-spinner wx:if="{{item.syncStatus === 'syncing'}}" size="sm" color="current" label="正在同步记录" />
+                  <text>{{item.syncStatus === 'synced' ? '已同步' : item.syncStatus === 'syncing' ? '同步中' : item.syncStatus === 'failed' ? '同步失败' : '仅本地'}}</text>
+                </view>
+                <button
+                  wx:if="{{item.origin === 'local' && item.syncStatus === 'failed'}}"
+                  class="history-retry-button"
+                  data-id="{{item.id}}"
+                  catchtap="retryHistorySync"
+                >重试同步</button>
+              </view>
+              <view wx:if="{{item.origin === 'local' && item.syncError && (item.syncStatus === 'failed' || item.syncStatus === 'local')}}" class="history-sync-error">{{item.syncError}}</view>
+            </view>
           </view>
-          <button
-            class="history-delete-button"
-            data-id="{{item.id}}"
-            loading="{{historyDeletingId === item.id}}"
-            disabled="{{!!historyDeletingId}}"
-            catchtap="deleteHistory"
-            aria-label="删除识别记录"
-          ><hero-icon wx:if="{{historyDeletingId !== item.id}}" name="trash" size="28rpx" /></button>
         </view>
       </view>
     </block>
@@ -441,6 +470,7 @@
       <view class="account-page">
         <view class="account-profile-card card">
           <view wx:if="{{accountLoading}}" class="account-loading">
+            <view class="account-loading-spinner"><ui-spinner size="md" label="正在加载账户信息" /></view>
             <view class="account-avatar account-avatar--skeleton skeleton-block"></view>
             <view class="account-loading-copy">
               <view class="skeleton-line account-skeleton-name"></view>
@@ -483,15 +513,76 @@
           </block>
         </view>
 
+        <view class="account-settings-card card">
+          <view class="account-settings-header">
+            <view class="account-section-title">界面设置</view>
+            <view class="account-section-desc">选择更适合当前环境的显示模式与主题色，设置会保存在本机。</view>
+          </view>
+
+          <view class="account-setting-group">
+            <view class="account-setting-heading">
+              <text class="account-setting-label">显示模式</text>
+              <text class="account-setting-value">{{uiPreferences.mode === 'dark' ? '暗色' : '亮色'}}</text>
+            </view>
+            <view class="account-theme-mode-list" role="radiogroup" aria-label="显示模式">
+              <view
+                wx:for="{{uiThemeModes}}"
+                wx:key="value"
+                wx:for-item="themeModeOption"
+                class="account-theme-mode-option {{uiPreferences.mode === themeModeOption.value ? 'is-active' : ''}}"
+                data-mode="{{themeModeOption.value}}"
+                bindtap="selectUiThemeMode"
+                role="radio"
+                aria-checked="{{uiPreferences.mode === themeModeOption.value}}"
+                aria-label="{{themeModeOption.label}}模式"
+              >
+                <view class="account-theme-preview account-theme-preview--{{themeModeOption.value}}">
+                  <view class="account-theme-preview-bar"></view>
+                  <view class="account-theme-preview-card"></view>
+                </view>
+                <text>{{themeModeOption.label}}</text>
+                <view wx:if="{{uiPreferences.mode === themeModeOption.value}}" class="account-setting-check">
+                  <hero-icon name="check" size="24rpx" />
+                </view>
+              </view>
+            </view>
+          </view>
+
+          <view class="account-setting-group account-setting-group--color">
+            <view class="account-setting-heading">
+              <text class="account-setting-label">主题色</text>
+              <text class="account-setting-value">{{uiThemeColorLabel}}</text>
+            </view>
+            <view class="account-theme-color-list" role="radiogroup" aria-label="主题色">
+              <view
+                wx:for="{{uiThemeColors}}"
+                wx:key="value"
+                wx:for-item="themeColorOption"
+                class="account-theme-color-option {{uiPreferences.color === themeColorOption.value ? 'is-active' : ''}}"
+                style="--account-theme-swatch: {{themeColorOption.preview}};"
+                data-color="{{themeColorOption.value}}"
+                bindtap="selectUiThemeColor"
+                role="radio"
+                aria-checked="{{uiPreferences.color === themeColorOption.value}}"
+                aria-label="主题色：{{themeColorOption.label}}"
+              >
+                <view class="account-theme-swatch">
+                  <hero-icon wx:if="{{uiPreferences.color === themeColorOption.value}}" name="check" size="28rpx" />
+                </view>
+                <text>{{themeColorOption.label}}</text>
+              </view>
+            </view>
+          </view>
+        </view>
+
         <view class="account-security-card card">
           <view class="account-section-title">登录与安全</view>
           <view class="account-section-desc">退出后将清除本机登录状态，再次使用时需要重新登录。</view>
           <button
             class="account-logout-button"
-            loading="{{loggingOut}}"
             disabled="{{loggingOut}}"
             bindtap="confirmLogout"
-          >{{loggingOut ? '正在退出…' : '退出登录'}}</button>
+          ><ui-spinner wx:if="{{loggingOut}}" size="sm" color="current" label="正在退出登录" /><text>{{loggingOut ? '正在退出…' : '退出登录'}}</text></button>
         </view>
       </view>
     </block>
@@ -533,19 +624,19 @@
     ></view>
   </view>
   <view class="floating-tab {{activeTab === 'scan' ? 'is-active' : ''}}" style="color: {{tabVisualColors.scan}};" data-tab="scan" bindtap="switchTab" bindtouchstart="onTabSwipeStart" bindtouchend="onTabPressEnd" bindtouchcancel="onTabPressEnd">
-    <hero-icon name="viewfinder-circle" size="31rpx" />
+    <hero-icon name="viewfinder-circle" size="36rpx" />
     <text>识别</text>
   </view>
   <view class="floating-tab {{activeTab === 'tasks' ? 'is-active' : ''}}" style="color: {{tabVisualColors.tasks}};" data-tab="tasks" bindtap="switchTab" bindtouchstart="onTabSwipeStart" bindtouchend="onTabPressEnd" bindtouchcancel="onTabPressEnd">
-    <hero-icon name="clipboard-document-list" size="31rpx" />
+    <hero-icon name="clipboard-document-list" size="36rpx" />
     <text>待检</text>
   </view>
   <view class="floating-tab {{activeTab === 'history' ? 'is-active' : ''}}" style="color: {{tabVisualColors.history}};" data-tab="history" bindtap="switchTab" bindtouchstart="onTabSwipeStart" bindtouchend="onTabPressEnd" bindtouchcancel="onTabPressEnd">
-    <hero-icon name="clock" size="31rpx" />
+    <hero-icon name="clock" size="36rpx" />
     <text>记录</text>
   </view>
   <view class="floating-tab {{activeTab === 'account' ? 'is-active' : ''}}" style="color: {{tabVisualColors.account}};" data-tab="account" bindtap="switchTab" bindtouchstart="onTabSwipeStart" bindtouchend="onTabPressEnd" bindtouchcancel="onTabPressEnd">
-    <hero-icon name="user-circle" size="31rpx" />
+    <hero-icon name="user-circle" size="36rpx" />
     <text>账户</text>
   </view>
 </view>

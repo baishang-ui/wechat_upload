@@ -38,6 +38,7 @@ import {
   TAB_SWIPE_ACTIVATION_PX,
   TAB_SWIPE_STEP_PX,
   WorkspaceTab,
+  DARK_INACTIVE_TAB_COLOR,
 } from '../../domain/tab-swipe'
 import {
   createMockRecord,
@@ -83,6 +84,19 @@ import {
   TASK_PAGE_SIZE,
   taskItemToInspectionRecord,
 } from '../../services/quality-inspection-service'
+import {
+  buildUiThemePresentation,
+  UiPreferences,
+  UiThemeColor,
+  UiThemeMode,
+  UI_THEME_COLORS,
+  UI_THEME_MODES,
+} from '../../domain/ui-preferences'
+import {
+  loadUiPreferences,
+  saveUiPreferences,
+} from '../../services/ui-preferences-service'
+import { pullRefreshRotationForDistance } from '../../domain/pull-refresh'
 
 interface NavigationHeightChangeEvent {
   detail: { height: number }
@@ -103,7 +117,61 @@ const recognitionStageTimers = new WeakMap<object, Set<ReturnType<typeof setTime
 const taskListRequests = new WeakMap<object, Promise<void>>()
 const historyListRequests = new WeakMap<object, Promise<void>>()
 const tabSettleTimers = new WeakMap<object, ReturnType<typeof setTimeout>>()
-const TAB_SETTLE_DURATION_MS = 500
+const TAB_SETTLE_DURATION_MS = 400
+const HISTORY_IMAGE_BATCH_SIZE = 4
+const HISTORY_IMAGE_BATCH_DELAY_MS = 24
+const initialUiPreferences = loadUiPreferences()
+
+function createUiThemeData(preferences: UiPreferences) {
+  const presentation = buildUiThemePresentation(preferences)
+  return {
+    uiPreferences: preferences,
+    uiThemeColorLabel: UI_THEME_COLORS.find((option) => option.value === preferences.color)?.label || '雾蓝',
+    uiThemePageStyle: presentation.pageStyle,
+    uiNavigationTextColor: presentation.navigationTextColor,
+    uiNavigationBackground: presentation.navigationBackground,
+    uiRefresherBackground: presentation.refresherBackground,
+  }
+}
+
+function getThemedTabVisualColors(
+  indicatorOffset: number,
+  mode: UiThemeMode,
+) {
+  return getTabVisualColors(
+    indicatorOffset,
+    mode === 'dark' ? DARK_INACTIVE_TAB_COLOR : undefined,
+  )
+}
+
+function deferHistoryCardImages(
+  items: HistoryViewItem[],
+  existing: HistoryViewItem[] = [],
+): HistoryViewItem[] {
+  const existingById = new Map(existing.map((item) => [item.id, item]))
+  return items.map((item) => {
+    const current = existingById.get(item.id)
+    if (current?.imagePaths.length) {
+      return {
+        ...item,
+        imagePath: current.imagePath,
+        imagePaths: current.imagePaths,
+      }
+    }
+    if (item.imagePaths.length === 0) return item
+    return {
+      ...item,
+      imagePath: '',
+      imagePaths: [],
+    }
+  })
+}
+
+function waitForHistoryImageTurn(): Promise<void> {
+  return new Promise((resolve) => {
+    setTimeout(resolve, HISTORY_IMAGE_BATCH_DELAY_MS)
+  })
+}
 
 interface TabSwipeGesture {
   startX: number
@@ -230,7 +298,7 @@ function appendTaskPage(
 
 Component({
   data: {
-    navigationBarHeight: 91,
+    navigationBarHeight: 99,
     activeTab: 'scan' as WorkspaceTab,
     taskItems: [] as QualityInspectionTaskDto[],
     taskPage: 1,
@@ -242,6 +310,7 @@ Component({
     taskInitialized: false,
     taskPullRefreshing: false,
     taskPulling: false,
+    pullRefreshRotation: 0,
     taskLoadedQueryKey: '',
     taskLoadingQueryKey: '',
     taskRequestId: 0,
@@ -298,17 +367,21 @@ Component({
     tabSettlePreScaleY: 1,
     tabSettlePeakScaleY: 1,
     tabIndicatorOffset: 0,
-    tabVisualColors: getTabVisualColors(0),
+    tabVisualColors: getThemedTabVisualColors(0, initialUiPreferences.mode),
     workspaceScrollTop: 0,
     currentUser: null as AuthUser | null,
     accountInitial: '账',
     accountLoading: !DEMO_MODE,
     accountError: DEMO_MODE ? '演示模式不包含登录账户' : '',
     loggingOut: false,
+    uiThemeModes: UI_THEME_MODES,
+    uiThemeColors: UI_THEME_COLORS,
+    ...createUiThemeData(initialUiPreferences),
   },
   lifetimes: {
     attached() {
       attachedWorkspaceComponents.add(this)
+      this.setData(createUiThemeData(loadUiPreferences()))
       if (!DEMO_MODE) {
         getCurrentUser()
           .then((currentUser) => {
@@ -389,70 +462,88 @@ Component({
         },
       })
     },
+    selectUiThemeMode(event: WechatMiniprogram.TouchEvent) {
+      const mode = String(event.currentTarget.dataset.mode || '') as UiThemeMode
+      if (!UI_THEME_MODES.some((option) => option.value === mode)) return
+      const nextPreferences: UiPreferences = {
+        ...this.data.uiPreferences,
+        mode,
+      }
+      if (nextPreferences.mode === this.data.uiPreferences.mode) return
+      this.setData({
+        ...createUiThemeData(nextPreferences),
+        tabVisualColors: getThemedTabVisualColors(
+          this.data.tabIndicatorOffset,
+          nextPreferences.mode,
+        ),
+      })
+      try {
+        saveUiPreferences(nextPreferences)
+      } catch {
+        showTopToast({ title: '主题设置保存失败', icon: 'none' })
+      }
+    },
+    selectUiThemeColor(event: WechatMiniprogram.TouchEvent) {
+      const color = String(event.currentTarget.dataset.color || '') as UiThemeColor
+      if (!UI_THEME_COLORS.some((option) => option.value === color)) return
+      const nextPreferences: UiPreferences = {
+        ...this.data.uiPreferences,
+        color,
+      }
+      if (nextPreferences.color === this.data.uiPreferences.color) return
+      this.setData(createUiThemeData(nextPreferences))
+      try {
+        saveUiPreferences(nextPreferences)
+      } catch {
+        showTopToast({ title: '主题设置保存失败', icon: 'none' })
+      }
+    },
     loadHistory(): Promise<void> {
       if (this.data.historyLoading) {
         return historyListRequests.get(this) ?? Promise.resolve()
       }
       const requestId = this.data.historyRequestId + 1
       const local = loadInspectionHistory()
+      const localRecords = mergeInspectionHistory(local, [])
       this.setData({
         historyRecords: this.data.historyRecords.length > 0
           ? this.data.historyRecords
-          : mergeInspectionHistory(local, []),
+          : deferHistoryCardImages(localRecords),
         historyLoading: true,
         historyInitialized: true,
         historyError: '',
         historyRequestId: requestId,
       })
       const request = listInspectionHistory()
-        .then(async (data) => {
+        .then((data) => {
           if (this.data.historyRequestId !== requestId) return
-          const historyRecords = await materializeHistoryCardImages(
-            mergeInspectionHistory(loadInspectionHistory(), data.items),
+          const historyRecords = mergeInspectionHistory(
+            loadInspectionHistory(),
+            data.items,
           )
-          if (this.data.historyRequestId !== requestId) return
-          const historyChanged = !hasSameListData(this.data.historyRecords, historyRecords)
+          const deferredRecords = deferHistoryCardImages(
+            historyRecords,
+            this.data.historyRecords,
+          )
+          const historyChanged = !hasSameListData(this.data.historyRecords, deferredRecords)
           if (historyChanged || this.data.historyError) {
             this.setData({
-              ...(historyChanged ? { historyRecords } : {}),
+              ...(historyChanged ? { historyRecords: deferredRecords } : {}),
               historyError: '',
             })
           }
-          void hydrateMissingHistoryImages(historyRecords).then((hydratedRecords) => {
-            if (
-              !attachedWorkspaceComponents.has(this)
-              || this.data.historyRequestId !== requestId
-            ) return
-            const hydratedById = new Map(hydratedRecords.map((item) => [item.id, item]))
-            const nextRecords = this.data.historyRecords.map((item) => {
-              const hydrated = hydratedById.get(item.id)
-              if (!hydrated || !hydrated.imageSummaryComplete) return item
-              if (
-                item.imageSummaryComplete
-                && item.imageCount === hydrated.imageCount
-                && hasSameListData(item.imagePaths, hydrated.imagePaths)
-              ) return item
-              return {
-                ...item,
-                imagePath: hydrated.imagePath,
-                imagePaths: hydrated.imagePaths,
-                imageCount: hydrated.imageCount,
-                imageSummaryComplete: true,
-              }
-            })
-            if (!hasSameListData(this.data.historyRecords, nextRecords)) {
-              this.setData({ historyRecords: nextRecords })
-            }
-          })
+          void this.loadHistoryImagesInBackground(historyRecords, requestId)
         })
         .catch((error: Error) => {
           if (this.data.historyRequestId !== requestId) return
+          const fallbackRecords = mergeInspectionHistory(loadInspectionHistory(), [])
           this.setData({
             historyRecords: this.data.historyRecords.length > 0
               ? this.data.historyRecords
-              : mergeInspectionHistory(loadInspectionHistory(), []),
+              : deferHistoryCardImages(fallbackRecords),
             historyError: `服务器记录加载失败：${error.message || '请稍后重试'}`,
           })
+          void this.loadHistoryImagesInBackground(fallbackRecords, requestId)
         })
         .finally(() => {
           if (this.data.historyRequestId === requestId) {
@@ -464,6 +555,67 @@ Component({
         })
       historyListRequests.set(this, request)
       return request
+    },
+    async loadHistoryImagesInBackground(
+      historyRecords: HistoryViewItem[],
+      requestId: number,
+    ): Promise<void> {
+      for (let index = 0; index < historyRecords.length; index += HISTORY_IMAGE_BATCH_SIZE) {
+        await waitForHistoryImageTurn()
+        if (
+          !attachedWorkspaceComponents.has(this)
+          || this.data.historyRequestId !== requestId
+        ) return
+        const batch = historyRecords.slice(index, index + HISTORY_IMAGE_BATCH_SIZE)
+        const materialized = await materializeHistoryCardImages(batch)
+        if (
+          !attachedWorkspaceComponents.has(this)
+          || this.data.historyRequestId !== requestId
+        ) return
+        const materializedById = new Map(materialized.map((item) => [item.id, item]))
+        const nextRecords = this.data.historyRecords.map((item) => {
+          const loaded = materializedById.get(item.id)
+          if (!loaded || hasSameListData(item.imagePaths, loaded.imagePaths)) return item
+          return {
+            ...item,
+            imagePath: loaded.imagePath,
+            imagePaths: loaded.imagePaths,
+          }
+        })
+        if (!hasSameListData(this.data.historyRecords, nextRecords)) {
+          this.setData({ historyRecords: nextRecords })
+        }
+      }
+
+      if (
+        !attachedWorkspaceComponents.has(this)
+        || this.data.historyRequestId !== requestId
+      ) return
+      const hydratedRecords = await hydrateMissingHistoryImages(this.data.historyRecords)
+      if (
+        !attachedWorkspaceComponents.has(this)
+        || this.data.historyRequestId !== requestId
+      ) return
+      const hydratedById = new Map(hydratedRecords.map((item) => [item.id, item]))
+      const nextRecords = this.data.historyRecords.map((item) => {
+        const hydrated = hydratedById.get(item.id)
+        if (!hydrated || !hydrated.imageSummaryComplete) return item
+        if (
+          item.imageSummaryComplete
+          && item.imageCount === hydrated.imageCount
+          && hasSameListData(item.imagePaths, hydrated.imagePaths)
+        ) return item
+        return {
+          ...item,
+          imagePath: hydrated.imagePath,
+          imagePaths: hydrated.imagePaths,
+          imageCount: hydrated.imageCount,
+          imageSummaryComplete: true,
+        }
+      })
+      if (!hasSameListData(this.data.historyRecords, nextRecords)) {
+        this.setData({ historyRecords: nextRecords })
+      }
     },
     loadActiveListOnce() {
       if (this.data.accountLoading) return
@@ -495,19 +647,24 @@ Component({
         })
       }
     },
-    onListPulling() {
-      if (this.data.activeTab === 'tasks' && !this.data.taskPulling) {
-        this.setData({ taskPulling: true })
+    onListPulling(event: WechatMiniprogram.CustomEvent<{ dy?: number }>) {
+      const rotation = pullRefreshRotationForDistance(event.detail.dy || 0)
+      const rotationChanged = rotation !== this.data.pullRefreshRotation
+      if (this.data.activeTab === 'tasks') {
+        if (rotationChanged || !this.data.taskPulling) {
+          this.setData({ taskPulling: true, pullRefreshRotation: rotation })
+        }
         return
       }
-      if (this.data.activeTab === 'history' && !this.data.historyPulling) {
-        this.setData({ historyPulling: true })
+      if (this.data.activeTab === 'history' && (rotationChanged || !this.data.historyPulling)) {
+        this.setData({ historyPulling: true, pullRefreshRotation: rotation })
       }
     },
     onListPullRefreshRestore() {
-      const updates: Record<string, boolean> = {}
+      const updates: Record<string, boolean | number> = {}
       if (this.data.taskPulling) updates.taskPulling = false
       if (this.data.historyPulling) updates.historyPulling = false
+      if (this.data.pullRefreshRotation !== 0) updates.pullRefreshRotation = 0
       if (Object.keys(updates).length > 0) this.setData(updates)
     },
     activateTab(
@@ -539,7 +696,7 @@ Component({
           tabDragStretchOffset: 0,
           tabDragScaleY: 1,
           tabIndicatorOffset,
-          tabVisualColors: getTabVisualColors(tabIndicatorOffset),
+          tabVisualColors: getThemedTabVisualColors(tabIndicatorOffset, this.data.uiPreferences.mode),
           workspaceScrollTop: 1,
           ...(activeTab === 'scan'
             ? { selectedTaskId: 0, selectedItemId: 0 }
@@ -574,7 +731,7 @@ Component({
         tabSettlePreScaleY: shouldSettle ? settlingMetrics.preScaleY : 1,
         tabSettlePeakScaleY: shouldSettle ? settlingMetrics.peakScaleY : 1,
         tabIndicatorOffset,
-        tabVisualColors: getTabVisualColors(tabIndicatorOffset),
+        tabVisualColors: getThemedTabVisualColors(tabIndicatorOffset, this.data.uiPreferences.mode),
         ...(tabChanged ? { workspaceScrollTop: 1 } : {}),
         ...(activeTab === 'scan'
           ? { selectedTaskId: 0, selectedItemId: 0 }
@@ -676,7 +833,7 @@ Component({
             tabDragStretch: 0,
             tabDragStretchOffset: 0,
             tabIndicatorOffset: offset,
-            tabVisualColors: getTabVisualColors(offset),
+            tabVisualColors: getThemedTabVisualColors(offset, this.data.uiPreferences.mode),
           })
           return
         }
@@ -710,7 +867,7 @@ Component({
         tabDragStretchOffset: gesture.direction === 'left' ? -tabDragStretch : 0,
         tabDragScaleY: getTabDragScaleY(tabDragStretch),
         tabIndicatorOffset,
-        tabVisualColors: getTabVisualColors(tabIndicatorOffset),
+        tabVisualColors: getThemedTabVisualColors(tabIndicatorOffset, this.data.uiPreferences.mode),
       })
     },
     onTabSwipeEnd() {
@@ -727,7 +884,7 @@ Component({
           tabDragStretchOffset: 0,
           tabDragScaleY: 1,
           tabIndicatorOffset: offset,
-          tabVisualColors: getTabVisualColors(offset),
+          tabVisualColors: getThemedTabVisualColors(offset, this.data.uiPreferences.mode),
         })
         return
       }
@@ -741,7 +898,7 @@ Component({
         tabDragStretchOffset: 0,
         tabDragScaleY: 1,
         tabIndicatorOffset: offset,
-        tabVisualColors: getTabVisualColors(offset),
+        tabVisualColors: getThemedTabVisualColors(offset, this.data.uiPreferences.mode),
       })
     },
     onTabSwipeCancel() {
@@ -755,7 +912,7 @@ Component({
         tabDragStretchOffset: 0,
         tabDragScaleY: 1,
         tabIndicatorOffset: offset,
-        tabVisualColors: getTabVisualColors(offset),
+        tabVisualColors: getThemedTabVisualColors(offset, this.data.uiPreferences.mode),
       })
     },
     goToScan() {

@@ -1,8 +1,9 @@
+<page-meta page-style="{{uiThemePageStyle}}" />
 <navigation-bar
   title="产品检验"
   back="{{true}}"
-  color="#17233d"
-  background="rgba(246, 249, 252, .92)"
+  color="{{uiNavigationTextColor}}"
+  background="{{uiNavigationBackground}}"
   loading="{{loading}}"
   bindheightchange="onNavigationHeightChange"
 ></navigation-bar>
@@ -10,6 +11,7 @@
 
 <view class="workbench-page" style="padding-top: calc({{navigationBarHeight}}px + 24rpx);">
   <view wx:if="{{loading}}" class="state-card">
+    <view class="state-spinner"><ui-spinner size="lg" label="正在加载线上检验表格" /></view>
     <view class="state-title">正在加载线上检验表格</view>
     <view class="state-description">正在读取产品模板和已有草稿，请稍候。</view>
   </view>
@@ -80,10 +82,12 @@
       <view class="recognition-actions">
         <button
           class="recognition-button recognition-button--primary"
-          loading="{{recognizing}}"
           disabled="{{recognizing}}"
           bindtap="takeQualitySheetPhoto"
-        >{{recognizing ? '正在识别…' : '拍摄质检单并识别'}}</button>
+        >
+          <ui-spinner wx:if="{{recognizing}}" size="sm" color="current" label="正在识别质检单" />
+          <text>{{recognizing ? '正在识别…' : '拍摄质检单并识别'}}</text>
+        </button>
         <button
           class="recognition-button"
           disabled="{{recognizing}}"
@@ -159,7 +163,7 @@
 
                   <block wx:elif="{{cell.kind === 'decision'}}">
                     <view class="table-decision-switch">
-                      <switch class="table-decision-switch__control" type="switch" color="#1ea978" checked="{{row.decision === 'OK'}}" data-row-key="{{row.rowKey}}" bindchange="onDecisionChange" />
+                      <switch class="table-decision-switch__control" type="switch" color="#17c964" checked="{{row.decision === 'OK'}}" data-row-key="{{row.rowKey}}" bindchange="onDecisionChange" />
                       <text class="table-decision-label {{row.decision === 'OK' ? '' : 'is-ng'}}">{{row.decision === 'OK' ? 'OK' : 'NG'}}</text>
                     </view>
                   </block>
@@ -192,14 +196,14 @@
                           data-photo-id="{{photo.id}}"
                           bindtap="previewPhoto"
                         ></image>
-                        <view wx:if="{{photo.status === 'uploading'}}" class="photo-status">上传中</view>
+                        <view wx:if="{{photo.status === 'uploading'}}" class="photo-status"><ui-spinner size="sm" color="current" label="照片上传中" /><text>上传中</text></view>
                         <view wx:elif="{{photo.status === 'failed'}}" class="photo-status photo-status--failed">失败</view>
                         <view
                           class="photo-remove"
                           data-row-key="{{row.rowKey}}"
                           data-photo-id="{{photo.id}}"
                           catchtap="removePhoto"
-                        ><hero-icon name="x-mark" size="24rpx" /></view>
+                        ><hero-icon name="x-mark" size="30rpx" /></view>
                         <view
                           wx:if="{{photo.status === 'failed'}}"
                           class="photo-retry"
@@ -214,7 +218,7 @@
                         data-row-key="{{row.rowKey}}"
                         bindtap="addRowPhotos"
                       >
-                        <view class="photo-add-button__plus"><hero-icon name="plus" size="32rpx" /></view>
+                        <view class="photo-add-button__plus"><hero-icon name="plus" size="40rpx" /></view>
                         <text>添加照片</text>
                       </button>
                     </view>
@@ -267,10 +271,12 @@
       </view>
       <button
         class="save-button"
-        loading="{{saving}}"
         disabled="{{saving || recognizing}}"
         bindtap="saveDraft"
-      >{{saving ? '保存中…' : '保存草稿'}}</button>
+      >
+        <ui-spinner wx:if="{{saving}}" size="sm" color="current" label="正在保存草稿" />
+        <text>{{saving ? '保存中…' : '保存草稿'}}</text>
+      </button>
     </view>
   </block>
 </view>

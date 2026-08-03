@@ -18,7 +18,7 @@ test('pending product selection opens the record-style workbench modal while pre
   assert.doesNotMatch(indexTs, /wx\.navigateTo\(\{\s*url:\s*`\/pages\/inspection-workbench/)
   assert.match(indexWxml, /<inspection-workbench-modal/)
   assert.match(indexJson, /"inspection-workbench-modal"/)
-  assert.match(indexWxml, />进入检验</)
+  assert.match(indexWxml, /class="task-item-action">[\s\S]*?<text>检验<\/text>/)
 })
 
 test('inspection workbench exposes online table, unlimited photos, OCR review and draft save states', () => {

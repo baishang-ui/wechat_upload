@@ -1,0 +1,111 @@
+@import '../../styles/design-tokens';
+
+.ui-spinner {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  color: $ui-primary;
+  pointer-events: none;
+}
+
+.ui-spinner--with-label {
+  gap: 14rpx;
+}
+
+.ui-spinner__icon {
+  position: relative;
+  width: 48rpx;
+  height: 48rpx;
+  flex: none;
+}
+
+.ui-spinner--sm .ui-spinner__icon {
+  width: 32rpx;
+  height: 32rpx;
+}
+
+.ui-spinner--md .ui-spinner__icon {
+  width: 48rpx;
+  height: 48rpx;
+}
+
+.ui-spinner--lg .ui-spinner__icon {
+  width: 64rpx;
+  height: 64rpx;
+}
+
+.ui-spinner--xl .ui-spinner__icon {
+  width: 80rpx;
+  height: 80rpx;
+}
+
+.ui-spinner__track,
+.ui-spinner__rotor,
+.ui-spinner__arc {
+  position: absolute;
+  inset: 0;
+  box-sizing: border-box;
+  border-radius: 50%;
+}
+
+.ui-spinner__track {
+  border: 4rpx solid currentColor;
+  opacity: .14;
+}
+
+.ui-spinner__rotor {
+  transform: rotate(var(--ui-spinner-start-rotation));
+}
+
+.ui-spinner.is-spinning .ui-spinner__rotor {
+  animation: ui-spinner-rotate .72s linear infinite;
+}
+
+.ui-spinner__arc {
+  border: 4rpx solid transparent;
+}
+
+.ui-spinner__arc--soft {
+  border-top-color: currentColor;
+  border-right-color: currentColor;
+  border-bottom-color: currentColor;
+  opacity: .5;
+}
+
+.ui-spinner__arc--strong {
+  border-top-color: currentColor;
+}
+
+.ui-spinner--sm .ui-spinner__track,
+.ui-spinner--sm .ui-spinner__arc {
+  border-width: 3rpx;
+}
+
+.ui-spinner--xl .ui-spinner__track,
+.ui-spinner--xl .ui-spinner__arc {
+  border-width: 5rpx;
+}
+
+.ui-spinner--current { color: inherit; }
+.ui-spinner--accent { color: $ui-primary; }
+.ui-spinner--success { color: $ui-success; }
+.ui-spinner--warning { color: $ui-warning; }
+.ui-spinner--danger { color: $ui-danger; }
+
+.ui-spinner__label {
+  color: $ui-text-secondary;
+  font-size: $ui-font-caption;
+  line-height: 1.4;
+}
+
+@keyframes ui-spinner-rotate {
+  from { transform: rotate(var(--ui-spinner-start-rotation)); }
+  to { transform: rotate(calc(var(--ui-spinner-start-rotation) + 360deg)); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ui-spinner__rotor {
+    animation: none;
+  }
+}

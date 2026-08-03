@@ -1,4 +1,5 @@
 import { showTopToast } from '../../services/top-toast-service'
+import { loadUiThemePageData } from '../../services/ui-preferences-service'
 import {
   addLocalPhotos,
   buildInspectionWorkbench,
@@ -222,7 +223,7 @@ function errorMessage(error: unknown, fallback: string): string {
 
 Page({
   data: {
-    navigationBarHeight: 91,
+    navigationBarHeight: 99,
     taskId: 0,
     itemId: 0,
     task: null as QualityInspectionTaskDto | null,
@@ -242,9 +243,11 @@ Page({
     unmatched: [] as UnmatchedRecognitionRow[],
     saving: false,
     savedMessage: '',
+    ...loadUiThemePageData(),
   },
 
   onLoad(options: RouteOptions) {
+    this.setData(loadUiThemePageData())
     const taskId = Number(options.taskId)
     const itemId = Number(options.itemId)
     this.setData({ taskId, itemId })

@@ -1,4 +1,5 @@
 import { showTopToast } from '../../services/top-toast-service'
+import { loadUiThemePageData } from '../../services/ui-preferences-service'
 import {
   AutoCaptureSnapshot,
   createAutoCaptureSnapshot,
@@ -146,9 +147,11 @@ Component({
     cameraErrorTop: 144,
     orientationCanvasWidth: 1,
     orientationCanvasHeight: 1,
+    ...loadUiThemePageData(),
   },
   lifetimes: {
     ready() {
+      this.setData(loadUiThemePageData())
       const systemInfo = wx.getSystemInfoSync()
       const menuButtonRect = wx.getMenuButtonBoundingClientRect()
       const cameraViewportWidth = Math.max(1, systemInfo.windowWidth)

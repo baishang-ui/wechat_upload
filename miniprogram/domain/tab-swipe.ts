@@ -4,16 +4,17 @@ export type WorkspaceTab = typeof WORKSPACE_TABS[number]
 export type TabVisualColors = Record<WorkspaceTab, string>
 export type TabDragDirection = 'left' | 'right'
 
-export const TAB_SWIPE_STEP_PX = 76
-export const TAB_SWIPE_SWITCH_THRESHOLD_PX = 54
+export const TAB_SWIPE_STEP_PX = 78
+export const TAB_SWIPE_SWITCH_THRESHOLD_PX = 56
 export const TAB_SWIPE_ACTIVATION_PX = 6
-export const TAB_BUTTON_WIDTH_PX = 72
+export const TAB_BUTTON_WIDTH_PX = 74
 export const TAB_DRAG_MAX_STRETCH_PX = 20
 export const TAB_DRAG_RESISTANCE = 2.4
 export const TAB_DRAG_FEEDBACK_RATIO = .4
 export const TAB_DRAG_MIN_SCALE_Y = .86
-const INACTIVE_TAB_COLOR = [117, 130, 151] as const
-const COVERED_TAB_COLOR = [255, 255, 255] as const
+const INACTIVE_TAB_COLOR = [113, 113, 122] as const
+const COVERED_TAB_COLOR = [24, 24, 27] as const
+export const DARK_INACTIVE_TAB_COLOR = [161, 161, 170] as const
 
 function clamp(value: number, minimum: number, maximum: number): number {
   return Math.min(maximum, Math.max(minimum, value))
@@ -127,19 +128,25 @@ export function resolveReachedTab(
   return WORKSPACE_TABS[targetIndex]
 }
 
-function mixColor(coverage: number): string {
+function mixColor(
+  coverage: number,
+  inactiveColor: readonly [number, number, number],
+): string {
   const smoothedCoverage = coverage * coverage * (3 - 2 * coverage)
-  const channels = INACTIVE_TAB_COLOR.map((channel, index) => Math.round(
+  const channels = inactiveColor.map((channel, index) => Math.round(
     channel + (COVERED_TAB_COLOR[index] - channel) * smoothedCoverage,
   ))
   return `rgb(${channels.join(', ')})`
 }
 
-export function getTabVisualColors(indicatorOffset: number): TabVisualColors {
+export function getTabVisualColors(
+  indicatorOffset: number,
+  inactiveColor: readonly [number, number, number] = INACTIVE_TAB_COLOR,
+): TabVisualColors {
   const colorFor = (tab: WorkspaceTab): string => {
     const distance = Math.abs(getTabIndicatorOffset(tab) - indicatorOffset)
     const coverage = clamp(1 - distance / TAB_BUTTON_WIDTH_PX, 0, 1)
-    return mixColor(coverage)
+    return mixColor(coverage, inactiveColor)
   }
   return {
     scan: colorFor('scan'),

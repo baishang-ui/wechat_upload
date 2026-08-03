@@ -1,3 +1,4 @@
+<page-meta page-style="{{uiThemePageStyle}}" />
 <top-toast />
 <view class="document-camera-page">
   <canvas
@@ -104,7 +105,7 @@
         >
           <view class="camera-shutter-surface">
             <text wx:if="{{countdown}}" class="camera-shutter-countdown">{{countdown}}</text>
-            <view wx:elif="{{captureProcessing}}" class="camera-shutter-spinner"></view>
+            <ui-spinner wx:elif="{{captureProcessing}}" size="md" color="current" label="正在处理照片" />
             <view wx:else class="camera-shutter-inner"></view>
           </view>
         </view>
@@ -135,7 +136,7 @@
         aria-label="向左旋转照片"
         aria-disabled="{{captureProcessing}}"
       >
-        <view class="preview-rotate-icon"><hero-icon name="arrow-uturn-left" size="36rpx" /></view>
+        <view class="preview-rotate-icon"><hero-icon name="arrow-uturn-left" size="40rpx" /></view>
         <text class="preview-rotate-label">向左旋转</text>
       </view>
       <view
@@ -149,7 +150,7 @@
         aria-label="向右旋转照片"
         aria-disabled="{{captureProcessing}}"
       >
-        <view class="preview-rotate-icon"><hero-icon name="arrow-uturn-right" size="36rpx" /></view>
+        <view class="preview-rotate-icon"><hero-icon name="arrow-uturn-right" size="40rpx" /></view>
         <text class="preview-rotate-label">向右旋转</text>
       </view>
     </view>

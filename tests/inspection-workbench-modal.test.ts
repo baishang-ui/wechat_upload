@@ -131,7 +131,7 @@ test('inspection workbench keeps actions readable and content orderly on narrow 
   assert.match(scss, /\.save-button\s*\{[\s\S]*?width:\s*100%/)
   assert.match(wxml, /现场照片[\s\S]*?<view class="photo-add-button site-photo-add-button"/)
   assert.doesNotMatch(wxml, /现场照片[\s\S]*?<button class="photo-add-button"/)
-  assert.match(scss, /\.site-photo-add-button\s*\{[^}]*width:\s*136rpx;[^}]*min-width:\s*136rpx;[^}]*max-width:\s*136rpx;[^}]*height:\s*136rpx;[^}]*min-height:\s*136rpx;[^}]*max-height:\s*136rpx;/)
+  assert.match(scss, /\.site-photo-add-button\s*\{[^}]*width:\s*156rpx;[^}]*min-width:\s*156rpx;[^}]*max-width:\s*156rpx;[^}]*height:\s*156rpx;[^}]*min-height:\s*156rpx;[^}]*max-height:\s*156rpx;/)
   assert.match(scss, /@media \(max-width:\s*360px\)[\s\S]*?\.recognition-actions[\s\S]*?flex-direction:\s*column/)
   assert.match(scss, /@media \(max-width:\s*360px\)[\s\S]*?\.measurement-grid[\s\S]*?grid-template-columns:\s*1fr/)
   assert.match(scss, /@media \(max-width:\s*360px\)[\s\S]*?\.workbench-photo-grid[\s\S]*?grid-template-columns:\s*repeat\(2, minmax\(0, 1fr\)\)/)

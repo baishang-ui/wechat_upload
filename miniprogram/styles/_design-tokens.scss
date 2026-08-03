@@ -1,15 +1,75 @@
-$ui-page-background: #f3f6f8;
-$ui-primary: #2f6bff;
-$ui-primary-pressed: #2458d8;
-$ui-text-primary: #17233d;
-$ui-text-secondary: #77839a;
-$ui-card-background: #fff;
-$ui-card-border: #e8edf5;
-$ui-card-radius: 24rpx;
-$ui-card-shadow: 0 14rpx 40rpx rgba(38, 67, 111, .08);
-$ui-field-background: #f6f8fc;
-$ui-field-border: #e2e8f2;
-$ui-success: #37d19b;
-$ui-success-background: #e8f8f2;
-$ui-danger: #e64c5b;
-$ui-danger-background: #fff0f1;
+// HeroUI v3 semantic theme translated to WeChat Mini Program-compatible values.
+$ui-page-background: var(--ui-page-background, #f7f7f8);
+$ui-text-primary: var(--ui-text-primary, #18181b);
+$ui-text-secondary: var(--ui-text-secondary, #71717a);
+$ui-text-tertiary: var(--ui-text-tertiary, #a1a1aa);
+
+$ui-card-background: var(--ui-card-background, #fcfcfc);
+$ui-surface-secondary: var(--ui-surface-secondary, #f4f4f5);
+$ui-surface-tertiary: var(--ui-surface-tertiary, #efeff0);
+$ui-surface-hover: var(--ui-surface-hover, #f1f1f2);
+$ui-card-border: var(--ui-card-border, #e7e7ea);
+$ui-separator: var(--ui-separator, #ececee);
+
+$ui-primary: var(--ui-primary, #5695e0);
+$ui-primary-pressed: var(--ui-primary-pressed, #5087c9);
+$ui-primary-soft: var(--ui-primary-soft, rgba(86, 149, 224, .15));
+$ui-primary-soft-pressed: var(--ui-primary-soft-pressed, rgba(86, 149, 224, .2));
+$ui-on-primary: var(--ui-on-primary, #18181b);
+
+$ui-success: var(--ui-success, #17c964);
+$ui-success-background: var(--ui-success-background, rgba(23, 201, 100, .15));
+$ui-success-border: var(--ui-success-border, rgba(23, 201, 100, .28));
+$ui-warning: var(--ui-warning, #f5a524);
+$ui-warning-background: var(--ui-warning-background, rgba(245, 165, 36, .15));
+$ui-warning-border: var(--ui-warning-border, rgba(245, 165, 36, .28));
+$ui-danger: var(--ui-danger, #ff383c);
+$ui-danger-pressed: var(--ui-danger-pressed, #ff4c50);
+$ui-danger-background: var(--ui-danger-background, rgba(255, 56, 60, .15));
+$ui-danger-background-pressed: var(--ui-danger-background-pressed, rgba(255, 56, 60, .2));
+$ui-danger-border: var(--ui-danger-border, rgba(255, 56, 60, .28));
+
+$ui-field-background: var(--ui-field-background, #fcfcfc);
+$ui-field-border: var(--ui-field-border, #e4e4e7);
+$ui-overlay-background: var(--ui-overlay-background, rgba(0, 0, 0, .5));
+$ui-overlay-surface: var(--ui-overlay-surface, #fcfcfc);
+$ui-sheet-background: var(--ui-sheet-background, rgba(252, 252, 252, .96));
+$ui-glass-background: var(--ui-glass-background, rgba(252, 252, 252, .58));
+$ui-glass-border: var(--ui-glass-border, rgba(255, 255, 255, .7));
+$ui-glass-highlight-strong: var(--ui-glass-highlight-strong, rgba(255, 255, 255, .62));
+$ui-glass-highlight-medium: var(--ui-glass-highlight-medium, rgba(255, 255, 255, .22));
+$ui-glass-highlight-soft: var(--ui-glass-highlight-soft, rgba(255, 255, 255, .04));
+$ui-bottom-glass-brightness: var(--ui-bottom-glass-brightness, 90%);
+$ui-diffuse-glow: var(--ui-diffuse-glow, rgba(86, 149, 224, .04));
+$ui-diffuse-glow-strong: var(--ui-diffuse-glow-strong, rgba(86, 149, 224, .065));
+$ui-glass-shadow: var(--ui-glass-shadow, 0 6rpx 24rpx rgba(24, 24, 27, .025), 0 24rpx 64rpx rgba(24, 24, 27, .045), inset 0 1rpx 0 rgba(255, 255, 255, .4));
+$ui-glass-blur: 18rpx;
+$ui-glass-saturation: 132%;
+
+$ui-radius: 16rpx;
+$ui-field-radius: 24rpx;
+$ui-card-radius: 32rpx;
+$ui-button-radius: 999rpx;
+
+// Mobile sizing follows a 44px minimum touch target while retaining a
+// slightly denser option for read-only labels and high-density data tables.
+$ui-touch-target: 88rpx;
+$ui-control-height: 88rpx;
+$ui-control-height-large: 96rpx;
+$ui-font-body: 28rpx;
+$ui-font-control: 28rpx;
+$ui-font-label: 25rpx;
+$ui-font-caption: 24rpx;
+$ui-font-title: 32rpx;
+
+$ui-card-shadow: var(--ui-card-shadow, 0 6rpx 20rpx rgba(24, 24, 27, .025), 0 24rpx 64rpx rgba(24, 24, 27, .035));
+$ui-field-shadow: var(--ui-field-shadow, 0 4rpx 16rpx rgba(24, 24, 27, .018), 0 16rpx 44rpx rgba(24, 24, 27, .024));
+$ui-overlay-shadow: var(--ui-overlay-shadow, 0 10rpx 32rpx rgba(24, 24, 27, .035), 0 36rpx 96rpx rgba(24, 24, 27, .055));
+$ui-focus-ring: var(--ui-focus-ring, 0 0 0 4rpx rgba(86, 149, 224, .18));
+$ui-tab-indicator-shadow: var(--ui-tab-indicator-shadow, 0 10rpx 32rpx rgba(86, 149, 224, .08));
+$ui-disabled-opacity: .5;
+
+$ui-motion-duration-fast: .15s;
+$ui-motion-duration-medium: .25s;
+$ui-motion-duration-enter: .35s;
+$ui-motion-stagger: .04s;

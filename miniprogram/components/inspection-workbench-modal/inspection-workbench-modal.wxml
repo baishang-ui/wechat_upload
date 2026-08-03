@@ -7,11 +7,12 @@
         <view class="workbench-modal-eyebrow">{{task.task_no || '待检任务'}}</view>
         <view class="workbench-modal-title">{{currentPage.title || '产品检验'}}</view>
       </view>
-      <view class="workbench-close" bindtap="requestClose" aria-label="关闭" role="button" hover-class="workbench-close--pressed" hover-stay-time="120"><hero-icon name="x-mark" size="34rpx" /></view>
+      <view class="workbench-close" bindtap="requestClose" aria-label="关闭" role="button" hover-class="workbench-close--pressed" hover-stay-time="120"><hero-icon name="x-mark" size="40rpx" /></view>
     </view>
 
     <scroll-view class="workbench-modal-body" scroll-y enhanced show-scrollbar="{{false}}">
       <view wx:if="{{loading}}" class="modal-state-card">
+        <view class="state-spinner"><ui-spinner size="lg" label="正在加载线上检验表" /></view>
         <view class="modal-state-title">正在加载线上检验表</view>
         <view class="modal-state-description">正在读取产品模板和已有草稿，请稍候。</view>
       </view>
@@ -58,7 +59,7 @@
             <view class="section-title">质检单识别</view>
             <view class="section-description">识别结果将回填尺寸和安全性能；其它项目仍可手动核验。</view>
             <view class="recognition-actions">
-              <view class="recognition-button recognition-button--primary {{recognizing ? 'is-disabled' : ''}}" aria-disabled="{{recognizing}}" role="button" bindtap="takeQualitySheetPhoto">{{recognizing ? '正在识别…' : '拍摄质检单并识别'}}</view>
+              <view class="recognition-button recognition-button--primary {{recognizing ? 'is-disabled' : ''}}" aria-disabled="{{recognizing}}" role="button" bindtap="takeQualitySheetPhoto"><ui-spinner wx:if="{{recognizing}}" size="sm" color="current" label="正在识别质检单" /><text>{{recognizing ? '正在识别…' : '拍摄质检单并识别'}}</text></view>
               <view class="recognition-button {{recognizing ? 'is-disabled' : ''}}" aria-disabled="{{recognizing}}" role="button" bindtap="chooseQualitySheetPhoto">从相册选择</view>
             </view>
             <view wx:if="{{recognitionError}}" class="inline-error">{{recognitionError}}</view>
@@ -74,10 +75,11 @@
             <view class="section-title">验货图片识别</view>
             <view class="section-description">图片将同步到线上验货图片识别区域，并由线上工作台自动识别。</view>
             <view class="recognition-actions">
-              <view class="recognition-button recognition-button--primary {{photoUploading ? 'is-disabled' : ''}}" aria-disabled="{{photoUploading}}" role="button" bindtap="chooseInspectionPhotos">{{photoUploading ? '正在上传…' : '拍摄或选择验货图片'}}</view>
+              <view class="recognition-button recognition-button--primary {{photoUploading ? 'is-disabled' : ''}}" aria-disabled="{{photoUploading}}" role="button" bindtap="chooseInspectionPhotos"><ui-spinner wx:if="{{photoUploading}}" size="sm" color="current" label="正在上传验货图片" /><text>{{photoUploading ? '正在上传…' : '拍摄或选择验货图片'}}</text></view>
             </view>
             <view wx:if="{{photoUploadError}}" class="inline-error">{{photoUploadError}}</view>
             <view wx:if="{{inspectionImages.length}}" class="inspection-classification-status {{inspectionClassificationPending ? 'is-pending' : ''}}">
+              <ui-spinner wx:if="{{inspectionClassificationPending}}" size="sm" color="warning" label="线上正在识别归类" />
               <view class="inspection-classification-status-main">
                 <text class="classification-status-title">{{inspectionClassificationPending ? '线上正在识别归类' : '线上归类结果'}}</text>
                 <text wx:if="{{inspectionClassificationPending}}" class="classification-status-desc">识别完成后，重新打开订单即可同步到对应检验条目</text>
@@ -147,7 +149,7 @@
                 <view class="form-field form-field--decision">
                   <text class="form-field-label">判定</text>
                   <view class="decision-switch-control">
-                    <switch class="decision-switch" type="switch" color="#1ea978" checked="{{row.decision === 'OK'}}" data-row-key="{{row.rowKey}}" bindchange="onDecisionChange" />
+                    <switch class="decision-switch" type="switch" color="#17c964" checked="{{row.decision === 'OK'}}" data-row-key="{{row.rowKey}}" bindchange="onDecisionChange" />
                     <text class="decision-switch-label {{row.decision === 'OK' ? '' : 'is-ng'}}">{{row.decision === 'OK' ? 'OK' : 'NG'}}</text>
                   </view>
                 </view>
@@ -161,12 +163,12 @@
                 <view class="workbench-photo-grid">
                   <view wx:for="{{row.images}}" wx:key="id" wx:for-item="photo" class="workbench-photo {{photo.status === 'failed' ? 'is-failed' : ''}}">
                     <image class="workbench-photo-image" src="{{photo.localPath || photo.remoteUrl}}" mode="aspectFill" data-row-key="{{row.rowKey}}" data-photo-id="{{photo.id}}" bindtap="previewPhoto"></image>
-                    <view wx:if="{{photo.status === 'uploading'}}" class="photo-status">上传中</view>
+                    <view wx:if="{{photo.status === 'uploading'}}" class="photo-status"><ui-spinner size="sm" color="current" label="照片上传中" /><text>上传中</text></view>
                     <view wx:elif="{{photo.status === 'failed'}}" class="photo-status photo-status--failed">上传失败</view>
-                    <view class="photo-remove" data-row-key="{{row.rowKey}}" data-photo-id="{{photo.id}}" catchtap="removePhoto"><hero-icon name="x-mark" size="24rpx" /></view>
+                    <view class="photo-remove" data-row-key="{{row.rowKey}}" data-photo-id="{{photo.id}}" catchtap="removePhoto"><hero-icon name="x-mark" size="30rpx" /></view>
                     <view wx:if="{{photo.status === 'failed'}}" class="photo-retry" data-row-key="{{row.rowKey}}" data-photo-id="{{photo.id}}" catchtap="retryPhoto">重试</view>
                   </view>
-                  <view class="photo-add-button site-photo-add-button" role="button" hover-class="site-photo-add-button--pressed" hover-stay-time="120" data-row-key="{{row.rowKey}}" bindtap="addRowPhotos"><view class="photo-add-icon"><hero-icon name="plus" size="34rpx" /></view><text>添加照片</text></view>
+                  <view class="photo-add-button site-photo-add-button" role="button" hover-class="site-photo-add-button--pressed" hover-stay-time="120" data-row-key="{{row.rowKey}}" bindtap="addRowPhotos"><view class="photo-add-icon"><hero-icon name="plus" size="40rpx" /></view><text>添加照片</text></view>
                 </view>
               </view>
             </view>
@@ -179,15 +181,15 @@
               <view class="formal-final-label">检验结论</view>
               <view class="formal-final-options">
                 <view class="formal-final-option {{finalState.decision === 'OK' ? 'is-active' : ''}}">
-                  <hero-icon class="formal-final-checkbox" name="{{finalState.decision === 'OK' ? 'check-circle' : 'stop'}}" size="28rpx" />
+                  <hero-icon class="formal-final-checkbox" name="{{finalState.decision === 'OK' ? 'check-circle' : 'stop'}}" size="34rpx" />
                   <text>合格</text>
                 </view>
                 <view class="formal-final-option">
-                  <hero-icon class="formal-final-checkbox" name="stop" size="28rpx" />
+                  <hero-icon class="formal-final-checkbox" name="stop" size="34rpx" />
                   <text>让步接收</text>
                 </view>
                 <view class="formal-final-option formal-final-option--ng {{finalState.decision === 'NG' ? 'is-active' : ''}}">
-                  <hero-icon class="formal-final-checkbox" name="{{finalState.decision === 'NG' ? 'check-circle' : 'stop'}}" size="28rpx" />
+                  <hero-icon class="formal-final-checkbox" name="{{finalState.decision === 'NG' ? 'check-circle' : 'stop'}}" size="34rpx" />
                   <text>不合格</text>
                 </view>
               </view>
@@ -215,7 +217,7 @@
         <view class="page-status"><text class="page-status-value">{{pageNumber}} / {{pageTotal}}</text><text wx:if="{{dirty}}" class="page-status-dirty">未保存</text></view>
         <view class="page-button {{activePage >= pageTotal - 1 || loading ? 'is-disabled' : ''}}" aria-disabled="{{activePage >= pageTotal - 1 || loading}}" role="button" bindtap="goNextPage">下一页</view>
       </view>
-      <view class="save-button {{saving || recognizing || photoUploading || photoDeletingIndex >= 0 || loading ? 'is-disabled' : ''}}" aria-disabled="{{saving || recognizing || photoUploading || photoDeletingIndex >= 0 || loading}}" role="button" bindtap="saveDraft">{{saving ? '保存中…' : '保存草稿'}}</view>
+      <view class="save-button {{saving || recognizing || photoUploading || photoDeletingIndex >= 0 || loading ? 'is-disabled' : ''}}" aria-disabled="{{saving || recognizing || photoUploading || photoDeletingIndex >= 0 || loading}}" role="button" bindtap="saveDraft"><ui-spinner wx:if="{{saving}}" size="sm" color="current" label="正在保存草稿" /><text>{{saving ? '保存中…' : '保存草稿'}}</text></view>
     </view>
   </view>
 </view>

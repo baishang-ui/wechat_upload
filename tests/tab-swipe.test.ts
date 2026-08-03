@@ -4,6 +4,7 @@ import strictAssert from 'node:assert/strict'
 const assert: typeof strictAssert = strictAssert
 
 import {
+  DARK_INACTIVE_TAB_COLOR,
   getTabDragScaleY,
   getTabDragStretch,
   getTabIndicatorOffset,
@@ -23,11 +24,11 @@ import {
 } from '../miniprogram/domain/tab-swipe'
 
 test('tab indicator offsets follow the fixed button width and gap', () => {
-  assert.equal(TAB_SWIPE_STEP_PX, 76)
+  assert.equal(TAB_SWIPE_STEP_PX, 78)
   assert.equal(getTabIndicatorOffset('scan'), 0)
-  assert.equal(getTabIndicatorOffset('tasks'), 76)
-  assert.equal(getTabIndicatorOffset('history'), 152)
-  assert.equal(getTabIndicatorOffset('account'), 228)
+  assert.equal(getTabIndicatorOffset('tasks'), 78)
+  assert.equal(getTabIndicatorOffset('history'), 156)
+  assert.equal(getTabIndicatorOffset('account'), 234)
 })
 
 test('tab swipe activates only for a deliberate horizontal gesture', () => {
@@ -37,7 +38,7 @@ test('tab swipe activates only for a deliberate horizontal gesture', () => {
 })
 
 test('tab switches shortly before the finger reaches the adjacent option', () => {
-  assert.equal(TAB_SWIPE_SWITCH_THRESHOLD_PX, 54)
+  assert.equal(TAB_SWIPE_SWITCH_THRESHOLD_PX, 56)
   assert.ok(TAB_SWIPE_SWITCH_THRESHOLD_PX < TAB_SWIPE_STEP_PX)
   assert.equal(
     resolveReachedTab('scan', TAB_SWIPE_SWITCH_THRESHOLD_PX - 1),
@@ -122,17 +123,23 @@ test('fast same-direction crossings extend the active route without restarting i
   )
 })
 
-test('tab text and icons brighten continuously as the indicator covers them', () => {
+test('tab text and icons blend continuously into the muted accent foreground', () => {
   assert.deepEqual(getTabVisualColors(0), {
-    scan: 'rgb(255, 255, 255)',
-    tasks: 'rgb(117, 130, 151)',
-    history: 'rgb(117, 130, 151)',
-    account: 'rgb(117, 130, 151)',
+    scan: 'rgb(24, 24, 27)',
+    tasks: 'rgb(113, 113, 122)',
+    history: 'rgb(113, 113, 122)',
+    account: 'rgb(113, 113, 122)',
   })
   const halfway = getTabVisualColors(TAB_SWIPE_STEP_PX / 2)
   assert.equal(halfway.scan, halfway.tasks)
-  assert.notEqual(halfway.scan, 'rgb(255, 255, 255)')
-  assert.notEqual(halfway.scan, 'rgb(117, 130, 151)')
+  assert.notEqual(halfway.scan, 'rgb(24, 24, 27)')
+  assert.notEqual(halfway.scan, 'rgb(113, 113, 122)')
+})
+
+test('dark appearance uses a lighter inactive tab color while preserving active contrast', () => {
+  const colors = getTabVisualColors(0, DARK_INACTIVE_TAB_COLOR)
+  assert.equal(colors.scan, 'rgb(24, 24, 27)')
+  assert.equal(colors.tasks, 'rgb(161, 161, 170)')
 })
 
 test('drag deformation follows the latest horizontal movement direction', () => {

@@ -8,7 +8,7 @@ page {
 
 .login-page {
   box-sizing: border-box;
-  padding: calc(36px + env(safe-area-inset-top) + 8px + 72rpx) 28rpx calc(64rpx + env(safe-area-inset-bottom));
+  padding: calc(44px + env(safe-area-inset-top) + 8px + 72rpx) 32rpx calc(72rpx + env(safe-area-inset-bottom));
 }
 
 .login-shell {
@@ -25,14 +25,14 @@ page {
 
 .brand-mark {
   color: $ui-primary;
-  font-size: 22rpx;
+  font-size: $ui-font-caption;
   font-weight: 700;
   letter-spacing: 4rpx;
 }
 
 .login-title {
   margin-top: 18rpx;
-  font-size: 42rpx;
+  font-size: 46rpx;
   line-height: 1.25;
   font-weight: 700;
 }
@@ -41,14 +41,14 @@ page {
   max-width: 600rpx;
   margin-top: 16rpx;
   color: $ui-text-secondary;
-  font-size: 27rpx;
+  font-size: $ui-font-body;
   line-height: 1.65;
 }
 
 .login-card {
   width: 100%;
   box-sizing: border-box;
-  padding: 40rpx 34rpx 36rpx;
+  padding: 44rpx 38rpx 40rpx;
   background: $ui-card-background;
   border: 1rpx solid $ui-card-border;
   border-radius: $ui-card-radius;
@@ -57,7 +57,7 @@ page {
 }
 
 .login-form-heading {
-  font-size: 32rpx;
+  font-size: 34rpx;
   line-height: 1.3;
   font-weight: 700;
 }
@@ -65,31 +65,44 @@ page {
 .login-form-description {
   margin-top: 10rpx;
   color: $ui-text-secondary;
-  font-size: 24rpx;
+  font-size: $ui-font-caption;
   line-height: 1.5;
 }
 
 .login-field {
-  margin-top: 28rpx;
+  margin-top: 32rpx;
+  animation: login-detail-in $ui-motion-duration-enter .08s cubic-bezier(.2, .8, .2, 1) both;
+}
+
+.login-field + .login-field {
+  animation-delay: .12s;
 }
 
 .field-label {
   margin-bottom: 12rpx;
   color: $ui-text-primary;
-  font-size: 25rpx;
+  font-size: $ui-font-label;
   font-weight: 650;
 }
 
 .login-input {
   width: 100%;
-  height: 88rpx;
+  height: $ui-control-height-large;
   box-sizing: border-box;
-  padding: 0 26rpx;
+  padding: 0 28rpx;
   color: $ui-text-primary;
   background: $ui-field-background;
   border: 2rpx solid $ui-field-border;
-  border-radius: 18rpx;
-  font-size: 28rpx;
+  border-radius: $ui-field-radius;
+  box-shadow: $ui-field-shadow;
+  font-size: $ui-font-control;
+  transition: border-color $ui-motion-duration-fast cubic-bezier(0, 0, .58, 1), box-shadow $ui-motion-duration-fast cubic-bezier(0, 0, .58, 1), background $ui-motion-duration-fast cubic-bezier(0, 0, .58, 1);
+}
+
+.login-input:focus {
+  background: $ui-card-background;
+  border-color: $ui-primary;
+  box-shadow: $ui-focus-ring;
 }
 
 .error-message {
@@ -97,12 +110,13 @@ page {
   align-items: flex-start;
   gap: 14rpx;
   margin-top: 22rpx;
-  padding: 18rpx 20rpx;
+  padding: 20rpx 22rpx;
   color: $ui-danger;
   background: $ui-danger-background;
   border-radius: 16rpx;
-  font-size: 24rpx;
+  font-size: $ui-font-caption;
   line-height: 1.5;
+  animation: login-detail-in $ui-motion-duration-medium cubic-bezier(.2, .8, .2, 1) both;
 }
 
 .error-dot {
@@ -116,30 +130,33 @@ page {
 
 .login-button {
   width: 100%;
-  height: 92rpx;
-  margin: 32rpx 0 0;
+  height: $ui-control-height-large;
+  margin: 36rpx 0 0;
   padding: 0 20rpx;
   display: flex;
   align-items: center;
   justify-content: center;
+  gap: 12rpx;
   box-sizing: border-box;
-  color: #fff;
+  color: $ui-on-primary;
   background: $ui-primary;
-  border-radius: 20rpx;
+  border-radius: $ui-button-radius;
   font-size: 30rpx;
   font-weight: 600;
   line-height: 1.2;
-  transition: transform .16s cubic-bezier(.25, .1, .25, 1), background .16s cubic-bezier(.25, .1, .25, 1);
+  transition: transform $ui-motion-duration-medium cubic-bezier(.25, .1, .25, 1), background $ui-motion-duration-fast cubic-bezier(.25, .1, .25, 1);
+  animation: login-detail-in $ui-motion-duration-enter .16s cubic-bezier(.2, .8, .2, 1) both;
 }
 
 .login-button:active {
   background: $ui-primary-pressed;
-  transform: scale(.99);
+  transform: scale(.97);
 }
 
 .login-button[disabled] {
-  color: rgba(255, 255, 255, .8);
-  background: #8eabf4;
+  color: $ui-on-primary;
+  background: $ui-primary;
+  opacity: $ui-disabled-opacity;
 }
 
 .login-button::after {
@@ -155,5 +172,30 @@ page {
   to {
     opacity: 1;
     transform: translateY(0);
+  }
+}
+
+@keyframes login-detail-in {
+  from {
+    opacity: 0;
+    transform: translateY(10rpx);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .login-intro,
+  .login-card,
+  .login-field,
+  .error-message,
+  .login-button {
+    animation-duration: .01ms !important;
+    animation-delay: 0s !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .01ms !important;
   }
 }

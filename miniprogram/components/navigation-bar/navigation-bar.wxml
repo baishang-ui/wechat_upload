@@ -15,7 +15,7 @@
               aria-role="button"
               aria-label="返回"
             >
-              <view class="weui-navigation-bar__button weui-navigation-bar__btn_goback"><hero-icon name="chevron-left" size="24px" /></view>
+              <view class="weui-navigation-bar__button weui-navigation-bar__btn_goback"><hero-icon name="chevron-left" size="28px" /></view>
             </view>
           </view>
         </block>
@@ -29,7 +29,7 @@
               aria-role="button"
               aria-label="首页"
             >
-              <view class="weui-navigation-bar__button weui-navigation-bar__btn_home"><hero-icon name="home" size="22px" /></view>
+              <view class="weui-navigation-bar__button weui-navigation-bar__btn_home"><hero-icon name="home" size="26px" /></view>
             </view>
           </view>
         </block>
@@ -41,12 +41,8 @@
 
     <!-- 标题 -->
     <view class='weui-navigation-bar__center'>
-      <view wx:if="{{loading}}" class="weui-navigation-bar__loading" aria-role="alert">
-        <view
-          class="weui-loading"
-          aria-role="img"
-          aria-label="加载中"
-        ></view>
+      <view wx:if="{{loading}}" class="weui-navigation-bar__loading">
+        <ui-spinner size="sm" label="页面加载中" />
       </view>
       <block wx:if="{{title}}">
         <text>{{title}}</text>
