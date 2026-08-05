@@ -1,5 +1,6 @@
 <page-meta page-style="{{uiThemePageStyle}}" />
 <navigation-bar title="{{activeTab === 'scan' ? '检验报告识别' : activeTab === 'tasks' ? '采购待检任务' : activeTab === 'history' ? '识别记录' : '账户'}}" back="{{false}}" color="{{uiNavigationTextColor}}" background="{{uiNavigationBackground}}" bindheightchange="onNavigationHeightChange"></navigation-bar>
+<view class="workspace-window">
 <top-toast />
 
 <view wx:if="{{activeTab === 'scan' && screen === 'review'}}" class="review-native-page">
@@ -106,7 +107,7 @@
   class="page-scroll"
   scroll-y
   scroll-top="{{workspaceScrollTop}}"
-  scroll-with-animation="{{false}}"
+  scroll-with-animation="{{workspaceScrollWithAnimation}}"
   enhanced
   show-scrollbar="{{false}}"
   bindscrolltolower="loadMoreTasks"
@@ -273,7 +274,7 @@
       </view>
 
       <view wx:else class="task-list">
-        <view wx:for="{{taskItems}}" wx:key="id" wx:for-item="task" class="task-card card">
+        <view wx:for="{{taskItems}}" wx:key="id" wx:for-item="task" id="task-card-{{task.id}}" class="task-card card {{taskCardOverlayVisible && taskCardOverlayId === task.id ? 'is-source-hidden' : ''}}">
           <view class="task-card-head" data-id="{{task.id}}" bindtap="openTask">
             <view class="task-card-main">
               <view class="task-card-kicker">质检订单</view>
@@ -281,62 +282,10 @@
               <view class="task-card-details">
                 <view class="task-card-contract">采购合同：{{task.contract_no || '—'}}</view>
                 <view class="task-card-subtitle">{{task.customer_name || '未填写客户'}} · {{task.supplier_name || '未填写供应商'}}</view>
-                <view class="task-card-meta">{{task.signed_date || '无日期'}} · {{task.items.length || 0}} 项物料</view>
+                <view class="task-card-meta">{{task.signed_date || '无日期'}}</view>
               </view>
             </view>
-            <view class="task-status-badge {{task.status === 'completed' ? 'is-completed' : ''}}">{{task.status === 'completed' ? '已完成' : '待检'}}</view>
-          </view>
-          <view wx:if="{{selectedTaskId === task.id}}" class="task-item-list">
-            <view wx:if="{{taskOpeningId === task.id}}" class="task-item-syncing"><ui-spinner size="sm" label="正在同步线上产品" /><text>正在同步线上产品…</text></view>
-            <view wx:if="{{(!task.items || task.items.length === 0) && taskOpeningId !== task.id}}" class="task-item-empty">该任务暂无质检明细</view>
-            <view
-              wx:for="{{task.items}}"
-              wx:key="id"
-              wx:for-item="taskItem"
-              class="task-item {{selectedItemId === taskItem.id ? 'is-selected' : ''}}"
-              data-task-id="{{task.id}}"
-              data-item-id="{{taskItem.id}}"
-              role="button"
-              aria-label="检验 {{taskItem.material_name || taskItem.material_code || '未命名物料'}}"
-              bindtap="selectTaskItem"
-            >
-              <view class="task-item-header">
-                <view class="task-item-copy">
-                  <view class="task-item-name">{{taskItem.material_name || taskItem.material_code || '未命名物料'}}</view>
-                  <view class="task-item-meta">{{taskItem.spec_desc || '无规格'}} · {{taskItem.quantity || 0}} {{taskItem.unit || 'Pcs'}}</view>
-                </view>
-                <view class="task-item-action">
-                  <text>检验</text>
-                  <view class="task-item-action-icon"><hero-icon name="chevron-left" size="24rpx" /></view>
-                </view>
-              </view>
-              <view class="task-item-content">
-                <view class="task-item-inspection-summary">
-                  <text class="task-item-inspection-progress {{taskItem.inspection_summary && taskItem.inspection_summary.total ? '' : 'is-empty'}}">{{taskItem.inspection_summary && taskItem.inspection_summary.total ? '已填 ' + taskItem.inspection_summary.filled + '/' + taskItem.inspection_summary.total : '未录入'}}</text>
-                  <text wx:if="{{taskItem.inspection_summary && taskItem.inspection_summary.ng}}" class="task-item-inspection-result is-ng">NG {{taskItem.inspection_summary.ng}} 项</text>
-                  <text wx:elif="{{taskItem.inspection_summary && taskItem.inspection_summary.ok}}" class="task-item-inspection-result is-ok">OK {{taskItem.inspection_summary.ok}} 项</text>
-                </view>
-                <scroll-view wx:if="{{taskItem.preview_images && taskItem.preview_images.length}}" class="task-item-photo-scroll" scroll-x enhanced show-scrollbar="{{false}}">
-                  <view class="task-item-photo-list">
-                    <image
-                      wx:for="{{taskItem.preview_thumbnails}}"
-                      wx:key="*this"
-                      wx:for-item="taskPhoto"
-                      wx:for-index="taskPhotoIndex"
-                      class="task-item-photo"
-                      src="{{taskPhoto}}"
-                      mode="aspectFill"
-                      lazy-load="{{true}}"
-                      data-task-id="{{task.id}}"
-                      data-item-id="{{taskItem.id}}"
-                      data-url="{{taskItem.preview_images[taskPhotoIndex]}}"
-                      catchtap="previewTaskItemPhoto"
-                    ></image>
-                  </view>
-                </scroll-view>
-                <view wx:if="{{taskItem.preview_image_count > taskItem.preview_images.length}}" class="task-item-photo-count">还有 {{taskItem.preview_image_count - taskItem.preview_images.length}} 张</view>
-              </view>
-            </view>
+            <view class="task-product-count">共 {{task.items.length || 0}} 条产品</view>
           </view>
         </view>
         <view class="task-list-footer">
@@ -590,26 +539,90 @@
   </view>
 </scroll-view>
 
-<inspection-workbench-modal
-  wx:if="{{workbenchModalVisible}}"
-  visible="{{workbenchModalVisible}}"
-  task-id="{{workbenchModalTaskId}}"
-  item-id="{{workbenchModalItemId}}"
-  bindclose="closeWorkbenchModal"
-  bindsaved="onWorkbenchSaved"
-/>
-
-<history-editor-modal
-  wx:if="{{historyEditorVisible}}"
-  visible="{{historyEditorVisible}}"
-  origin="{{historyEditorOrigin}}"
-  record-id="{{historyEditorId}}"
-  source-type="{{historyEditorSourceType}}"
-  task-id="{{historyEditorTaskId}}"
-  item-id="{{historyEditorItemId}}"
-  bindclose="closeHistoryEditorModal"
-  bindsaved="onHistoryEditorModalSaved"
-/>
+<view
+  wx:if="{{taskCardOverlayVisible && activeTask}}"
+  class="task-card-overlay {{taskCardOverlayOpen ? 'is-open' : ''}} {{taskCardOverlayClosing ? 'is-closing' : ''}}"
+  style="left: {{taskCardOverlayOpen ? taskCardOverlayTargetLeft : taskCardOverlayOriginLeft}}px; top: {{taskCardOverlayOpen ? taskCardOverlayTargetTop : taskCardOverlayOriginTop}}px; width: {{taskCardOverlayOpen ? taskCardOverlayTargetWidth : taskCardOverlayOriginWidth}}px; height: {{taskCardOverlayOpen ? taskCardOverlayTargetHeight : taskCardOverlayOriginHeight}}px;"
+>
+  <view class="task-card-head" data-id="{{activeTask.id}}" bindtap="openTask">
+    <view class="task-card-main">
+      <view class="task-card-kicker">质检订单</view>
+      <view class="task-card-title">{{activeTask.task_no || '未编号质检订单'}}</view>
+      <view class="task-card-details">
+        <view class="task-card-contract">采购合同：{{activeTask.contract_no || '—'}}</view>
+        <view class="task-card-subtitle">{{activeTask.customer_name || '未填写客户'}} · {{activeTask.supplier_name || '未填写供应商'}}</view>
+        <view class="task-card-meta">{{activeTask.signed_date || '无日期'}}</view>
+      </view>
+    </view>
+    <view class="task-product-count">共 {{activeTask.items.length || 0}} 条产品</view>
+  </view>
+  <view class="task-item-list">
+    <scroll-view class="task-item-scroll" scroll-y enhanced show-scrollbar="{{false}}">
+      <view wx:if="{{taskOpeningId === activeTask.id}}" class="task-item-syncing"><ui-spinner size="sm" label="正在同步线上产品" /><text>正在同步线上产品…</text></view>
+      <view wx:if="{{(!activeTask.items || activeTask.items.length === 0) && taskOpeningId !== activeTask.id}}" class="task-item-empty">该任务暂无质检明细</view>
+      <view
+        wx:for="{{activeTask.items}}"
+        wx:key="id"
+        wx:for-item="taskItem"
+        wx:for-index="taskItemIndex"
+        class="task-item {{selectedItemId === taskItem.id ? 'is-selected' : ''}}"
+        style="animation-delay: {{250 + taskItemIndex * 60}}ms;"
+        data-task-id="{{activeTask.id}}"
+        data-item-id="{{taskItem.id}}"
+        role="button"
+        aria-label="检验 {{taskItem.material_name || taskItem.material_code || '未命名物料'}}"
+        bindtap="selectTaskItem"
+      >
+        <view class="task-item-header">
+          <view class="task-item-copy">
+            <view class="task-item-name">{{taskItem.material_name || taskItem.material_code || '未命名物料'}}</view>
+            <view class="task-item-tags">
+              <text wx:if="{{taskItem.material_code}}" class="task-item-tag is-code">编码 {{taskItem.material_code}}</text>
+              <text
+                wx:for="{{taskItem.spec_tags}}"
+                wx:key="key"
+                wx:for-item="specTag"
+                class="task-item-tag is-spec is-spec-{{specTag.kind}}"
+              >{{specTag.label}} {{specTag.value}}</text>
+              <text wx:if="{{!taskItem.spec_tags || taskItem.spec_tags.length === 0}}" class="task-item-tag is-spec">规格 待补充</text>
+              <text class="task-item-tag is-quantity">数量 {{taskItem.quantity || 0}} {{taskItem.unit || 'Pcs'}}</text>
+            </view>
+          </view>
+          <view class="task-item-action">
+            <text>检验</text>
+            <view class="task-item-action-icon"><hero-icon name="chevron-left" size="24rpx" /></view>
+          </view>
+        </view>
+        <view class="task-item-content">
+          <view class="task-item-inspection-summary">
+            <text class="task-item-inspection-progress {{taskItem.inspection_summary && taskItem.inspection_summary.total ? '' : 'is-empty'}}">{{taskItem.inspection_summary && taskItem.inspection_summary.total ? '已填 ' + taskItem.inspection_summary.filled + '/' + taskItem.inspection_summary.total : '未录入'}}</text>
+            <text wx:if="{{taskItem.inspection_summary && taskItem.inspection_summary.ng}}" class="task-item-inspection-result is-ng">NG {{taskItem.inspection_summary.ng}} 项</text>
+            <text wx:elif="{{taskItem.inspection_summary && taskItem.inspection_summary.ok}}" class="task-item-inspection-result is-ok">OK {{taskItem.inspection_summary.ok}} 项</text>
+          </view>
+          <scroll-view wx:if="{{taskItem.preview_images && taskItem.preview_images.length}}" class="task-item-photo-scroll" scroll-x enhanced show-scrollbar="{{false}}">
+            <view class="task-item-photo-list">
+              <image
+                wx:for="{{taskItem.preview_thumbnails}}"
+                wx:key="*this"
+                wx:for-item="taskPhoto"
+                wx:for-index="taskPhotoIndex"
+                class="task-item-photo"
+                src="{{taskPhoto}}"
+                mode="aspectFill"
+                lazy-load="{{true}}"
+                data-task-id="{{activeTask.id}}"
+                data-item-id="{{taskItem.id}}"
+                data-url="{{taskItem.preview_images[taskPhotoIndex]}}"
+                catchtap="previewTaskItemPhoto"
+              ></image>
+            </view>
+          </scroll-view>
+          <view wx:if="{{taskItem.preview_image_count > taskItem.preview_images.length}}" class="task-item-photo-count">还有 {{taskItem.preview_image_count - taskItem.preview_images.length}} 张</view>
+        </view>
+      </view>
+    </scroll-view>
+  </view>
+</view>
 
 <view
   class="floating-tabs {{tabDragging ? 'is-dragging is-dragging-' + tabDragDirection : ''}} {{tabSettling ? 'is-settling is-settling-' + tabSettlingDirection : ''}}"
@@ -640,3 +653,25 @@
     <text>账户</text>
   </view>
 </view>
+</view>
+
+<inspection-workbench-modal
+  wx:if="{{workbenchModalVisible}}"
+  visible="{{workbenchModalVisible}}"
+  task-id="{{workbenchModalTaskId}}"
+  item-id="{{workbenchModalItemId}}"
+  bindclose="closeWorkbenchModal"
+  bindsaved="onWorkbenchSaved"
+/>
+
+<history-editor-modal
+  wx:if="{{historyEditorVisible}}"
+  visible="{{historyEditorVisible}}"
+  origin="{{historyEditorOrigin}}"
+  record-id="{{historyEditorId}}"
+  source-type="{{historyEditorSourceType}}"
+  task-id="{{historyEditorTaskId}}"
+  item-id="{{historyEditorItemId}}"
+  bindclose="closeHistoryEditorModal"
+  bindsaved="onHistoryEditorModalSaved"
+/>

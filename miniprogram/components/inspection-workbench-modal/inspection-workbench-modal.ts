@@ -934,6 +934,7 @@ Component({
     finishClose() {
       if (this.data.closing) return
       // Keep the drawer mounted until its record-style slide-down animation finishes.
+      this.triggerEvent('closing')
       this.setData({ closing: true })
       setTimeout(() => {
         this.triggerEvent('close', { taskId: this.data.taskId, itemId: this.data.itemId, saved: !this.data.dirty })
@@ -981,7 +982,7 @@ Component({
         const savedMessage = deletedRecordImages.length ? '图片已删除并同步' : '草稿已保存'
         this.setData({ savedMessage, dirty: false })
         showTopToast({ title: savedMessage, icon: 'success' })
-        this.triggerEvent('saved', { taskId: this.data.taskId, itemId: this.data.itemId })
+        this.triggerEvent('saved', { taskId: this.data.taskId, itemId: this.data.itemId, closing: shouldClose })
         if (shouldClose) this.finishClose()
       } catch (error) {
         if (this.isActiveWorkbenchRequest(this.data.taskId, this.data.itemId)) {

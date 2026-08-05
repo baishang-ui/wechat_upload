@@ -386,6 +386,7 @@ Component({
     finishClose() {
       if (this.data.closing) return
       historyEditorDraftValues.delete(this)
+      this.triggerEvent('closing')
       this.setData({
         closing: true,
         expandedRowIndex: -1,

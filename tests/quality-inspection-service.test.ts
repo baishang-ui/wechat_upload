@@ -16,6 +16,7 @@ import {
   listInspectionTasks,
   listProductQualityTemplates,
   matchRecognizedInspectionToPendingItem,
+  normalizeQualityInspectionItem,
   recognizeInspectionFile,
   saveInspectionDraft,
   uploadInspectionDraftImage,
@@ -46,6 +47,19 @@ function createCompleteRecord() {
     inspector: '检验员',
   })
 }
+
+test('task items parse local specifications into display tags', () => {
+  const item = normalizeQualityInspectionItem({
+    id: 811,
+    spec_desc: '115 × 22.23mm，P60，T29',
+  })
+
+  assert.deepEqual(item.spec_tags, [
+    { key: 'dimension-0', kind: 'dimension', label: '尺寸', value: '115 × 22.23 mm' },
+    { key: 'grit-1', kind: 'grit', label: '粒度', value: 'P60' },
+    { key: 'shape-2', kind: 'shape', label: '型式', value: 'T29' },
+  ])
+})
 
 test('listProductQualityTemplates reads inspection rows from the product database endpoint', async () => {
   const calls: Array<Record<string, unknown>> = []

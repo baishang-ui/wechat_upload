@@ -2481,11 +2481,35 @@ page {
 }
 
 .task-card {
+  height: 302rpx;
   padding: 0;
   overflow: hidden;
   border-radius: $ui-card-radius;
-  transition: transform .16s cubic-bezier(.25, .1, .25, 1), box-shadow .16s cubic-bezier(.25, .1, .25, 1);
+  transition: box-shadow .2s cubic-bezier(.16, 1, .3, 1);
   animation: content-rise .38s cubic-bezier(0, 0, .58, 1) both;
+}
+
+.task-card.is-source-hidden {
+  visibility: hidden;
+}
+
+.task-card-overlay {
+  position: fixed;
+  z-index: 30;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1rpx solid $ui-card-border;
+  border-radius: $ui-card-radius;
+  background: $ui-card-background;
+  box-shadow: $ui-card-shadow;
+  will-change: left, top, width, height;
+  transition: left .46s cubic-bezier(.16, 1, .3, 1), top .46s cubic-bezier(.16, 1, .3, 1), width .46s cubic-bezier(.16, 1, .3, 1), height .46s cubic-bezier(.16, 1, .3, 1);
+}
+
+.task-card-overlay.is-closing {
+  pointer-events: none;
 }
 
 .task-card-head {
@@ -2494,6 +2518,18 @@ page {
   gap: 20rpx;
   padding: 28rpx;
   transition: background .15s cubic-bezier(0, 0, .58, 1);
+}
+
+.task-card-overlay .task-card-head {
+  flex: none;
+  flex-shrink: 0;
+  box-sizing: border-box;
+  border-bottom: 1rpx solid transparent;
+  transition: background .15s cubic-bezier(0, 0, .58, 1), border-color .46s cubic-bezier(.16, 1, .3, 1);
+}
+
+.task-card-overlay.is-open .task-card-head {
+  border-bottom-color: $ui-separator;
 }
 
 .task-card-head:active {
@@ -2549,7 +2585,7 @@ page {
   font-size: $ui-font-caption;
 }
 
-.task-status-badge {
+.task-product-count {
   padding: 9rpx 16rpx;
   flex: none;
   color: $ui-primary;
@@ -2559,28 +2595,95 @@ page {
   font-weight: 700;
 }
 
-.task-status-badge.is-completed {
-  color: $ui-success;
-  background: $ui-success-background;
-}
-
 .task-item-list {
-  padding: 16rpx;
+  min-height: 0;
+  flex: 1;
+  padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 14rpx;
-  background: $ui-surface-secondary;
-  border-top: 1rpx solid $ui-separator;
-  animation: section-reveal $ui-motion-duration-medium cubic-bezier(.2, .8, .2, 1) both;
+  overflow: hidden;
+  background: $ui-sheet-background;
+}
+
+.task-card-overlay .task-item-list {
+  opacity: 0;
+  filter: blur(0);
+  transform: translate3d(0, 20rpx, 0);
+  will-change: opacity, filter, transform;
+}
+
+.task-card-overlay.is-open .task-item-list {
+  animation: task-item-list-focus-in .46s cubic-bezier(.16, 1, .3, 1) both;
+}
+
+.task-card-overlay.is-closing .task-item-list {
+  animation: task-item-list-focus-out .46s cubic-bezier(.16, 1, .3, 1) both;
+}
+
+@keyframes task-item-list-focus-in {
+  from {
+    opacity: 0;
+    filter: blur(0);
+    transform: translate3d(0, 20rpx, 0);
+  }
+
+  45% {
+    opacity: .68;
+    filter: blur(10rpx);
+    transform: translate3d(0, 8rpx, 0);
+  }
+
+  to {
+    opacity: 1;
+    filter: blur(0);
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+@keyframes task-item-list-focus-out {
+  from {
+    opacity: 1;
+    filter: blur(0);
+    transform: translate3d(0, 0, 0);
+  }
+
+  45% {
+    opacity: .68;
+    filter: blur(10rpx);
+    transform: translate3d(0, 8rpx, 0);
+  }
+
+  to {
+    opacity: 0;
+    filter: blur(0);
+    transform: translate3d(0, 20rpx, 0);
+  }
+}
+
+.task-item-scroll {
+  min-height: 0;
+  flex: 1;
+  padding: 16rpx;
+  box-sizing: border-box;
 }
 
 .task-item {
+  margin-bottom: 14rpx;
   padding: 24rpx;
   border: 1rpx solid $ui-card-border;
   border-radius: $ui-card-radius;
   background: $ui-card-background;
   box-shadow: $ui-field-shadow;
   transition: border-color .16s cubic-bezier(.25, .1, .25, 1), box-shadow .16s cubic-bezier(.25, .1, .25, 1), transform .16s cubic-bezier(.25, .1, .25, 1);
+}
+
+.task-card-overlay.is-open .task-item {
+  animation: task-product-enter .3s cubic-bezier(.16, 1, .3, 1) both;
+}
+
+@keyframes task-product-enter {
+  from { opacity: 0; transform: translateY(12rpx); }
+  to { opacity: 1; transform: translateY(0); }
 }
 
 .task-item:active {
@@ -2618,11 +2721,41 @@ page {
   white-space: nowrap;
 }
 
-.task-item-meta {
-  margin-top: 6rpx;
+.task-item-tags {
+  margin-top: 12rpx;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8rpx;
+}
+
+.task-item-tag {
+  max-width: 100%;
+  padding: 4rpx 10rpx;
+  box-sizing: border-box;
   overflow: hidden;
+  border: 1rpx solid transparent;
+  border-radius: 999rpx;
+  font-size: $ui-font-caption;
+  font-weight: 600;
+  line-height: 1.4;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.task-item-tag.is-code {
+  color: $ui-text-secondary;
+  border-color: $ui-card-border;
+  background: $ui-surface-secondary;
+}
+
+.task-item-tag.is-spec {
+  color: $ui-primary;
+  background: $ui-primary-soft;
+}
+
+.task-item-tag.is-quantity {
+  color: $ui-success;
+  background: $ui-success-background;
 }
 
 .task-item-syncing {

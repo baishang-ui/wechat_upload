@@ -96,14 +96,29 @@ test('inspection workbench drawer keeps record-style fixed height, scrollable co
 
   assert.match(wxml, /class="workbench-modal-layer \{\{closing \? 'is-closing' : ''\}\}"/)
   assert.match(scss, /\.workbench-modal-panel\s*\{[\s\S]*?height:\s*88vh/)
+  assert.match(scss, /\.workbench-modal-panel\s*\{[^}]*will-change:\s*transform;[^}]*transform:\s*translate3d\(0, 100%, 0\);/s)
+  assert.doesNotMatch(scss.match(/\.workbench-modal-panel\s*\{[^}]*\}/)?.[0] || '', /backdrop-filter:/)
   assert.doesNotMatch(scss, /\.workbench-modal-panel\s*\{[\s\S]*?max-height:\s*91vh/)
   assert.match(scss, /\.workbench-modal-body\s*\{[\s\S]*?min-height:\s*0[\s\S]*?flex:\s*1/)
   assert.match(scss, /\.workbench-modal-actions\s*\{[\s\S]*?flex:\s*none/)
   assert.match(scss, /\.workbench-modal-layer\.is-closing \.workbench-modal-mask\s*\{[\s\S]*?modal-mask-out/)
   assert.match(scss, /\.workbench-modal-layer\.is-closing \.workbench-modal-panel\s*\{[\s\S]*?modal-sheet-down/)
+  assert.match(scss, /@keyframes modal-sheet-up\s*\{[\s\S]*?translate3d\(0, 100%, 0\)[\s\S]*?translate3d\(0, 0, 0\)/)
+  assert.match(scss, /@keyframes modal-sheet-down\s*\{[\s\S]*?translate3d\(0, 0, 0\)[\s\S]*?translate3d\(0, 100%, 0\)/)
   assert.match(ts, /closing:\s*false/)
   assert.match(ts, /this\.setData\(\{ closing: true \}\)/)
   assert.match(ts, /setTimeout\([\s\S]*?this\.triggerEvent\('close'/)
+})
+
+test('bottom drawers keep the background workspace static in both directions', () => {
+  const wxml = source('miniprogram/pages/index/index.wxml')
+  const scss = source('miniprogram/pages/index/index.scss')
+  const page = source('miniprogram/pages/index/index.ts')
+
+  assert.match(wxml, /^<page-meta[^>]*\/>\s*<navigation-bar[^>]*><\/navigation-bar>\s*<view class="workspace-window">[\s\S]*?<top-toast\s*\/>[\s\S]*?<scroll-view[\s\S]*?<view[\s\S]*class="floating-tabs/)
+  assert.doesNotMatch(wxml, /is-drawer-open|is-drawer-closing|bindclosing=/)
+  assert.doesNotMatch(page, /workspaceDrawerClosing|onWorkbenchModalClosing|onHistoryEditorModalClosing/)
+  assert.doesNotMatch(scss, /workspace-card-slide|\.workspace-window\.is-drawer-open|\.workspace-window\s*\{[\s\S]*?transform/)
 })
 
 test('inspection workbench keeps actions readable and content orderly on narrow screens', () => {
@@ -131,20 +146,70 @@ test('inspection workbench keeps actions readable and content orderly on narrow 
   assert.match(scss, /\.save-button\s*\{[\s\S]*?width:\s*100%/)
   assert.match(wxml, /现场照片[\s\S]*?<view class="photo-add-button site-photo-add-button"/)
   assert.doesNotMatch(wxml, /现场照片[\s\S]*?<button class="photo-add-button"/)
-  assert.match(scss, /\.site-photo-add-button\s*\{[^}]*width:\s*156rpx;[^}]*min-width:\s*156rpx;[^}]*max-width:\s*156rpx;[^}]*height:\s*156rpx;[^}]*min-height:\s*156rpx;[^}]*max-height:\s*156rpx;/)
+  assert.match(scss, /\.site-photo-add-button\s*\{[^}]*width:\s*140rpx;[^}]*min-width:\s*140rpx;[^}]*max-width:\s*140rpx;[^}]*height:\s*140rpx;[^}]*min-height:\s*140rpx;[^}]*max-height:\s*140rpx;/)
   assert.match(scss, /@media \(max-width:\s*360px\)[\s\S]*?\.recognition-actions[\s\S]*?flex-direction:\s*column/)
   assert.match(scss, /@media \(max-width:\s*360px\)[\s\S]*?\.measurement-grid[\s\S]*?grid-template-columns:\s*1fr/)
   assert.match(scss, /@media \(max-width:\s*360px\)[\s\S]*?\.workbench-photo-grid[\s\S]*?grid-template-columns:\s*repeat\(2, minmax\(0, 1fr\)\)/)
 })
 
-test('closing or saving the workbench leaves list refresh to the pull-down gesture', () => {
+test('inspection workbench uses a slightly compact visual scale without shrinking the close target', () => {
+  const scss = source('miniprogram/components/inspection-workbench-modal/inspection-workbench-modal.scss')
+  const titleRule = scss.match(/\.workbench-modal-title\s*\{([^}]*)\}/)?.[1] || ''
+  const bodyRule = scss.match(/\.workbench-modal-body\s*\{([^}]*)\}/)?.[1] || ''
+  const cardRule = scss.match(/\.modal-state-card,[\s\S]*?\.unmatched-item\s*\{([^}]*)\}/)?.[1] || ''
+  const summaryRule = scss.match(/\.inspection-item-summary\s*\{([^}]*)\}/)?.[1] || ''
+  const actionsRule = scss.match(/\.workbench-modal-actions\s*\{([^}]*)\}/)?.[1] || ''
+  const closeRule = scss.match(/\.workbench-close\s*\{([^}]*)\}/)?.[1] || ''
+
+  assert.match(titleRule, /font-size:\s*35rpx/)
+  assert.match(bodyRule, /padding:\s*22rpx 24rpx 0/)
+  assert.match(cardRule, /margin-bottom:\s*16rpx/)
+  assert.match(cardRule, /padding:\s*24rpx/)
+  assert.match(summaryRule, /min-height:\s*116rpx/)
+  assert.match(summaryRule, /padding:\s*22rpx 24rpx/)
+  assert.match(actionsRule, /padding:\s*14rpx 20rpx calc\(16rpx \+ env\(safe-area-inset-bottom\)\)/)
+  assert.match(closeRule, /width:\s*\$ui-touch-target/)
+  assert.match(closeRule, /height:\s*\$ui-touch-target/)
+})
+
+test('closing the workbench does not refresh the whole task list', () => {
   const indexTs = source('miniprogram/pages/index/index.ts')
-  const closeMethod = indexTs.match(/closeWorkbenchModal\(\)\s*\{([\s\S]*?)\n    \},\n    onWorkbenchSaved/)?.[1] || ''
-  const savedMethod = indexTs.match(/onWorkbenchSaved\(\)\s*\{([\s\S]*?)\n    \},/)?.[1] || ''
+  const closeMethod = indexTs.match(/closeWorkbenchModal\(\)\s*\{([\s\S]*?)\n    \},\n    queueWorkbenchTaskRefresh/)?.[1] || ''
+  const closeHistoryMethod = indexTs.match(/closeHistoryEditorModal\(\)\s*\{([\s\S]*?)\n    \},\n    noop/)?.[1] || ''
 
   assert.ok(closeMethod)
   assert.doesNotMatch(closeMethod, /loadTasks/)
+  assert.doesNotMatch(closeMethod, /queueWorkbenchTaskRefresh|getInspectionTask|refreshQueuedWorkbenchTask/)
+  assert.doesNotMatch(closeHistoryMethod, /loadHistory|listInspectionHistory|getInspectionTask/)
+})
+
+test('saving a workbench coalesces online compact refreshes in the background', () => {
+  const indexTs = source('miniprogram/pages/index/index.ts')
+  const modal = source('miniprogram/components/inspection-workbench-modal/inspection-workbench-modal.ts')
+  const savedMethod = indexTs.match(/onWorkbenchSaved\([\s\S]*?\n    \},\n    onHistoryEditorSaved/)?.[0] || ''
+  const queueMethod = indexTs.match(/queueWorkbenchTaskRefresh\([\s\S]*?\n    \},\n    async refreshQueuedWorkbenchTask/)?.[0] || ''
+  const refreshMethod = indexTs.match(/async refreshQueuedWorkbenchTask\([\s\S]*?\n    \},\n    onWorkbenchSaved/)?.[0] || ''
+  const detachedMethod = indexTs.match(/detached\(\)\s*\{([\s\S]*?)\n    \},/)?.[1] || ''
+
+  assert.ok(savedMethod)
+  assert.match(savedMethod, /event\.detail\.taskId/)
+  assert.match(savedMethod, /event\.detail\.itemId/)
+  assert.match(savedMethod, /if \(event\.detail\.closing\) return/)
+  assert.match(savedMethod, /this\.queueWorkbenchTaskRefresh\(\{ taskId, itemId \}\)/)
+  assert.doesNotMatch(savedMethod, /getInspectionTask/)
+  assert.match(indexTs, /WORKBENCH_REFRESH_DEBOUNCE_MS\s*=\s*600/)
+  assert.match(indexTs, /workbenchRefreshTimers\s*=\s*new WeakMap/)
+  assert.match(indexTs, /workbenchRefreshTargets\s*=\s*new WeakMap/)
+  assert.match(indexTs, /workbenchRefreshInFlight\s*=\s*new WeakSet/)
+  assert.match(queueMethod, /clearWorkbenchRefreshTimer\(this\)/)
+  assert.match(queueMethod, /setTimeout/)
+  assert.match(queueMethod, /void this\.refreshQueuedWorkbenchTask\(\)/)
+  assert.match(refreshMethod, /getInspectionTask\(target\.taskId, true\)/)
+  assert.match(refreshMethod, /workbenchRefreshInFlight\.has\(this\)/)
+  assert.match(refreshMethod, /this\.queueWorkbenchTaskRefresh\(nextTarget\)/)
+  assert.match(detachedMethod, /disposeWorkbenchRefresh\(this\)/)
   assert.doesNotMatch(savedMethod, /loadTasks/)
+  assert.match(modal, /this\.triggerEvent\('saved', \{ taskId: this\.data\.taskId, itemId: this\.data\.itemId, closing: shouldClose \}\)/)
 })
 
 test('manual save from the drawer does not treat the tap event as a close-after-save request', () => {

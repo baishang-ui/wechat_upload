@@ -12,6 +12,7 @@ import {
   RawApiRecord,
 } from '../domain/inspection-record'
 import { RecognitionConfidencePayload } from '../domain/recognition-review'
+import { parseProductSpecification, ProductSpecificationTag } from '../domain/product-specification'
 import { DATA_SERVER_BASE_URL, RECOGNITION_API_URL } from '../config/server'
 import { InspectionTemplateDto } from '../domain/inspection-workbench'
 import {
@@ -109,6 +110,7 @@ export interface QualityInspectionItemDto {
   material_code?: string | null
   material_name?: string | null
   spec_desc?: string | null
+  spec_tags?: ProductSpecificationTag[]
   unit?: string | null
   quantity?: number | null
   packaging_method?: string | null
@@ -1214,6 +1216,7 @@ export function normalizeQualityInspectionItem(
   const serverImageCount = Math.max(0, Number(item.preview_image_count) || 0)
   const normalized: QualityInspectionItemDto = {
     ...item,
+    spec_tags: parseProductSpecification(item.spec_desc),
     inspection_draft: inspectionDraft,
     preview_images: previewImages,
     preview_thumbnails: previewThumbnails,

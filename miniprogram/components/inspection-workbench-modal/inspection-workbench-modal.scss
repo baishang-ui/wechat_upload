@@ -37,8 +37,8 @@
   border-radius: 48rpx 48rpx 0 0;
   background: $ui-sheet-background;
   box-shadow: $ui-overlay-shadow;
-  -webkit-backdrop-filter: blur(34rpx) saturate(150%);
-  backdrop-filter: blur(34rpx) saturate(150%);
+  will-change: transform;
+  transform: translate3d(0, 100%, 0);
   animation: modal-sheet-up .32s cubic-bezier(.2, .8, .2, 1) both;
 }
 
@@ -82,7 +82,7 @@
 .workbench-modal-title {
   margin-top: 4rpx;
   color: $ui-text-primary;
-  font-size: 39rpx;
+  font-size: 35rpx;
   overflow: hidden;
   font-weight: 750;
   line-height: 1.25;
@@ -119,7 +119,7 @@
   min-height: 0;
   flex: 1;
   box-sizing: border-box;
-  padding: 28rpx 28rpx 0;
+  padding: 22rpx 24rpx 0;
 }
 
 .modal-state-card,
@@ -133,8 +133,8 @@
 .inspection-empty-state,
 .formal-final-card,
 .unmatched-item {
-  margin-bottom: 20rpx;
-  padding: 30rpx;
+  margin-bottom: 16rpx;
+  padding: 24rpx;
   border: 1rpx solid $ui-card-border;
   border-radius: $ui-card-radius;
   background: $ui-overlay-surface;
@@ -362,7 +362,7 @@
 .inspection-empty-title { margin-bottom: 8rpx; color: $ui-text-primary; font-size: 29rpx; font-weight: 700; }
 .inspection-item-card { padding: 0; overflow: hidden; transition: border-color .2s cubic-bezier(.25, .1, .25, 1), box-shadow .2s cubic-bezier(.25, .1, .25, 1); }
 .inspection-item-card.is-expanded { border-color: $ui-primary; box-shadow: $ui-focus-ring; }
-.inspection-item-summary { min-height: 136rpx; padding: 27rpx 28rpx; }
+.inspection-item-summary { min-height: 116rpx; padding: 22rpx 24rpx; }
 .inspection-item-title-wrap { min-width: 0; padding-right: 18rpx; }
 .inspection-item-title { color: $ui-text-primary; font-size: 30rpx; font-weight: 700; line-height: 1.38; }
 .inspection-item-standard { margin-top: 7rpx; overflow: hidden; color: $ui-text-secondary; font-size: 25rpx; line-height: 1.4; text-overflow: ellipsis; white-space: nowrap; }
@@ -386,7 +386,7 @@
 .photo-section { margin-top: 22rpx; }
 .workbench-photo-grid { margin-top: 10rpx; display: grid; grid-template-columns: repeat(3, 1fr); gap: 10rpx; }
 .workbench-photo,
-.photo-add-button { position: relative; width: 100%; height: 156rpx; min-height: 0; margin: 0; padding: 0; overflow: hidden; border-radius: 16rpx; background: $ui-field-background; }
+.photo-add-button { position: relative; width: 100%; height: 140rpx; min-height: 0; margin: 0; padding: 0; overflow: hidden; border-radius: 16rpx; background: $ui-field-background; }
 .workbench-photo-image { width: 100%; height: 100%; }
 .workbench-photo.is-failed { outline: 2rpx solid $ui-danger; }
 .photo-status,
@@ -396,7 +396,7 @@
 .photo-retry { background: rgba(218, 77, 91, .92); }
 .photo-remove { position: absolute; top: 6rpx; right: 6rpx; width: 56rpx; height: 56rpx; display: flex; align-items: center; justify-content: center; color: #fff; border-radius: 50%; background: rgba(20, 33, 56, .7); }
 .photo-add-button { display: flex; align-items: center; justify-content: center; flex-direction: column; color: $ui-primary; font-size: 23rpx; border: 1rpx dashed $ui-primary; background: $ui-primary-soft; transition: background .1s cubic-bezier(0, 0, .58, 1), transform .25s cubic-bezier(.25, .1, .25, 1); }
-.site-photo-add-button { width: 156rpx; min-width: 156rpx; max-width: 156rpx; height: 156rpx; min-height: 156rpx; max-height: 156rpx; box-sizing: border-box; flex: none; align-self: start; justify-self: start; }
+.site-photo-add-button { width: 140rpx; min-width: 140rpx; max-width: 140rpx; height: 140rpx; min-height: 140rpx; max-height: 140rpx; box-sizing: border-box; flex: none; align-self: start; justify-self: start; }
 .site-photo-add-button--pressed { background: $ui-primary-soft-pressed; transform: scale(.97); }
 .photo-add-icon { margin-bottom: 3rpx; }
 
@@ -521,7 +521,7 @@
   flex: none;
   width: 100%;
   box-sizing: border-box;
-  padding: 18rpx 24rpx calc(20rpx + env(safe-area-inset-bottom));
+  padding: 14rpx 20rpx calc(16rpx + env(safe-area-inset-bottom));
   display: flex;
   flex-direction: column;
   gap: 12rpx;
@@ -594,8 +594,8 @@
 
 @keyframes modal-mask-in { from { opacity: 0; } to { opacity: 1; } }
 @keyframes modal-mask-out { from { opacity: 1; } to { opacity: 0; } }
-@keyframes modal-sheet-up { from { transform: translateY(100%); } to { transform: translateY(0); } }
-@keyframes modal-sheet-down { from { transform: translateY(0); } to { transform: translateY(100%); } }
+@keyframes modal-sheet-up { from { transform: translate3d(0, 100%, 0); } to { transform: translate3d(0, 0, 0); } }
+@keyframes modal-sheet-down { from { transform: translate3d(0, 0, 0); } to { transform: translate3d(0, 100%, 0); } }
 
 .workbench-modal-layer.is-closing .workbench-modal-panel {
   animation: modal-sheet-down .3s cubic-bezier(.4, 0, 1, 1) both;

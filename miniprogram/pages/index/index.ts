@@ -106,6 +106,12 @@ interface HistoryEditorSavedPayload {
   record: StoredInspectionRecord
 }
 
+interface WorkbenchSavedPayload {
+  taskId: number
+  itemId: number
+  closing?: boolean
+}
+
 const productLabels = PRODUCT_OPTIONS.map((option) => option.label)
 const measurementHeaders = Array.from({ length: MEASUREMENT_COUNT }, (_, index) => index + 1)
 const RECOGNITION_PROGRESS_TICK_MS = 300
@@ -117,7 +123,13 @@ const recognitionStageTimers = new WeakMap<object, Set<ReturnType<typeof setTime
 const taskListRequests = new WeakMap<object, Promise<void>>()
 const historyListRequests = new WeakMap<object, Promise<void>>()
 const tabSettleTimers = new WeakMap<object, ReturnType<typeof setTimeout>>()
+const workbenchRefreshTimers = new WeakMap<object, ReturnType<typeof setTimeout>>()
+const workbenchRefreshTargets = new WeakMap<object, WorkbenchSavedPayload>()
+const workbenchRefreshInFlight = new WeakSet<object>()
+const taskCardOverlayCleanupTimers = new WeakMap<object, ReturnType<typeof setTimeout>>()
 const TAB_SETTLE_DURATION_MS = 400
+const WORKBENCH_REFRESH_DEBOUNCE_MS = 600
+const TASK_CARD_OVERLAY_DURATION_MS = 460
 const HISTORY_IMAGE_BATCH_SIZE = 4
 const HISTORY_IMAGE_BATCH_DELAY_MS = 24
 const initialUiPreferences = loadUiPreferences()
@@ -207,6 +219,24 @@ function clearTabSettleTimer(component: object): void {
   const timer = tabSettleTimers.get(component)
   if (timer) clearTimeout(timer)
   tabSettleTimers.delete(component)
+}
+
+function clearWorkbenchRefreshTimer(component: object): void {
+  const timer = workbenchRefreshTimers.get(component)
+  if (timer) clearTimeout(timer)
+  workbenchRefreshTimers.delete(component)
+}
+
+function disposeWorkbenchRefresh(component: object): void {
+  clearWorkbenchRefreshTimer(component)
+  workbenchRefreshTargets.delete(component)
+  workbenchRefreshInFlight.delete(component)
+}
+
+function clearTaskCardOverlayCleanupTimer(component: object): void {
+  const timer = taskCardOverlayCleanupTimers.get(component)
+  if (timer) clearTimeout(timer)
+  taskCardOverlayCleanupTimers.delete(component)
 }
 
 function scheduleRecognitionStage(component: object, callback: () => void): void {
@@ -369,6 +399,20 @@ Component({
     tabIndicatorOffset: 0,
     tabVisualColors: getThemedTabVisualColors(0, initialUiPreferences.mode),
     workspaceScrollTop: 0,
+    workspaceScrollWithAnimation: false,
+    activeTask: null as QualityInspectionTaskDto | null,
+    taskCardOverlayVisible: false,
+    taskCardOverlayOpen: false,
+    taskCardOverlayClosing: false,
+    taskCardOverlayId: 0,
+    taskCardOverlayTargetLeft: 0,
+    taskCardOverlayTargetTop: 0,
+    taskCardOverlayTargetWidth: 0,
+    taskCardOverlayTargetHeight: 0,
+    taskCardOverlayOriginLeft: 0,
+    taskCardOverlayOriginTop: 0,
+    taskCardOverlayOriginWidth: 0,
+    taskCardOverlayOriginHeight: 0,
     currentUser: null as AuthUser | null,
     accountInitial: '账',
     accountLoading: !DEMO_MODE,
@@ -410,6 +454,8 @@ Component({
       clearRecognitionStageTimers(this)
       tabSwipeGestures.delete(this)
       clearTabSettleTimer(this)
+      disposeWorkbenchRefresh(this)
+      clearTaskCardOverlayCleanupTimer(this)
       this.stopAllRecognitionProgress()
     },
   },
@@ -679,6 +725,16 @@ Component({
       const shouldSettle = tabChanged
         && settlingDirection !== ''
         && settlingMetrics !== undefined
+      const taskOverlayReset = activeTab !== 'tasks'
+        ? {
+          activeTask: null,
+          taskCardOverlayVisible: false,
+          taskCardOverlayOpen: false,
+          taskCardOverlayClosing: false,
+          taskCardOverlayId: 0,
+        }
+        : {}
+      if (activeTab !== 'tasks') clearTaskCardOverlayCleanupTimer(this)
       const continuesCurrentRoute = shouldSettle
         && shouldContinueTabSettleRoute(
           this.data.activeTab,
@@ -701,6 +757,7 @@ Component({
           ...(activeTab === 'scan'
             ? { selectedTaskId: 0, selectedItemId: 0 }
             : {}),
+          ...taskOverlayReset,
         }, () => {
           this.setData({ workspaceScrollTop: 0 }, () => this.loadActiveListOnce())
         })
@@ -736,6 +793,7 @@ Component({
         ...(activeTab === 'scan'
           ? { selectedTaskId: 0, selectedItemId: 0 }
           : {}),
+        ...taskOverlayReset,
       }, () => {
         if (shouldSettle) {
           this.setData({ tabSettling: true }, () => {
@@ -1023,37 +1081,117 @@ Component({
       const taskId = Number(event.currentTarget.dataset.id)
       if (!taskId) return
       const requestId = this.data.taskOpenRequestId + 1
-      if (this.data.selectedTaskId === taskId) {
-        this.setData({
-          selectedTaskId: 0,
-          selectedItemId: 0,
-          taskOpenRequestId: requestId,
-          taskOpeningId: 0,
-        })
+      if (this.data.taskCardOverlayVisible
+        && this.data.taskCardOverlayId === taskId
+        && !this.data.taskCardOverlayClosing) {
+        this.closeTaskCardOverlay()
         return
       }
-      this.setData({
-        selectedTaskId: taskId,
-        selectedItemId: 0,
-        taskOpenRequestId: requestId,
-        taskOpeningId: taskId,
-      })
+
+      const startOpening = () => {
+        this.setData({
+          taskOpenRequestId: requestId,
+          taskOpeningId: taskId,
+        }, () => this.measureTaskCardOverlay(taskId, requestId))
+      }
+
+      clearTaskCardOverlayCleanupTimer(this)
+      if (this.data.taskCardOverlayVisible) {
+        this.setData({
+          taskCardOverlayVisible: false,
+          taskCardOverlayOpen: false,
+          taskCardOverlayClosing: false,
+          taskCardOverlayId: 0,
+          activeTask: null,
+        }, startOpening)
+      } else {
+        startOpening()
+      }
+
       getInspectionTask(taskId, true)
         .then((task) => {
-          if (this.data.taskOpenRequestId !== requestId || this.data.selectedTaskId !== taskId) return
+          if (this.data.taskOpenRequestId !== requestId) return
           this.setData({
             taskItems: this.data.taskItems.map((item) => (
               item.id === task.id ? task : item
             )),
+            ...(this.data.taskCardOverlayId === task.id
+              ? { activeTask: task }
+              : {}),
           })
         })
         .catch((error: Error) => {
-          if (this.data.taskOpenRequestId !== requestId || this.data.selectedTaskId !== taskId) return
+          if (this.data.taskOpenRequestId !== requestId) return
           showTopToast({ title: error.message || '线上产品同步失败，已显示当前列表', icon: 'none' })
         })
         .finally(() => {
           if (this.data.taskOpenRequestId === requestId) this.setData({ taskOpeningId: 0 })
         })
+    },
+    measureTaskCardOverlay(taskId: number, requestId: number) {
+      wx.createSelectorQuery()
+        .in(this)
+        .select(`#task-card-${taskId}`)
+        .boundingClientRect((rect) => {
+          if (!rect || this.data.taskOpenRequestId !== requestId) return
+          const task = this.data.taskItems.find((item) => item.id === taskId)
+          if (!task) return
+          const windowInfo = wx.getSystemInfoSync()
+          const targetLeft = windowInfo.windowWidth * 32 / 750
+          const targetTop = this.data.navigationBarHeight + targetLeft
+          const targetWidth = Math.max(rect.width, windowInfo.windowWidth - targetLeft * 2)
+          const safeAreaBottom = windowInfo.safeArea?.bottom || windowInfo.windowHeight
+          const targetHeight = Math.max(
+            rect.height,
+            safeAreaBottom - targetTop - targetLeft,
+          )
+          this.setData({
+            activeTask: task,
+            taskCardOverlayVisible: true,
+            taskCardOverlayOpen: false,
+            taskCardOverlayClosing: false,
+            taskCardOverlayId: taskId,
+            taskCardOverlayTargetLeft: targetLeft,
+            taskCardOverlayTargetTop: targetTop,
+            taskCardOverlayTargetWidth: targetWidth,
+            taskCardOverlayTargetHeight: targetHeight,
+            taskCardOverlayOriginLeft: rect.left,
+            taskCardOverlayOriginTop: rect.top,
+            taskCardOverlayOriginWidth: rect.width,
+            taskCardOverlayOriginHeight: rect.height,
+            selectedTaskId: taskId,
+            selectedItemId: 0,
+          }, () => {
+            if (this.data.taskOpenRequestId !== requestId) return
+            this.setData({ taskCardOverlayOpen: true })
+          })
+        })
+        .exec()
+    },
+    closeTaskCardOverlay() {
+      if (!this.data.taskCardOverlayVisible || this.data.taskCardOverlayClosing) return
+      const requestId = this.data.taskOpenRequestId + 1
+      this.setData({
+        taskOpenRequestId: requestId,
+        taskOpeningId: 0,
+        selectedTaskId: 0,
+        selectedItemId: 0,
+        taskCardOverlayOpen: false,
+        taskCardOverlayClosing: true,
+      })
+      clearTaskCardOverlayCleanupTimer(this)
+      const timer = setTimeout(() => {
+        taskCardOverlayCleanupTimers.delete(this)
+        if (!attachedWorkspaceComponents.has(this)) return
+        if (this.data.taskOpenRequestId !== requestId) return
+        this.setData({
+          activeTask: null,
+          taskCardOverlayVisible: false,
+          taskCardOverlayClosing: false,
+          taskCardOverlayId: 0,
+        })
+      }, TASK_CARD_OVERLAY_DURATION_MS)
+      taskCardOverlayCleanupTimers.set(this, timer)
     },
     selectTaskItem(event: WechatMiniprogram.TouchEvent) {
       const taskId = Number(event.currentTarget.dataset.taskId)
@@ -1086,7 +1224,55 @@ Component({
         workbenchModalItemId: 0,
       })
     },
-    onWorkbenchSaved() {},
+    queueWorkbenchTaskRefresh(target: WorkbenchSavedPayload) {
+      workbenchRefreshTargets.set(this, target)
+      clearWorkbenchRefreshTimer(this)
+      if (workbenchRefreshInFlight.has(this)) return
+      const timer = setTimeout(() => {
+        workbenchRefreshTimers.delete(this)
+        if (!attachedWorkspaceComponents.has(this)) return
+        void this.refreshQueuedWorkbenchTask()
+      }, WORKBENCH_REFRESH_DEBOUNCE_MS)
+      workbenchRefreshTimers.set(this, timer)
+    },
+    async refreshQueuedWorkbenchTask() {
+      if (workbenchRefreshInFlight.has(this)) return
+      const target = workbenchRefreshTargets.get(this)
+      if (!target || !attachedWorkspaceComponents.has(this)) return
+      workbenchRefreshTargets.delete(this)
+      workbenchRefreshInFlight.add(this)
+      try {
+        const task = await getInspectionTask(target.taskId, true)
+        if (!attachedWorkspaceComponents.has(this)) return
+        if (!task.items?.some((item) => item.id === target.itemId)) {
+          throw new Error('线上订单中未找到已保存产品')
+        }
+        this.setData({
+          taskItems: this.data.taskItems.map((item) => (
+            item.id === task.id ? task : item
+          )),
+        })
+      } catch {
+        if (attachedWorkspaceComponents.has(this)) {
+          showTopToast({ title: '数据已保存，列表同步失败，请下拉刷新', icon: 'none' })
+        }
+      } finally {
+        workbenchRefreshInFlight.delete(this)
+        const nextTarget = workbenchRefreshTargets.get(this)
+        if (nextTarget && attachedWorkspaceComponents.has(this)) {
+          this.queueWorkbenchTaskRefresh(nextTarget)
+        }
+      }
+    },
+    onWorkbenchSaved(
+      event: WechatMiniprogram.CustomEvent<WorkbenchSavedPayload>,
+    ) {
+      if (event.detail.closing) return
+      const taskId = Number(event.detail.taskId)
+      const itemId = Number(event.detail.itemId)
+      if (!taskId || !itemId) return
+      this.queueWorkbenchTaskRefresh({ taskId, itemId })
+    },
     onHistoryEditorSaved(result: StoredInspectionRecord) {
       if (
         result.syncStatus === 'synced'
