@@ -190,7 +190,7 @@
                         class="workbench-photo {{photo.status === 'failed' ? 'is-failed' : ''}}"
                       >
                         <image
-                          src="{{photo.localPath || photo.remoteUrl}}"
+                          src="{{photo.status === 'uploaded' ? (photo.thumbnailUrl || photo.remoteUrl) : (photo.localPath || photo.thumbnailUrl || photo.remoteUrl)}}"
                           mode="aspectFill"
                           data-row-key="{{row.rowKey}}"
                           data-photo-id="{{photo.id}}"

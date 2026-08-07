@@ -616,7 +616,7 @@ function remoteHistoryImageSummary(item: RemoteInspectionHistory): {
   const originals = normalizeServerImageList(item.preview_images)
   const thumbnails = normalizeServerImageList(item.preview_thumbnails)
   const previews = originals.length > 0
-    ? originals.map((image, index) => thumbnails[index] || image)
+    ? originals.map((image, index) => thumbnails[index] || inspectionImageThumbnailUrl(image))
     : thumbnails
   const legacyThumbnail = normalizeServerImageList([item.thumbnail_image])[0]
   const imagePaths = (previews.length > 0 ? previews : [legacyThumbnail].filter(Boolean))
@@ -1211,7 +1211,7 @@ export function normalizeQualityInspectionItem(
   const previewImages = (inspectionDraft ? draftImages : serverPreviewImages)
     .slice(0, TASK_PREVIEW_IMAGE_LIMIT)
   const previewThumbnails = previewImages.map((image, index) => (
-    serverPreviewThumbnails[index] || image
+    serverPreviewThumbnails[index] || inspectionImageThumbnailUrl(image)
   ))
   const serverImageCount = Math.max(0, Number(item.preview_image_count) || 0)
   const normalized: QualityInspectionItemDto = {
@@ -1339,8 +1339,17 @@ export async function hydrateMissingHistoryImages(
         const detail = await loadDetail(item.taskId, item.itemId)
         const originals = normalizeServerImageList(detail.item.preview_images)
         const thumbnails = normalizeServerImageList(detail.item.preview_thumbnails)
-        const detailCandidates = originals.map((image, index) => thumbnails[index] || image)
-        const candidates = (detailCandidates.length > 0 ? detailCandidates : item.imagePaths)
+        const detailCandidates = originals.map((image, index) => (
+          thumbnails[index] || inspectionImageThumbnailUrl(image)
+        ))
+        const preservesCompleteLegacyThumbnails = thumbnails.length === 0
+          && originals.length > 0
+          && originals.length <= item.imagePaths.length
+        const candidates = (
+          preservesCompleteLegacyThumbnails
+            ? item.imagePaths
+            : detailCandidates.length > 0 ? detailCandidates : item.imagePaths
+        )
           .slice(0, TASK_PREVIEW_IMAGE_LIMIT)
         const imagePaths = (await Promise.all(candidates.map((imagePath, index) => (
           materialize(imagePath, `${item.id}-detail-${index}`).catch(() => '')
@@ -1416,6 +1425,21 @@ export function normalizeServerImageUrl(value: string): string {
     return `${protocol}${imageUrl}`
   }
   return `${DATA_SERVER_BASE_URL.replace(/\/$/, '')}/${imageUrl.replace(/^\/+/, '')}`
+}
+
+const INSPECTION_IMAGE_THUMBNAIL_PATH =
+  '/customer-orders/api/purchase-orders/quality-inspection-image-thumbnail'
+
+export function inspectionImageThumbnailUrl(value: string): string {
+  const imageUrl = normalizeServerImageUrl(value)
+  if (!imageUrl || !/^https?:\/\//i.test(imageUrl)) return imageUrl
+  if (imageUrl.includes(INSPECTION_IMAGE_THUMBNAIL_PATH)) return imageUrl
+
+  const baseUrl = DATA_SERVER_BASE_URL.replace(/\/$/, '')
+  const source = imageUrl.startsWith(`${baseUrl}/`)
+    ? imageUrl.slice(baseUrl.length)
+    : imageUrl
+  return `${baseUrl}${INSPECTION_IMAGE_THUMBNAIL_PATH}?url=${encodeURIComponent(source)}`
 }
 
 export async function uploadInspectionDraftImage(

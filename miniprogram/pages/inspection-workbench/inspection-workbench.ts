@@ -19,6 +19,7 @@ import { buildOnlineInspectionTemplate } from '../../domain/online-inspection-te
 import { prepareImageForUpload, recognizeInspection } from '../../services/inspection-service'
 import {
   getInspectionItemDetail,
+  inspectionImageThumbnailUrl,
   uploadInspectionDraftImage,
   QualityInspectionItemDto,
   QualityInspectionTaskDto,
@@ -213,8 +214,8 @@ function groupRows(
   return groups
 }
 
-function photoSource(photo: InspectionPhoto): string {
-  return photo.localPath || photo.remoteUrl
+function photoOriginalSource(photo: InspectionPhoto): string {
+  return photo.remoteUrl || photo.localPath
 }
 
 function errorMessage(error: unknown, fallback: string): string {
@@ -239,6 +240,7 @@ Page({
     rawContent: '',
     reportImages: [] as string[],
     reportPreviewPaths: [] as string[],
+    reportPreviewOriginalPaths: [] as string[],
     inspectionImages: [] as string[],
     unmatched: [] as UnmatchedRecognitionRow[],
     saving: false,
@@ -280,6 +282,7 @@ Page({
       const workbench = buildInspectionWorkbench({
         template,
         draft: item.inspection_draft,
+        thumbnailUrl: inspectionImageThumbnailUrl,
       })
       const renderColumns = buildRenderColumns(workbench.columns)
       const result = item.inspection_draft?.ai_workbench_result || {}
@@ -299,7 +302,8 @@ Page({
         groups: groupRows(workbench.rows, renderColumns),
         unmatched,
         reportImages,
-        reportPreviewPaths: reportImages,
+        reportPreviewPaths: reportImages.map(inspectionImageThumbnailUrl),
+        reportPreviewOriginalPaths: reportImages,
         inspectionImages,
         rawContent: text(result.recognition_raw_content),
         loading: false,
@@ -408,6 +412,7 @@ Page({
         rows = updateWorkbenchPhoto(rows, rowKey, photo.id, {
           status: 'uploaded',
           remoteUrl: uploaded.url,
+          thumbnailUrl: inspectionImageThumbnailUrl(uploaded.url),
           error: '',
         })
       } catch (error) {
@@ -426,8 +431,8 @@ Page({
     const row = this.data.workbench?.rows.find((candidate) => candidate.rowKey === rowKey)
     const current = row?.images.find((photo) => photo.id === photoId)
     if (!row || !current) return
-    const urls = row.images.map(photoSource).filter(Boolean)
-    wx.previewImage({ current: photoSource(current), urls })
+    const urls = row.images.map(photoOriginalSource).filter(Boolean)
+    wx.previewImage({ current: photoOriginalSource(current), urls })
   },
 
   removePhoto(event: RowActionEvent) {
@@ -465,6 +470,7 @@ Page({
       rows = updateWorkbenchPhoto(rows, rowKey, photo.id, {
         status: 'uploaded',
         remoteUrl: uploaded.url,
+        thumbnailUrl: inspectionImageThumbnailUrl(uploaded.url),
         error: '',
       })
     } catch (error) {
@@ -519,6 +525,8 @@ Page({
       const result = await recognizeInspection(preparedPath)
       const merged = mergeRecognitionRecord(this.data.workbench?.rows || workbench.rows, result.record)
       let reportImages = this.data.reportImages
+      let reportPreviewPath = preparedPath
+      let reportPreviewOriginalPath = preparedPath
       try {
         const uploadedReport = await uploadInspectionDraftImage(
           this.data.taskId,
@@ -526,6 +534,8 @@ Page({
           preparedPath,
         )
         reportImages = [...reportImages, uploadedReport.url]
+        reportPreviewPath = inspectionImageThumbnailUrl(uploadedReport.url)
+        reportPreviewOriginalPath = uploadedReport.url
       } catch {
         showTopToast({ title: '识别完成，质检单图片未写入草稿', icon: 'none' })
       }
@@ -540,7 +550,11 @@ Page({
         unmatched,
         rawContent,
         reportImages,
-        reportPreviewPaths: [...this.data.reportPreviewPaths, preparedPath],
+        reportPreviewPaths: [...this.data.reportPreviewPaths, reportPreviewPath],
+        reportPreviewOriginalPaths: [
+          ...this.data.reportPreviewOriginalPaths,
+          reportPreviewOriginalPath,
+        ],
       })
       showTopToast({
         title: merged.unmatched.length > 0 ? '识别完成，请核对未匹配条目' : '识别结果已回填',
@@ -555,9 +569,9 @@ Page({
 
   previewReportImage(event: RowActionEvent) {
     const index = Number(event.currentTarget.dataset.index)
-    const current = this.data.reportPreviewPaths[index]
+    const current = this.data.reportPreviewOriginalPaths[index]
     if (!current) return
-    wx.previewImage({ current, urls: this.data.reportPreviewPaths })
+    wx.previewImage({ current, urls: this.data.reportPreviewOriginalPaths })
   },
 
   clearUnmatched() {

@@ -29,6 +29,7 @@ import {
 import { prepareImageForUpload, recognizeInspection } from '../../services/inspection-service'
 import {
   getInspectionItemDetail,
+  inspectionImageThumbnailUrl,
   QualityInspectionCustomerProductDto,
   uploadInspectionDraftImage,
   QualityInspectionItemDto,
@@ -58,8 +59,8 @@ function text(value: unknown): string {
   return String(value)
 }
 
-function photoSource(photo: InspectionPhoto): string {
-  return photo.localPath || photo.remoteUrl
+function photoOriginalSource(photo: InspectionPhoto): string {
+  return photo.remoteUrl || photo.localPath
 }
 
 function errorMessage(error: unknown, fallback: string): string {
@@ -137,6 +138,7 @@ Component({
     rawContent: '',
     reportImages: [] as string[],
     reportPreviewPaths: [] as string[],
+    reportPreviewOriginalPaths: [] as string[],
     inspectionImages: [] as string[],
     inspectionClassifiedCount: 0,
     inspectionClassificationPending: false,
@@ -202,6 +204,7 @@ Component({
         rawContent: '',
         reportImages: [],
         reportPreviewPaths: [],
+        reportPreviewOriginalPaths: [],
         inspectionImages: [],
         inspectionClassifiedCount: 0,
         inspectionClassificationPending: false,
@@ -244,6 +247,7 @@ Component({
         const baseWorkbench = buildInspectionWorkbench({
           template,
           draft: item.inspection_draft,
+          thumbnailUrl: inspectionImageThumbnailUrl,
         })
         const aiWorkbenchResult = item.inspection_draft?.ai_workbench_result || {}
         const unmatched = Array.isArray(aiWorkbenchResult.unmatched_recognition_rows)
@@ -263,6 +267,7 @@ Component({
             baseWorkbench.rows,
             aiWorkbenchResult,
             inspectionImages,
+            inspectionImageThumbnailUrl,
           ),
         }
         const pages = buildInspectionWorkbenchPages(workbench.rows, unmatched)
@@ -289,7 +294,8 @@ Component({
           pageTotal: pages.length,
           expandedRowKey: '',
           reportImages,
-          reportPreviewPaths: reportImages,
+          reportPreviewPaths: reportImages.map(inspectionImageThumbnailUrl),
+          reportPreviewOriginalPaths: reportImages,
           inspectionImages,
           inspectionClassifiedCount: imageClassification.assignedCount,
           inspectionClassificationPending: imageClassification.pending,
@@ -457,7 +463,12 @@ Component({
               async (path) => path,
             )
             if (!this.isActiveWorkbenchRequest(requestedTaskId, requestedItemId)) return
-            rows = updateWorkbenchPhoto(rows, rowKey, photo.id, { status: 'uploaded', remoteUrl: uploaded.url, error: '' })
+            rows = updateWorkbenchPhoto(rows, rowKey, photo.id, {
+              status: 'uploaded',
+              remoteUrl: uploaded.url,
+              thumbnailUrl: inspectionImageThumbnailUrl(uploaded.url),
+              error: '',
+            })
             uploadedCount += 1
           } catch (error) {
             if (!this.isActiveWorkbenchRequest(requestedTaskId, requestedItemId)) return
@@ -486,7 +497,10 @@ Component({
       const row = this.data.workbench?.rows.find((candidate) => candidate.rowKey === rowKey)
       const current = row?.images.find((photo) => photo.id === photoId)
       if (!row || !current) return
-      wx.previewImage({ current: photoSource(current), urls: row.images.map(photoSource).filter(Boolean) })
+      wx.previewImage({
+        current: photoOriginalSource(current),
+        urls: row.images.map(photoOriginalSource).filter(Boolean),
+      })
     },
 
     removePhoto(event: RowActionEvent) {
@@ -541,7 +555,12 @@ Component({
           async (path) => path,
         )
         if (!this.isActiveWorkbenchRequest(requestedTaskId, requestedItemId)) return
-        rows = updateWorkbenchPhoto(rows, rowKey, photo.id, { status: 'uploaded', remoteUrl: uploaded.url, error: '' })
+        rows = updateWorkbenchPhoto(rows, rowKey, photo.id, {
+          status: 'uploaded',
+          remoteUrl: uploaded.url,
+          thumbnailUrl: inspectionImageThumbnailUrl(uploaded.url),
+          error: '',
+        })
         this.setRows(rows)
         const synced = await this.syncUploadedRowPhotos(requestedTaskId, requestedItemId, rows)
         if (synced) showTopToast({ title: '照片已同步到线上', icon: 'success' })
@@ -623,6 +642,7 @@ Component({
           this.data.workbench?.rows || workbench.rows,
           aiWorkbenchResult,
           inspectionImages,
+          inspectionImageThumbnailUrl,
         )
         this.setRows(rows)
         this.setData({
@@ -709,6 +729,7 @@ Component({
         workbench.rows,
         aiWorkbenchResult,
         inspectionImages,
+        inspectionImageThumbnailUrl,
       )
       const nextWorkbench = { ...workbench, rows }
       this.setRows(rows)
@@ -807,6 +828,8 @@ Component({
         if (!this.isActiveWorkbenchRequest(requestedTaskId, requestedItemId)) return
         const merged = mergeRecognitionRecord(this.data.workbench?.rows || workbench.rows, result.record)
         let reportImages = this.data.reportImages
+        let reportPreviewPath = preparedPath
+        let reportPreviewOriginalPath = preparedPath
         try {
           const uploadedReport = await uploadInspectionDraftImage(
             requestedTaskId,
@@ -815,6 +838,8 @@ Component({
           )
           if (!this.isActiveWorkbenchRequest(requestedTaskId, requestedItemId)) return
           reportImages = [...reportImages, uploadedReport.url]
+          reportPreviewPath = inspectionImageThumbnailUrl(uploadedReport.url)
+          reportPreviewOriginalPath = uploadedReport.url
         } catch {
           if (!this.isActiveWorkbenchRequest(requestedTaskId, requestedItemId)) return
           showTopToast({ title: '识别完成，质检单图片未写入草稿', icon: 'none' })
@@ -835,7 +860,11 @@ Component({
           unmatched,
           rawContent: [this.data.rawContent, result.rawContent].filter(Boolean).join('\n\n---\n\n'),
           reportImages,
-          reportPreviewPaths: [...this.data.reportPreviewPaths, preparedPath],
+          reportPreviewPaths: [...this.data.reportPreviewPaths, reportPreviewPath],
+          reportPreviewOriginalPaths: [
+            ...this.data.reportPreviewOriginalPaths,
+            reportPreviewOriginalPath,
+          ],
           dirty: true,
         })
         this.syncCurrentPageAfterRecognition(next.rows, unmatched)
@@ -853,8 +882,8 @@ Component({
 
     previewReportImage(event: RowActionEvent) {
       const index = Number(event.currentTarget.dataset.index)
-      const current = this.data.reportPreviewPaths[index]
-      if (current) wx.previewImage({ current, urls: this.data.reportPreviewPaths })
+      const current = this.data.reportPreviewOriginalPaths[index]
+      if (current) wx.previewImage({ current, urls: this.data.reportPreviewOriginalPaths })
     },
 
     clearUnmatched() {

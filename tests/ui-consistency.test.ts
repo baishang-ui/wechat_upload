@@ -978,6 +978,26 @@ test('pending task items show shared backend inspection data and photos', () => 
   assert.match(scss, /\.task-item-photo-count/)
 })
 
+test('online workbenches render server thumbnails and preview original images', () => {
+  const page = source('miniprogram/pages/inspection-workbench/inspection-workbench.ts')
+  const pageWxml = source('miniprogram/pages/inspection-workbench/inspection-workbench.wxml')
+  const modal = source('miniprogram/components/inspection-workbench-modal/inspection-workbench-modal.ts')
+  const modalWxml = source('miniprogram/components/inspection-workbench-modal/inspection-workbench-modal.wxml')
+
+  assert.match(pageWxml, /reportPreviewPaths/)
+  assert.match(pageWxml, /photo\.thumbnailUrl/)
+  assert.match(modalWxml, /reportPreviewPaths/)
+  assert.match(modalWxml, /photo\.thumbnailUrl/)
+  assert.match(page, /reportPreviewOriginalPaths/)
+  assert.match(modal, /reportPreviewOriginalPaths/)
+  assert.match(page, /inspectionImageThumbnailUrl/)
+  assert.match(modal, /inspectionImageThumbnailUrl/)
+  assert.match(page, /function photoOriginalSource[\s\S]*?return photo\.remoteUrl \|\| photo\.localPath/)
+  assert.match(modal, /function photoOriginalSource[\s\S]*?return photo\.remoteUrl \|\| photo\.localPath/)
+  assert.match(page, /wx\.previewImage\(\{ current, urls: this\.data\.reportPreviewOriginalPaths \}\)/)
+  assert.match(modal, /wx\.previewImage\(\{ current, urls: this\.data\.reportPreviewOriginalPaths \}\)/)
+})
+
 test('opening an order uses a fixed expansion layer so list layout never animates', () => {
   const wxml = source('miniprogram/pages/index/index.wxml')
   const page = source('miniprogram/pages/index/index.ts')

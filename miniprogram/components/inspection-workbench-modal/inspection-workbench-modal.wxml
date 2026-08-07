@@ -162,7 +162,7 @@
                 <view class="detail-label">现场照片 {{row.photoRequired ? '（必填）' : '（选填）'}}</view>
                 <view class="workbench-photo-grid">
                   <view wx:for="{{row.images}}" wx:key="id" wx:for-item="photo" class="workbench-photo {{photo.status === 'failed' ? 'is-failed' : ''}}">
-                    <image class="workbench-photo-image" src="{{photo.localPath || photo.remoteUrl}}" mode="aspectFill" data-row-key="{{row.rowKey}}" data-photo-id="{{photo.id}}" bindtap="previewPhoto"></image>
+                    <image class="workbench-photo-image" src="{{photo.status === 'uploaded' ? (photo.thumbnailUrl || photo.remoteUrl) : (photo.localPath || photo.thumbnailUrl || photo.remoteUrl)}}" mode="aspectFill" data-row-key="{{row.rowKey}}" data-photo-id="{{photo.id}}" bindtap="previewPhoto"></image>
                     <view wx:if="{{photo.status === 'uploading'}}" class="photo-status"><ui-spinner size="sm" color="current" label="照片上传中" /><text>上传中</text></view>
                     <view wx:elif="{{photo.status === 'failed'}}" class="photo-status photo-status--failed">上传失败</view>
                     <view class="photo-remove" data-row-key="{{row.rowKey}}" data-photo-id="{{photo.id}}" catchtap="removePhoto"><hero-icon name="x-mark" size="30rpx" /></view>

@@ -304,6 +304,7 @@ test('workbenchToDraft preserves online rows and only serializes uploaded photo 
         id: 'uploaded',
         localPath: '/tmp/a.jpg',
         remoteUrl: 'https://example.com/a.jpg',
+        thumbnailUrl: 'https://example.com/thumb-a.jpg',
         status: 'uploaded',
         error: '',
       },
@@ -343,6 +344,7 @@ test('workbenchToDraft preserves online rows and only serializes uploaded photo 
   assert.deepEqual(draft.inspection_records[0].images, [
     'https://example.com/a.jpg',
   ])
+  assert.doesNotMatch(JSON.stringify(draft), /thumb-a\.jpg/)
   assert.equal(draft.inspection_records[0].group_title, '产品外观')
   assert.equal(draft.inspection_records[0].decision, 'OK')
   assert.equal(draft.ai_workbench_result.template_id, 'tpl-steel-brush')

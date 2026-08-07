@@ -39,6 +39,7 @@ export interface InspectionPhoto {
   id: string
   localPath: string
   remoteUrl: string
+  thumbnailUrl?: string
   status: 'local' | 'compressing' | 'uploading' | 'uploaded' | 'failed'
   error: string
   origin?: 'ai_assignment'
@@ -259,6 +260,7 @@ function uniqueWorkbenchRowKeys(rows: InspectionTemplateRowDto[]): Map<Inspectio
 export function buildInspectionWorkbench(options: {
   template?: InspectionTemplateDto | null
   draft?: InspectionDraftLike | null
+  thumbnailUrl?: (imageUrl: string) => string
 }): InspectionWorkbench {
   const template = options.template
   const draftRecords = options.draft?.inspection_records || options.draft?.records || []
@@ -306,6 +308,7 @@ export function buildInspectionWorkbench(options: {
           id: `remote-${rowKey}-${index}`,
           localPath: '',
           remoteUrl,
+          thumbnailUrl: options.thumbnailUrl?.(remoteUrl) || '',
           status: 'uploaded' as const,
           error: '',
         })),

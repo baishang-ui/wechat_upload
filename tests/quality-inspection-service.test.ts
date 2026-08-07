@@ -11,6 +11,7 @@ import {
   draftToInspectionRecord,
   inspectionImageToDataUrl,
   inspectionRecordToDraft,
+  inspectionImageThumbnailUrl,
   getInspectionItemDetail,
   getInspectionTask,
   listInspectionTasks,
@@ -24,6 +25,18 @@ import {
   uploadInspectionRowImage,
   QualityInspectionDraftPayload,
 } from '../miniprogram/services/quality-inspection-service'
+
+test('inspection image thumbnails use the shared server endpoint without replacing originals', () => {
+  assert.equal(
+    inspectionImageThumbnailUrl('https://www.binictools.cn:7876/uploads/report 1.jpg'),
+    'https://www.binictools.cn:7876/customer-orders/api/purchase-orders/quality-inspection-image-thumbnail?url=%2Fuploads%2Freport%201.jpg',
+  )
+  assert.equal(
+    inspectionImageThumbnailUrl('/uploads/report.jpg'),
+    'https://www.binictools.cn:7876/customer-orders/api/purchase-orders/quality-inspection-image-thumbnail?url=%2Fuploads%2Freport.jpg',
+  )
+  assert.equal(inspectionImageThumbnailUrl('wxfile://tmp/report.jpg'), 'wxfile://tmp/report.jpg')
+})
 
 function createCompleteRecord() {
   return normalizeApiRecord({
@@ -707,10 +720,11 @@ test('compact task detail uses the compact endpoint and drops legacy full drafts
   })
   assert.equal(task.items?.[0].inspection_draft, undefined)
   assert.equal(task.items?.[0].preview_images?.length, 3)
-  assert.deepEqual(
-    task.items?.[0].preview_thumbnails,
-    task.items?.[0].preview_images,
-  )
+  assert.deepEqual(task.items?.[0].preview_thumbnails, [
+    'https://www.binictools.cn:7876/customer-orders/api/purchase-orders/quality-inspection-image-thumbnail?url=%2Fuploads%2Fone.jpg',
+    'https://www.binictools.cn:7876/customer-orders/api/purchase-orders/quality-inspection-image-thumbnail?url=%2Fuploads%2Ftwo.jpg',
+    'https://www.binictools.cn:7876/customer-orders/api/purchase-orders/quality-inspection-image-thumbnail?url=%2Fuploads%2Fthree.jpg',
+  ])
   assert.equal(task.items?.[0].preview_image_count, 4)
 })
 
@@ -1151,9 +1165,9 @@ test('history image hydration replaces one legacy thumbnail with a three-image d
   }))
 
   assert.deepEqual(hydrated.imagePaths, [
-    'https://files.example.com/one.jpg',
-    'https://files.example.com/two.jpg',
-    'https://files.example.com/three.jpg',
+    'https://www.binictools.cn:7876/customer-orders/api/purchase-orders/quality-inspection-image-thumbnail?url=https%3A%2F%2Ffiles.example.com%2Fone.jpg',
+    'https://www.binictools.cn:7876/customer-orders/api/purchase-orders/quality-inspection-image-thumbnail?url=https%3A%2F%2Ffiles.example.com%2Ftwo.jpg',
+    'https://www.binictools.cn:7876/customer-orders/api/purchase-orders/quality-inspection-image-thumbnail?url=https%3A%2F%2Ffiles.example.com%2Fthree.jpg',
   ])
   assert.equal(hydrated.imageCount, 4)
   assert.equal(hydrated.imageSummaryComplete, true)

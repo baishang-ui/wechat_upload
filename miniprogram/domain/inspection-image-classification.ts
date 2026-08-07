@@ -145,6 +145,7 @@ export function mergeInspectionImageAssignmentsIntoRows(
   rows: InspectionWorkbenchRow[],
   rawResult: unknown,
   images: string[],
+  thumbnailUrl?: (imageUrl: string) => string,
 ): InspectionWorkbenchRow[] {
   const result = record(rawResult)
   const assignments = itemList(result, 'image_assignments')
@@ -218,6 +219,7 @@ export function mergeInspectionImageAssignmentsIntoRows(
         id: `ai-assignment-${row.rowKey}-${sourceImageIndex + 1}`,
         localPath: '',
         remoteUrl,
+        thumbnailUrl: thumbnailUrl?.(remoteUrl) || '',
         status: 'uploaded' as const,
         error: '',
         origin: 'ai_assignment' as const,
