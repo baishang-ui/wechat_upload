@@ -245,6 +245,42 @@ function validImageIndex(value: unknown): number | null {
   return Number.isInteger(imageIndex) && imageIndex > 0 ? imageIndex : null
 }
 
+function removeAndReindexImageItems(value: unknown, removedImageIndex: number): unknown[] {
+  if (!Array.isArray(value)) return []
+  return value.flatMap((candidate) => {
+    if (!candidate || typeof candidate !== 'object' || Array.isArray(candidate)) {
+      return [candidate]
+    }
+    const item = candidate as Record<string, unknown>
+    const imageIndex = validImageIndex(item.image_index)
+    if (imageIndex === removedImageIndex) return []
+    if (imageIndex === null || imageIndex < removedImageIndex) return [{ ...item }]
+    return [{ ...item, image_index: imageIndex - 1 }]
+  })
+}
+
+export function removeInspectionImageReferences(
+  rawResult: unknown,
+  removedOriginalIndex: number,
+): Record<string, unknown> {
+  const result = record(rawResult)
+  if (!Number.isInteger(removedOriginalIndex) || removedOriginalIndex < 0) {
+    return { ...result }
+  }
+  const removedImageIndex = removedOriginalIndex + 1
+  return {
+    ...result,
+    image_assignments: removeAndReindexImageItems(
+      result.image_assignments,
+      removedImageIndex,
+    ),
+    measurements: removeAndReindexImageItems(
+      result.measurements,
+      removedImageIndex,
+    ),
+  }
+}
+
 export function normalizeInspectionImageSection(value: unknown): InspectionImageSection {
   const normalized = text(value)
   if ((INSPECTION_IMAGE_SECTIONS as readonly string[]).includes(normalized)) {

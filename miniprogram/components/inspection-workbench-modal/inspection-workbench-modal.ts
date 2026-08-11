@@ -25,6 +25,7 @@ import { normalizeInspectionDate } from '../../domain/inspection-record'
 import {
   buildInspectionImageClassificationState,
   mergeInspectionImageAssignmentsIntoRows,
+  removeInspectionImageReferences,
 } from '../../domain/inspection-image-classification'
 import { prepareImageForUpload, recognizeInspection } from '../../services/inspection-service'
 import {
@@ -720,7 +721,10 @@ Component({
       ) return
 
       const inspectionImages = this.data.inspectionImages.filter((_, imageIndex) => imageIndex !== index)
-      const aiWorkbenchResult = inspectionRecognitionRequest(inspectionImages.length)
+      const aiWorkbenchResult = {
+        ...removeInspectionImageReferences(this.data.aiWorkbenchResult, index),
+        ...inspectionRecognitionRequest(inspectionImages.length),
+      }
       const imageClassification = buildInspectionImageClassificationState(
         aiWorkbenchResult,
         inspectionImages,

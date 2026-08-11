@@ -299,6 +299,7 @@ test('workbench overview uploads inspection photos to the online AI workbench wi
   assert.match(ts, /status:\s*'cleared'[\s\S]*?source:\s*'miniprogram'[\s\S]*?image_count:\s*0/)
   assert.match(ts, /await saveInspectionDraft\(requestedTaskId, requestedItemId/)
   assert.match(ts, /deleteInspectionImageAt\(index: number\)/)
+  assert.match(ts, /removeInspectionImageReferences\(this\.data\.aiWorkbenchResult, index\)/)
   assert.match(ts, /this\.saveDraft\(false, \[photo\.remoteUrl\]\)/)
   assert.match(ts, /deletedRecordImages/)
   assert.match(ts, /inspectionRecognitionRequest\(inspectionImages\.length\)/)

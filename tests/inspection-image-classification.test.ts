@@ -7,6 +7,7 @@ import {
   buildUnassignedInspectionImages,
   mergeInspectionImageAssignmentsIntoRows,
   normalizeInspectionImageSection,
+  removeInspectionImageReferences,
 } from '../miniprogram/domain/inspection-image-classification'
 import { InspectionWorkbenchRow } from '../miniprogram/domain/inspection-workbench'
 
@@ -166,5 +167,51 @@ test('uses the image assignment project when a recognized measurement has no pro
   assert.deepEqual(
     merged.images.map((photo) => photo.remoteUrl),
     ['https://img.test/diameter.jpg'],
+  )
+})
+
+test('removing one inspection image preserves and reindexes the remaining recognition references', () => {
+  const rawResult = {
+    image_assignments: [
+      { image_index: 1, section: '产品外观', project: '产品正面' },
+      { image_index: 2, section: '产品包装', project: '外箱' },
+      { image_index: 3, section: '产品尺寸', project: '外径' },
+    ],
+    measurements: [
+      { image_index: 2, project: '外箱', value: '完整' },
+      { image_index: 3, project: '外径', value: 115, unit: 'mm' },
+    ],
+    inspection_date: '2026-08-11',
+  }
+
+  const result = removeInspectionImageReferences(rawResult, 1)
+
+  assert.deepEqual(result.image_assignments, [
+    { image_index: 1, section: '产品外观', project: '产品正面' },
+    { image_index: 2, section: '产品尺寸', project: '外径' },
+  ])
+  assert.deepEqual(result.measurements, [
+    { image_index: 2, project: '外径', value: 115, unit: 'mm' },
+  ])
+  assert.equal(result.inspection_date, '2026-08-11')
+  assert.equal(rawResult.image_assignments[2].image_index, 3)
+
+  const rows = [
+    workbenchRow('appearance', '产品外观', '产品正面', ['产品正面']),
+    workbenchRow('outer-box', '产品包装', '外箱', ['外箱']),
+    workbenchRow('diameter', '产品尺寸', '外径', ['外径']),
+  ]
+  const merged = mergeInspectionImageAssignmentsIntoRows(rows, result, [
+    'https://img.test/front.jpg',
+    'https://img.test/diameter.jpg',
+  ])
+
+  assert.deepEqual(
+    merged.map((row) => row.images.map((photo) => photo.remoteUrl)),
+    [
+      ['https://img.test/front.jpg'],
+      [],
+      ['https://img.test/diameter.jpg'],
+    ],
   )
 })
