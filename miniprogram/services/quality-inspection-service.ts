@@ -83,7 +83,7 @@ export interface QualityInspectionDraftRecord {
   images: string[]
 }
 
-export type QualityInspectionRecordMergeMode = 'replace' | 'matched_only' | 'workbench'
+export type QualityInspectionRecordMergeMode = 'replace' | 'matched_only' | 'workbench' | 'workbench_patch'
 
 export interface QualityInspectionDraftPayload {
   inspection_records?: QualityInspectionDraftRecord[]
@@ -93,6 +93,11 @@ export interface QualityInspectionDraftPayload {
   record_source_images?: string[]
   deleted_record_images?: string[]
   record_merge_mode: QualityInspectionRecordMergeMode
+  draft_changes?: {
+    ai_workbench_result?: Record<string, unknown>
+    ai_workbench_images?: { add?: string[]; remove?: string[] }
+    record_source_images?: { add?: string[]; remove?: string[] }
+  }
   saved_at?: string
 }
 
@@ -1391,6 +1396,41 @@ export function saveInspectionDraft(
     path: `/customer-orders/api/purchase-orders/quality-inspections/${taskId}/items/${itemId}/draft`,
     data: payload,
   })
+}
+
+export interface IncrementalInspectionDraftChanges {
+  aiWorkbenchResultPatch?: Record<string, unknown>
+  aiWorkbenchImageAdditions?: string[]
+  aiWorkbenchImageDeletions?: string[]
+  recordSourceImageAdditions?: string[]
+  recordSourceImageDeletions?: string[]
+}
+
+export async function saveInspectionDraftIncremental(
+  taskId: number,
+  itemId: number,
+  payload: QualityInspectionDraftPayload,
+  changes: IncrementalInspectionDraftChanges = {},
+  request: QualityRequest = serverRequest,
+): Promise<unknown> {
+  return saveInspectionDraft(taskId, itemId, {
+    inspection_records: [...(payload.inspection_records || [])],
+    ai_workbench_result: {},
+    ai_workbench_images: [],
+    deleted_record_images: [...(payload.deleted_record_images || [])],
+    record_merge_mode: 'workbench_patch',
+    draft_changes: {
+      ai_workbench_result: { ...(changes.aiWorkbenchResultPatch || {}) },
+      ai_workbench_images: {
+        add: [...(changes.aiWorkbenchImageAdditions || [])],
+        remove: [...(changes.aiWorkbenchImageDeletions || [])],
+      },
+      record_source_images: {
+        add: [...(changes.recordSourceImageAdditions || [])],
+        remove: [...(changes.recordSourceImageDeletions || [])],
+      },
+    },
+  }, request)
 }
 
 export function createStandaloneInspection(

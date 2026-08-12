@@ -4,6 +4,7 @@ import assert from 'node:assert/strict'
 import {
   addLocalPhotos,
   buildInspectionWorkbench,
+  findChangedWorkbenchRowKeys,
   InspectionTemplateDto,
   mergeRecognitionRecord,
   workbenchToDraft,
@@ -412,6 +413,51 @@ test('workbenchToDraft sends explicit image deletion tombstones for cross-client
   assert.deepEqual(draft.deleted_record_images, ['https://files.example.com/deleted.jpg'])
 })
 
+test('workbenchToDraft serializes only explicitly changed rows for incremental sync', () => {
+  const workbench = buildInspectionWorkbench({ template: createTemplate() })
+  const draft = workbenchToDraft(workbench, {
+    metadata: {
+      customer: '',
+      supplier: '',
+      orderNumber: '',
+      model: '',
+      arrivalQuantity: '',
+      inspectionDate: '2026-08-12',
+    },
+    rawContent: '',
+    unmatched: [],
+    qualitySheetImages: [],
+    inspectionImages: [],
+    changedRowKeys: ['size-outer'],
+  })
+
+  assert.deepEqual(draft.inspection_records.map((row) => row.row_key), ['size-outer'])
+})
+
+test('workbenchToDraft can sync only AI image state without resubmitting report rows', () => {
+  const workbench = buildInspectionWorkbench({ template: createTemplate() })
+  const draft = workbenchToDraft(workbench, {
+    metadata: {
+      customer: '',
+      supplier: '',
+      orderNumber: '',
+      model: '',
+      arrivalQuantity: '',
+      inspectionDate: '2026-08-12',
+    },
+    rawContent: '',
+    unmatched: [],
+    qualitySheetImages: [],
+    inspectionImages: ['https://files.example.com/kept.jpg'],
+    deletedRecordImages: ['https://files.example.com/deleted.jpg'],
+    changedRowKeys: [],
+  })
+
+  assert.deepEqual(draft.inspection_records, [])
+  assert.deepEqual(draft.ai_workbench_images, ['https://files.example.com/kept.jpg'])
+  assert.deepEqual(draft.deleted_record_images, ['https://files.example.com/deleted.jpg'])
+})
+
 
 test('workbench row editing updates one field without mutating other rows', () => {
   const workbench = buildInspectionWorkbench({ template: createTemplate() })
@@ -431,6 +477,18 @@ test('workbench row editing updates one field without mutating other rows', () =
   assert.equal(withNote[1].measurements[2], '100.2')
   assert.equal(withNote[0].note, '已现场确认')
   assert.equal(workbench.rows[1].measurements[2], '')
+})
+
+test('findChangedWorkbenchRowKeys reports only rows whose report content changed', () => {
+  const workbench = buildInspectionWorkbench({ template: createTemplate() })
+  const changed = updateWorkbenchMeasurement(
+    workbench.rows,
+    'size-outer',
+    0,
+    '100.1',
+  )
+
+  assert.deepEqual(findChangedWorkbenchRowKeys(workbench.rows, changed), ['size-outer'])
 })
 
 test('photo lifecycle updates or removes only the selected photo', () => {

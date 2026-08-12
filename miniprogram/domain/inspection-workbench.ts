@@ -455,10 +455,16 @@ export function workbenchToDraft(
     inspectionImages: string[]
     deletedRecordImages?: string[]
     aiResult?: Record<string, unknown>
+    changedRowKeys?: string[]
   },
 ): WorkbenchDraftPayload {
+  const changedRowKeys = options.changedRowKeys === undefined
+    ? null
+    : new Set(options.changedRowKeys)
   return {
-    inspection_records: workbench.rows.map((row) => ({
+    inspection_records: workbench.rows
+      .filter((row) => changedRowKeys === null || changedRowKeys.has(row.rowKey))
+      .map((row) => ({
       row_key: row.rowKey,
       group_title: row.groupTitle,
       project: row.project,
@@ -550,4 +556,25 @@ export function removeWorkbenchPhoto(
   return rows.map((row) => row.rowKey === rowKey
     ? { ...row, images: row.images.filter((photo) => photo.id !== photoId) }
     : row)
+}
+
+export function findChangedWorkbenchRowKeys(
+  previousRows: InspectionWorkbenchRow[],
+  nextRows: InspectionWorkbenchRow[],
+): string[] {
+  const previousByKey = new Map(previousRows.map((row) => [row.rowKey, row]))
+  return nextRows.flatMap((row) => {
+    const previous = previousByKey.get(row.rowKey)
+    if (!previous) return [row.rowKey]
+    const changed = previous.decision !== row.decision
+      || previous.note !== row.note
+      || previous.measurements.some((value, index) => value !== row.measurements[index])
+      || previous.images.length !== row.images.length
+      || previous.images.some((photo, index) => (
+        photo.id !== row.images[index]?.id
+        || photo.remoteUrl !== row.images[index]?.remoteUrl
+        || photo.status !== row.images[index]?.status
+      ))
+    return changed ? [row.rowKey] : []
+  })
 }

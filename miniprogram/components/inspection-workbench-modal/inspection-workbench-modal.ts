@@ -2,6 +2,7 @@ import { showTopToast } from '../../services/top-toast-service'
 import {
   addLocalPhotos,
   buildInspectionWorkbench,
+  findChangedWorkbenchRowKeys,
   InspectionPhoto,
   InspectionWorkbench,
   InspectionWorkbenchRow,
@@ -36,7 +37,7 @@ import {
   QualityInspectionItemDto,
   QualityInspectionMasterProductDto,
   QualityInspectionTaskDto,
-  saveInspectionDraft,
+  saveInspectionDraftIncremental,
   uploadInspectionWorkbenchImage,
   uploadInspectionRowImage,
 } from '../../services/quality-inspection-service'
@@ -111,6 +112,10 @@ function inspectionRecognitionRequest(imageCount: number): Record<string, unknow
   }
 }
 
+function appendUnique(values: string[], additions: string[]): string[] {
+  return [...new Set([...values, ...additions].filter(Boolean))]
+}
+
 Component({
   properties: {
     visible: { type: Boolean, value: false },
@@ -151,6 +156,12 @@ Component({
     pageTotal: 0,
     expandedRowKey: '',
     dirty: false,
+    dirtyRowKeys: [] as string[],
+    draftMetadataDirty: false,
+    pendingAiImageAdditions: [] as string[],
+    pendingAiImageDeletions: [] as string[],
+    pendingDeletedRecordImages: [] as string[],
+    draftRevision: 0,
     saving: false,
     savedMessage: '',
     closing: false,
@@ -217,6 +228,12 @@ Component({
         pageTotal: 0,
         expandedRowKey: '',
         dirty: false,
+        dirtyRowKeys: [],
+        draftMetadataDirty: false,
+        pendingAiImageAdditions: [],
+        pendingAiImageDeletions: [],
+        pendingDeletedRecordImages: [],
+        draftRevision: 0,
         saving: false,
         savedMessage: '',
       })
@@ -302,6 +319,12 @@ Component({
           inspectionClassificationPending: imageClassification.pending,
           rawContent: text(aiWorkbenchResult.recognition_raw_content),
           dirty: false,
+          dirtyRowKeys: [],
+          draftMetadataDirty: false,
+          pendingAiImageAdditions: [],
+          pendingAiImageDeletions: [],
+          pendingDeletedRecordImages: [],
+          draftRevision: 0,
           loading: false,
         })
       } catch (error) {
@@ -311,7 +334,7 @@ Component({
       }
     },
 
-    setRows(rows: InspectionWorkbenchRow[]) {
+    setRows(rows: InspectionWorkbenchRow[], modifiedRowKeys: string[] = []) {
       const workbench = this.data.workbench
       if (!workbench || !this.data.visible || this.data.closing) return
       const next = { ...workbench, rows }
@@ -327,6 +350,8 @@ Component({
         pageTotal: pages.length,
         savedMessage: '',
         dirty: true,
+        draftRevision: this.data.draftRevision + 1,
+        dirtyRowKeys: appendUnique(this.data.dirtyRowKeys, modifiedRowKeys),
       })
     },
 
@@ -341,21 +366,21 @@ Component({
       const rowKey = text(event.currentTarget.dataset.rowKey)
       const measurementIndex = Number(event.currentTarget.dataset.measurementIndex)
       if (!this.data.workbench || !rowKey || !Number.isInteger(measurementIndex)) return
-      this.setRows(updateWorkbenchMeasurement(this.data.workbench.rows, rowKey, measurementIndex, event.detail.value))
+      this.setRows(updateWorkbenchMeasurement(this.data.workbench.rows, rowKey, measurementIndex, event.detail.value), [rowKey])
     },
 
     onDecisionChange(event: SwitchEvent) {
       const rowKey = text(event.currentTarget.dataset.rowKey)
       if (!this.data.workbench || !rowKey) return
       const decision = event.detail.value ? 'OK' : 'NG'
-      this.setRows(updateWorkbenchRowField(this.data.workbench.rows, rowKey, 'decision', decision))
+      this.setRows(updateWorkbenchRowField(this.data.workbench.rows, rowKey, 'decision', decision), [rowKey])
     },
 
     onRowFieldInput(event: InputEvent) {
       const rowKey = text(event.currentTarget.dataset.rowKey)
       const field = text(event.currentTarget.dataset.field)
       if (!this.data.workbench || !rowKey || field !== 'note') return
-      this.setRows(updateWorkbenchRowField(this.data.workbench.rows, rowKey, field, event.detail.value))
+      this.setRows(updateWorkbenchRowField(this.data.workbench.rows, rowKey, field, event.detail.value), [rowKey])
     },
 
     addRowPhotos(event: RowActionEvent) {
@@ -384,6 +409,7 @@ Component({
       requestedTaskId: number,
       requestedItemId: number,
       rows: InspectionWorkbenchRow[],
+      rowKey: string,
     ): Promise<boolean> {
       const { workbench, task, item } = this.data
       if (
@@ -394,7 +420,7 @@ Component({
       ) return false
       const nextWorkbench = { ...workbench, rows }
       try {
-        await saveInspectionDraft(requestedTaskId, requestedItemId, workbenchToDraft(nextWorkbench, {
+        await saveInspectionDraftIncremental(requestedTaskId, requestedItemId, workbenchToDraft(nextWorkbench, {
           metadata: {
             customer: text(task.customer_name),
             supplier: text(task.supplier_name),
@@ -408,6 +434,7 @@ Component({
           qualitySheetImages: this.data.reportImages,
           inspectionImages: this.data.inspectionImages,
           aiResult: this.data.aiWorkbenchResult,
+          changedRowKeys: [rowKey],
         }))
         if (!this.isActiveWorkbenchRequest(requestedTaskId, requestedItemId)) return false
         const hasPendingPhotos = rows.some((row) => (
@@ -415,7 +442,13 @@ Component({
         ))
         this.setData({
           savedMessage: '照片已上传并同步',
-          dirty: hasPendingPhotos,
+          dirtyRowKeys: this.data.dirtyRowKeys.filter((key) => key !== rowKey),
+          dirty: hasPendingPhotos
+            || this.data.dirtyRowKeys.some((key) => key !== rowKey)
+            || this.data.draftMetadataDirty
+            || this.data.pendingAiImageAdditions.length > 0
+            || this.data.pendingAiImageDeletions.length > 0
+            || this.data.pendingDeletedRecordImages.length > 0,
         })
         if (!this.isActiveWorkbenchRequest(requestedTaskId, requestedItemId)) return false
         this.triggerEvent('saved', { taskId: requestedTaskId, itemId: requestedItemId })
@@ -446,12 +479,12 @@ Component({
       const additions = rows.find((row) => row.rowKey === rowKey)?.images.slice(previousCount) || []
       let uploadedCount = 0
       let failedCount = 0
-      this.setRows(rows)
+      this.setRows(rows, [rowKey])
       try {
         for (const photo of additions) {
           if (!this.isActiveWorkbenchRequest(requestedTaskId, requestedItemId)) return
           rows = updateWorkbenchPhoto(rows, rowKey, photo.id, { status: 'uploading', error: '' })
-          this.setRows(rows)
+          this.setRows(rows, [rowKey])
           try {
             const preparedPath = await prepareImageForUpload(photo.localPath)
             if (!this.isActiveWorkbenchRequest(requestedTaskId, requestedItemId)) return
@@ -476,10 +509,10 @@ Component({
             rows = updateWorkbenchPhoto(rows, rowKey, photo.id, { status: 'failed', error: errorMessage(error, '上传失败') })
             failedCount += 1
           }
-          this.setRows(rows)
+          this.setRows(rows, [rowKey])
         }
         if (uploadedCount) {
-          const synced = await this.syncUploadedRowPhotos(requestedTaskId, requestedItemId, rows)
+          const synced = await this.syncUploadedRowPhotos(requestedTaskId, requestedItemId, rows, rowKey)
           if (synced) showTopToast({ title: '照片已同步到线上', icon: 'success' })
         }
         if (failedCount && this.isActiveWorkbenchRequest(requestedTaskId, requestedItemId)) {
@@ -520,8 +553,16 @@ Component({
         void this.deleteInspectionImageAt(sourceImageIndex)
         return
       }
-      this.setRows(removeWorkbenchPhoto(this.data.workbench.rows, rowKey, photoId))
-      if (photo?.remoteUrl) void this.saveDraft(false, [photo.remoteUrl])
+      this.setRows(removeWorkbenchPhoto(this.data.workbench.rows, rowKey, photoId), [rowKey])
+      if (photo?.remoteUrl) {
+        this.setData({
+          pendingDeletedRecordImages: appendUnique(
+            this.data.pendingDeletedRecordImages,
+            [photo.remoteUrl],
+          ),
+        })
+        void this.saveDraft()
+      }
     },
 
     retryPhoto(event: RowActionEvent) {
@@ -543,7 +584,7 @@ Component({
       if (!workbench) return
       this.setData({ photoUploading: true, photoUploadError: '', savedMessage: '' })
       let rows = updateWorkbenchPhoto(workbench.rows, rowKey, photo.id, { status: 'uploading', error: '' })
-      this.setRows(rows)
+      this.setRows(rows, [rowKey])
       try {
         const preparedPath = await prepareImageForUpload(photo.localPath)
         if (!this.isActiveWorkbenchRequest(requestedTaskId, requestedItemId)) return
@@ -562,13 +603,13 @@ Component({
           thumbnailUrl: inspectionImageThumbnailUrl(uploaded.url),
           error: '',
         })
-        this.setRows(rows)
-        const synced = await this.syncUploadedRowPhotos(requestedTaskId, requestedItemId, rows)
+        this.setRows(rows, [rowKey])
+        const synced = await this.syncUploadedRowPhotos(requestedTaskId, requestedItemId, rows, rowKey)
         if (synced) showTopToast({ title: '照片已同步到线上', icon: 'success' })
       } catch (error) {
         if (!this.isActiveWorkbenchRequest(requestedTaskId, requestedItemId)) return
         rows = updateWorkbenchPhoto(rows, rowKey, photo.id, { status: 'failed', error: errorMessage(error, '上传失败') })
-        this.setRows(rows)
+        this.setRows(rows, [rowKey])
         this.setData({ photoUploadError: errorMessage(error, '照片上传失败，请重试') })
       } finally {
         if (this.isActiveWorkbenchRequest(requestedTaskId, requestedItemId)) {
@@ -610,7 +651,8 @@ Component({
         || !this.isActiveWorkbenchRequest(requestedTaskId, requestedItemId)
       ) return
       this.setData({ photoUploading: true, photoUploadError: '', savedMessage: '' })
-      let inspectionImages = [...this.data.inspectionImages]
+      const initialInspectionImages = [...this.data.inspectionImages]
+      let inspectionImages = [...initialInspectionImages]
       let uploadedCount = 0
       let failedCount = 0
       try {
@@ -634,7 +676,10 @@ Component({
         }
         if (!uploadedCount) throw new Error('验货图片上传失败，请重试')
 
-        const aiWorkbenchResult = inspectionRecognitionRequest(inspectionImages.length)
+        const aiWorkbenchResult = {
+          ...this.data.aiWorkbenchResult,
+          ...inspectionRecognitionRequest(inspectionImages.length),
+        }
         const imageClassification = buildInspectionImageClassificationState(
           aiWorkbenchResult,
           inspectionImages,
@@ -655,7 +700,16 @@ Component({
           dirty: true,
         })
 
-        await saveInspectionDraft(requestedTaskId, requestedItemId, workbenchToDraft(
+        const uploadedInspectionImages = inspectionImages.filter((image) => (
+          !initialInspectionImages.includes(image)
+        ))
+        const pendingAiImageAdditions = appendUnique(
+          this.data.pendingAiImageAdditions,
+          uploadedInspectionImages,
+        )
+        const pendingAiImageDeletions = [...this.data.pendingAiImageDeletions]
+        this.setData({ pendingAiImageAdditions })
+        await saveInspectionDraftIncremental(requestedTaskId, requestedItemId, workbenchToDraft(
           this.data.workbench || workbench,
           {
             metadata: {
@@ -671,10 +725,15 @@ Component({
             rawContent: this.data.rawContent,
             unmatched: this.data.unmatched,
             qualitySheetImages: this.data.reportImages,
-            inspectionImages,
-            aiResult: aiWorkbenchResult,
-          },
-        ))
+          inspectionImages,
+          aiResult: aiWorkbenchResult,
+          changedRowKeys: [],
+        },
+        ), {
+          aiWorkbenchImageAdditions: pendingAiImageAdditions,
+          aiWorkbenchImageDeletions: pendingAiImageDeletions,
+          aiWorkbenchResultPatch: inspectionRecognitionRequest(inspectionImages.length),
+        })
         if (!this.isActiveWorkbenchRequest(requestedTaskId, requestedItemId)) return
         const savedMessage = failedCount
           ? `已同步${uploadedCount}张，${failedCount}张上传失败`
@@ -682,7 +741,11 @@ Component({
         this.setData({
           savedMessage,
           photoUploadError: failedCount ? `${failedCount}张图片上传失败，请重新选择` : '',
-          dirty: false,
+          pendingAiImageAdditions: [],
+          pendingAiImageDeletions: [],
+          dirty: this.data.dirtyRowKeys.length > 0
+            || this.data.draftMetadataDirty
+            || this.data.pendingDeletedRecordImages.length > 0,
         })
         this.triggerEvent('saved', { taskId: requestedTaskId, itemId: requestedItemId })
         showTopToast({
@@ -721,6 +784,18 @@ Component({
       ) return
 
       const inspectionImages = this.data.inspectionImages.filter((_, imageIndex) => imageIndex !== index)
+      const deletedImageUrl = this.data.inspectionImages[index]
+      const wasPendingAddition = this.data.pendingAiImageAdditions.includes(deletedImageUrl)
+      const pendingAiImageAdditions = this.data.pendingAiImageAdditions.filter((image) => (
+        image !== deletedImageUrl
+      ))
+      const pendingAiImageDeletions = wasPendingAddition
+        ? [...this.data.pendingAiImageDeletions]
+        : appendUnique(this.data.pendingAiImageDeletions, [deletedImageUrl])
+      const pendingDeletedRecordImages = appendUnique(
+        this.data.pendingDeletedRecordImages,
+        [deletedImageUrl],
+      )
       const aiWorkbenchResult = {
         ...removeInspectionImageReferences(this.data.aiWorkbenchResult, index),
         ...inspectionRecognitionRequest(inspectionImages.length),
@@ -746,10 +821,13 @@ Component({
         photoDeletingIndex: index,
         photoUploadError: '',
         savedMessage: '',
+        pendingAiImageAdditions,
+        pendingAiImageDeletions,
+        pendingDeletedRecordImages,
         dirty: true,
       })
       try {
-        await saveInspectionDraft(requestedTaskId, requestedItemId, workbenchToDraft(nextWorkbench, {
+        await saveInspectionDraftIncremental(requestedTaskId, requestedItemId, workbenchToDraft(nextWorkbench, {
           metadata: {
             customer: text(task.customer_name),
             supplier: text(task.supplier_name),
@@ -762,12 +840,21 @@ Component({
           unmatched: this.data.unmatched,
           qualitySheetImages: this.data.reportImages,
           inspectionImages,
+          deletedRecordImages: pendingDeletedRecordImages,
           aiResult: aiWorkbenchResult,
-        }))
+          changedRowKeys: [],
+        }), {
+          aiWorkbenchImageAdditions: pendingAiImageAdditions,
+          aiWorkbenchImageDeletions: pendingAiImageDeletions,
+          aiWorkbenchResultPatch: inspectionRecognitionRequest(inspectionImages.length),
+        })
         if (!this.isActiveWorkbenchRequest(requestedTaskId, requestedItemId)) return
         this.setData({
           savedMessage: inspectionImages.length ? '验货图片已更新' : '验货图片已清空',
-          dirty: false,
+          pendingAiImageAdditions: [],
+          pendingAiImageDeletions: [],
+          pendingDeletedRecordImages: [],
+          dirty: this.data.dirtyRowKeys.length > 0 || this.data.draftMetadataDirty,
         })
         this.triggerEvent('saved', { taskId: requestedTaskId, itemId: requestedItemId })
         showTopToast({
@@ -831,6 +918,7 @@ Component({
         const result = await recognizeInspection(preparedPath)
         if (!this.isActiveWorkbenchRequest(requestedTaskId, requestedItemId)) return
         const merged = mergeRecognitionRecord(this.data.workbench?.rows || workbench.rows, result.record)
+        const recognizedRowKeys = findChangedWorkbenchRowKeys(workbench.rows, merged.rows)
         let reportImages = this.data.reportImages
         let reportPreviewPath = preparedPath
         let reportPreviewOriginalPath = preparedPath
@@ -870,6 +958,9 @@ Component({
             reportPreviewOriginalPath,
           ],
           dirty: true,
+          dirtyRowKeys: appendUnique(this.data.dirtyRowKeys, recognizedRowKeys),
+          draftMetadataDirty: true,
+          draftRevision: this.data.draftRevision + 1,
         })
         this.syncCurrentPageAfterRecognition(next.rows, unmatched)
         showTopToast({ title: merged.unmatched.length ? '识别完成，请核对未匹配条目' : '识别结果已回填', icon: 'none' })
@@ -902,6 +993,8 @@ Component({
         pageTotal: pages.length,
         savedMessage: '',
         dirty: true,
+        draftMetadataDirty: true,
+        draftRevision: this.data.draftRevision + 1,
       })
     },
 
@@ -974,7 +1067,7 @@ Component({
       }, 300)
     },
 
-    async saveDraft(closeAfterSave = false, deletedRecordImages: string[] = []) {
+    async saveDraft(closeAfterSave = false) {
       const shouldClose = closeAfterSave === true
       const { workbench, task, item } = this.data
       if (
@@ -995,7 +1088,26 @@ Component({
       }
       this.setData({ saving: true, savedMessage: '' })
       try {
-        await saveInspectionDraft(this.data.taskId, this.data.itemId, workbenchToDraft(workbench, {
+        const savedRevision = this.data.draftRevision
+        const pendingAiImageAdditions = [...this.data.pendingAiImageAdditions]
+        const pendingAiImageDeletions = [...this.data.pendingAiImageDeletions]
+        const pendingDeletedRecordImages = [...this.data.pendingDeletedRecordImages]
+        const dirtyRowKeys = [...this.data.dirtyRowKeys]
+        const draftMetadataDirty = this.data.draftMetadataDirty
+        const aiImagesDirty = pendingAiImageAdditions.length > 0 || pendingAiImageDeletions.length > 0
+        const aiWorkbenchResultPatch = {
+          ...(draftMetadataDirty
+            ? {
+                inspection_date: this.data.inspectionDate,
+                recognition_raw_content: this.data.rawContent,
+                unmatched_recognition_rows: this.data.unmatched,
+              }
+            : {}),
+          ...(aiImagesDirty
+            ? inspectionRecognitionRequest(this.data.inspectionImages.length)
+            : {}),
+        }
+        await saveInspectionDraftIncremental(this.data.taskId, this.data.itemId, workbenchToDraft(workbench, {
           metadata: {
             customer: text(task.customer_name),
             supplier: text(task.supplier_name),
@@ -1008,15 +1120,38 @@ Component({
           unmatched: this.data.unmatched,
           qualitySheetImages: this.data.reportImages,
           inspectionImages: this.data.inspectionImages,
-          deletedRecordImages,
+          deletedRecordImages: pendingDeletedRecordImages,
           aiResult: this.data.aiWorkbenchResult,
-        }))
+          changedRowKeys: dirtyRowKeys,
+        }), {
+          aiWorkbenchResultPatch,
+          aiWorkbenchImageAdditions: pendingAiImageAdditions,
+          aiWorkbenchImageDeletions: pendingAiImageDeletions,
+          recordSourceImageAdditions: draftMetadataDirty
+            ? this.data.reportImages
+            : [],
+        })
         if (!this.isActiveWorkbenchRequest(this.data.taskId, this.data.itemId)) return
-        const savedMessage = deletedRecordImages.length ? '图片已删除并同步' : '草稿已保存'
-        this.setData({ savedMessage, dirty: false })
+        const unchangedDuringSave = this.data.draftRevision === savedRevision
+        const savedMessage = pendingDeletedRecordImages.length ? '图片已删除并同步' : '草稿已保存'
+        this.setData(unchangedDuringSave
+          ? {
+              savedMessage,
+              dirty: false,
+              dirtyRowKeys: [],
+              draftMetadataDirty: false,
+              pendingAiImageAdditions: [],
+              pendingAiImageDeletions: [],
+              pendingDeletedRecordImages: [],
+            }
+          : { savedMessage: '已保存提交时的修改，当前新修改待保存', dirty: true })
         showTopToast({ title: savedMessage, icon: 'success' })
-        this.triggerEvent('saved', { taskId: this.data.taskId, itemId: this.data.itemId, closing: shouldClose })
-        if (shouldClose) this.finishClose()
+        this.triggerEvent('saved', {
+          taskId: this.data.taskId,
+          itemId: this.data.itemId,
+          closing: shouldClose && unchangedDuringSave,
+        })
+        if (shouldClose && unchangedDuringSave) this.finishClose()
       } catch (error) {
         if (this.isActiveWorkbenchRequest(this.data.taskId, this.data.itemId)) {
           showTopToast({

@@ -20,6 +20,7 @@ import {
   normalizeQualityInspectionItem,
   recognizeInspectionFile,
   saveInspectionDraft,
+  saveInspectionDraftIncremental,
   uploadInspectionDraftImage,
   uploadInspectionWorkbenchImage,
   uploadInspectionRowImage,
@@ -751,6 +752,96 @@ test('draft save and recognition use shared backend paths', async () => {
   )
   assert.equal(uploadCalls[0].url, RECOGNITION_API_URL)
   assert.equal(uploadCalls[0].sessionMode, 'read-only')
+})
+
+test('incremental draft save sends one backend-owned changeset without refreshing the full draft', async () => {
+  const calls: Array<Record<string, unknown>> = []
+  const request = async <T>(options: Record<string, unknown>): Promise<T> => {
+    calls.push(options)
+    return {} as T
+  }
+  const payload = {
+    inspection_records: [{
+      row_key: 'appearance',
+      group_title: '产品外观',
+      project: '产品本体',
+      method: '目视',
+      standard: '无缺陷',
+      decision: 'OK',
+      sample_data: [],
+      measurement_standards: {},
+      note: '',
+      ai_result: {},
+      images: [],
+    }],
+    ai_workbench_result: { inspection_date: '2026-08-12' },
+    ai_workbench_images: [],
+    record_source_images: [],
+    deleted_record_images: [],
+    record_merge_mode: 'workbench' as const,
+  }
+
+  await saveInspectionDraftIncremental(1, 2, payload, {
+    aiWorkbenchResultPatch: { inspection_date: '2026-08-12' },
+    recordSourceImageAdditions: ['https://files.example.com/report-new.jpg'],
+  }, request)
+
+  assert.equal(calls.length, 1)
+  assert.equal(calls[0].method, 'POST')
+  const saved = calls[0].data as QualityInspectionDraftPayload
+  assert.equal(saved.record_merge_mode, 'workbench_patch')
+  assert.deepEqual(saved.inspection_records?.map((row) => row.row_key), ['appearance'])
+  assert.deepEqual(saved.ai_workbench_result, {})
+  assert.deepEqual(saved.ai_workbench_images, [])
+  assert.equal(saved.record_source_images, undefined)
+  assert.deepEqual(saved.draft_changes, {
+    ai_workbench_result: { inspection_date: '2026-08-12' },
+    ai_workbench_images: { add: [], remove: [] },
+    record_source_images: {
+      add: ['https://files.example.com/report-new.jpg'],
+      remove: [],
+    },
+  })
+})
+
+test('incremental AI image deletion sends only the target URL and result patch', async () => {
+  const calls: Array<Record<string, unknown>> = []
+  const request = async <T>(options: Record<string, unknown>): Promise<T> => {
+    calls.push(options)
+    return {} as T
+  }
+  const payload = {
+    inspection_records: [],
+    ai_workbench_result: {},
+    ai_workbench_images: [],
+    record_source_images: [],
+    deleted_record_images: ['https://files.example.com/one.jpg'],
+    record_merge_mode: 'workbench' as const,
+  }
+
+  const deletedUrl = 'https://files.example.com/one.jpg'
+  await saveInspectionDraftIncremental(1, 2, payload, {
+    aiWorkbenchImageDeletions: [deletedUrl],
+    aiWorkbenchResultPatch: {
+      visual_recognition_request: { status: 'pending', image_count: 1 },
+    },
+  }, request)
+
+  assert.equal(calls.length, 1)
+  const saved = calls[0].data as QualityInspectionDraftPayload
+  assert.equal(saved.record_merge_mode, 'workbench_patch')
+  assert.deepEqual(saved.inspection_records, [])
+  assert.deepEqual(saved.ai_workbench_result, {})
+  assert.deepEqual(saved.ai_workbench_images, [])
+  assert.equal(saved.record_source_images, undefined)
+  assert.deepEqual(saved.draft_changes, {
+    ai_workbench_result: {
+      visual_recognition_request: { status: 'pending', image_count: 1 },
+    },
+    ai_workbench_images: { add: [], remove: [deletedUrl] },
+    record_source_images: { add: [], remove: [] },
+  })
+  assert.deepEqual(saved.deleted_record_images, ['https://files.example.com/one.jpg'])
 })
 
 test('encodeTaskQuery always requests purchase-order tasks for the pending tab', () => {

@@ -3,6 +3,7 @@ import { loadUiThemePageData } from '../../services/ui-preferences-service'
 import {
   addLocalPhotos,
   buildInspectionWorkbench,
+  findChangedWorkbenchRowKeys,
   InspectionPhoto,
   InspectionTemplateColumnDto,
   InspectionWorkbench,
@@ -23,7 +24,7 @@ import {
   uploadInspectionDraftImage,
   QualityInspectionItemDto,
   QualityInspectionTaskDto,
-  saveInspectionDraft,
+  saveInspectionDraftIncremental,
   uploadInspectionRowImage,
 } from '../../services/quality-inspection-service'
 
@@ -242,6 +243,10 @@ Page({
     reportPreviewPaths: [] as string[],
     reportPreviewOriginalPaths: [] as string[],
     inspectionImages: [] as string[],
+    dirtyRowKeys: [] as string[],
+    deletedRecordImages: [] as string[],
+    draftMetadataDirty: false,
+    draftRevision: 0,
     unmatched: [] as UnmatchedRecognitionRow[],
     saving: false,
     savedMessage: '',
@@ -305,6 +310,10 @@ Page({
         reportPreviewPaths: reportImages.map(inspectionImageThumbnailUrl),
         reportPreviewOriginalPaths: reportImages,
         inspectionImages,
+        dirtyRowKeys: [],
+        deletedRecordImages: [],
+        draftMetadataDirty: false,
+        draftRevision: 0,
         rawContent: text(result.recognition_raw_content),
         loading: false,
       })
@@ -321,7 +330,7 @@ Page({
     }
   },
 
-  setRows(rows: InspectionWorkbenchRow[]) {
+  setRows(rows: InspectionWorkbenchRow[], modifiedRowKeys: string[] = []) {
     const workbench = this.data.workbench
     if (!workbench) return
     const next = { ...workbench, rows }
@@ -329,6 +338,8 @@ Page({
       workbench: next,
       groups: groupRows(next.rows, this.data.renderColumns),
       savedMessage: '',
+      draftRevision: this.data.draftRevision + 1,
+      dirtyRowKeys: [...new Set([...this.data.dirtyRowKeys, ...modifiedRowKeys])],
     })
   },
 
@@ -341,7 +352,7 @@ Page({
       rowKey,
       measurementIndex,
       event.detail.value,
-    ))
+    ), [rowKey])
   },
 
   onDecisionChange(event: SwitchEvent) {
@@ -353,7 +364,7 @@ Page({
       rowKey,
       'decision',
       decision,
-    ))
+    ), [rowKey])
   },
 
   onRowFieldInput(event: InputEvent) {
@@ -365,7 +376,7 @@ Page({
       rowKey,
       field,
       event.detail.value,
-    ))
+    ), [rowKey])
   },
 
   addRowPhotos(event: RowActionEvent) {
@@ -394,14 +405,14 @@ Page({
     const previousCount = workbench.rows.find((row) => row.rowKey === rowKey)?.images.length || 0
     let rows = addLocalPhotos(workbench.rows, rowKey, localPaths)
     const additions = rows.find((row) => row.rowKey === rowKey)?.images.slice(previousCount) || []
-    this.setRows(rows)
+    this.setRows(rows, [rowKey])
 
     for (const photo of additions) {
       rows = updateWorkbenchPhoto(rows, rowKey, photo.id, {
         status: 'uploading',
         error: '',
       })
-      this.setRows(rows)
+      this.setRows(rows, [rowKey])
       try {
         const uploaded = await uploadInspectionRowImage(
           this.data.taskId,
@@ -421,7 +432,7 @@ Page({
           error: errorMessage(error, '上传失败'),
         })
       }
-      this.setRows(rows)
+      this.setRows(rows, [rowKey])
     }
   },
 
@@ -439,7 +450,18 @@ Page({
     const rowKey = text(event.currentTarget.dataset.rowKey)
     const photoId = text(event.currentTarget.dataset.photoId)
     if (!this.data.workbench || !rowKey || !photoId) return
-    this.setRows(removeWorkbenchPhoto(this.data.workbench.rows, rowKey, photoId))
+    const photo = this.data.workbench.rows
+      .find((row) => row.rowKey === rowKey)?.images
+      .find((candidate) => candidate.id === photoId)
+    this.setRows(removeWorkbenchPhoto(this.data.workbench.rows, rowKey, photoId), [rowKey])
+    if (photo?.remoteUrl) {
+      this.setData({
+        deletedRecordImages: [...new Set([
+          ...this.data.deletedRecordImages,
+          photo.remoteUrl,
+        ])],
+      })
+    }
   },
 
   retryPhoto(event: RowActionEvent) {
@@ -459,7 +481,7 @@ Page({
       status: 'uploading',
       error: '',
     })
-    this.setRows(rows)
+    this.setRows(rows, [rowKey])
     try {
       const uploaded = await uploadInspectionRowImage(
         this.data.taskId,
@@ -479,7 +501,7 @@ Page({
         error: errorMessage(error, '上传失败'),
       })
     }
-    this.setRows(rows)
+    this.setRows(rows, [rowKey])
   },
 
   takeQualitySheetPhoto() {
@@ -524,6 +546,7 @@ Page({
       const preparedPath = await prepareImageForUpload(imagePath)
       const result = await recognizeInspection(preparedPath)
       const merged = mergeRecognitionRecord(this.data.workbench?.rows || workbench.rows, result.record)
+      const recognizedRowKeys = findChangedWorkbenchRowKeys(workbench.rows, merged.rows)
       let reportImages = this.data.reportImages
       let reportPreviewPath = preparedPath
       let reportPreviewOriginalPath = preparedPath
@@ -555,6 +578,9 @@ Page({
           ...this.data.reportPreviewOriginalPaths,
           reportPreviewOriginalPath,
         ],
+        dirtyRowKeys: [...new Set([...this.data.dirtyRowKeys, ...recognizedRowKeys])],
+        draftMetadataDirty: true,
+        draftRevision: this.data.draftRevision + 1,
       })
       showTopToast({
         title: merged.unmatched.length > 0 ? '识别完成，请核对未匹配条目' : '识别结果已回填',
@@ -575,7 +601,12 @@ Page({
   },
 
   clearUnmatched() {
-    this.setData({ unmatched: [], savedMessage: '' })
+    this.setData({
+      unmatched: [],
+      savedMessage: '',
+      draftMetadataDirty: true,
+      draftRevision: this.data.draftRevision + 1,
+    })
   },
 
   async saveDraft() {
@@ -589,6 +620,10 @@ Page({
     }
     this.setData({ saving: true, savedMessage: '' })
     try {
+      const savedRevision = this.data.draftRevision
+      const dirtyRowKeys = [...this.data.dirtyRowKeys]
+      const deletedRecordImages = [...this.data.deletedRecordImages]
+      const draftMetadataDirty = this.data.draftMetadataDirty
       const payload = workbenchToDraft(workbench, {
         metadata: {
           customer: text(task.customer_name),
@@ -604,9 +639,27 @@ Page({
         unmatched: this.data.unmatched,
         qualitySheetImages: this.data.reportImages,
         inspectionImages: this.data.inspectionImages,
+        deletedRecordImages,
+        changedRowKeys: dirtyRowKeys,
       })
-      await saveInspectionDraft(this.data.taskId, this.data.itemId, payload)
-      this.setData({ savedMessage: '草稿已保存' })
+      await saveInspectionDraftIncremental(this.data.taskId, this.data.itemId, payload, draftMetadataDirty
+        ? {
+            recordSourceImageAdditions: this.data.reportImages,
+            aiWorkbenchResultPatch: {
+              recognition_raw_content: this.data.rawContent,
+              unmatched_recognition_rows: this.data.unmatched,
+            },
+          }
+        : {})
+      const unchangedDuringSave = this.data.draftRevision === savedRevision
+      this.setData(unchangedDuringSave
+        ? {
+            savedMessage: '草稿已保存',
+            dirtyRowKeys: [],
+            deletedRecordImages: [],
+            draftMetadataDirty: false,
+          }
+        : { savedMessage: '已保存提交时的修改，当前新修改待保存' })
       showTopToast({ title: '草稿已保存', icon: 'success' })
     } catch (error) {
       showTopToast({

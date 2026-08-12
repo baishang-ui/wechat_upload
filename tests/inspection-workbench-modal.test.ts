@@ -209,14 +209,14 @@ test('saving a workbench coalesces online compact refreshes in the background', 
   assert.match(refreshMethod, /this\.queueWorkbenchTaskRefresh\(nextTarget\)/)
   assert.match(detachedMethod, /disposeWorkbenchRefresh\(this\)/)
   assert.doesNotMatch(savedMethod, /loadTasks/)
-  assert.match(modal, /this\.triggerEvent\('saved', \{ taskId: this\.data\.taskId, itemId: this\.data\.itemId, closing: shouldClose \}\)/)
+  assert.match(modal, /closing: shouldClose && unchangedDuringSave/)
 })
 
 test('manual save from the drawer does not treat the tap event as a close-after-save request', () => {
   const ts = source('miniprogram/components/inspection-workbench-modal/inspection-workbench-modal.ts')
 
   assert.match(ts, /const shouldClose = closeAfterSave === true/)
-  assert.match(ts, /if \(shouldClose\) this\.finishClose\(\)/)
+  assert.match(ts, /if \(shouldClose && unchangedDuringSave\) this\.finishClose\(\)/)
 })
 
 test('workbench drawer is mounted only when opened and initializes on attachment', () => {
@@ -267,7 +267,7 @@ test('recognized quality sheets are uploaded before draft save instead of embedd
   assert.doesNotMatch(qualitySheetMethod, /inspectionImageToDataUrl\(preparedPath\)/)
   assert.match(qualitySheetMethod, /let reportImages = this\.data\.reportImages/)
   assert.match(qualitySheetMethod, /reportImages,/)
-  assert.match(modal, /saveInspectionDraft\(this\.data\.taskId, this\.data\.itemId/)
+  assert.match(modal, /saveInspectionDraftIncremental\(this\.data\.taskId, this\.data\.itemId/)
 })
 
 test('workbench overview uploads inspection photos to the online AI workbench without running AI locally', () => {
@@ -297,10 +297,11 @@ test('workbench overview uploads inspection photos to the online AI workbench wi
   assert.match(ts, /visual_recognition_request:\s*imageCount > 0/)
   assert.match(ts, /status:\s*'pending'[\s\S]*?source:\s*'miniprogram'/)
   assert.match(ts, /status:\s*'cleared'[\s\S]*?source:\s*'miniprogram'[\s\S]*?image_count:\s*0/)
-  assert.match(ts, /await saveInspectionDraft\(requestedTaskId, requestedItemId/)
+  assert.match(ts, /await saveInspectionDraftIncremental\(requestedTaskId, requestedItemId/)
   assert.match(ts, /deleteInspectionImageAt\(index: number\)/)
   assert.match(ts, /removeInspectionImageReferences\(this\.data\.aiWorkbenchResult, index\)/)
-  assert.match(ts, /this\.saveDraft\(false, \[photo\.remoteUrl\]\)/)
+  assert.match(ts, /pendingDeletedRecordImages:\s*appendUnique\([\s\S]*?\[photo\.remoteUrl\]/)
+  assert.match(ts, /void this\.saveDraft\(\)/)
   assert.match(ts, /deletedRecordImages/)
   assert.match(ts, /inspectionRecognitionRequest\(inspectionImages\.length\)/)
   assert.match(ts, /inspectionImages,\s*\n\s*aiResult:\s*aiWorkbenchResult/)
@@ -332,9 +333,25 @@ test('row photo uploads and retries persist the shared backend draft without ref
 
   assert.match(ts, /async syncUploadedRowPhotos/)
   assert.doesNotMatch(syncFlow, /loadWorkbench\(\)/)
-  assert.match(uploadFlow, /await this\.syncUploadedRowPhotos\(requestedTaskId, requestedItemId, rows\)/)
-  assert.match(retryFlow, /await this\.syncUploadedRowPhotos\(requestedTaskId, requestedItemId, rows\)/)
+  assert.match(uploadFlow, /await this\.syncUploadedRowPhotos\(requestedTaskId, requestedItemId, rows, rowKey\)/)
+  assert.match(retryFlow, /await this\.syncUploadedRowPhotos\(requestedTaskId, requestedItemId, rows, rowKey\)/)
   assert.match(ts, /照片已上传并同步/)
+})
+
+test('workbench sync submits only changed rows and AI image changes submit no report rows', () => {
+  const ts = source('miniprogram/components/inspection-workbench-modal/inspection-workbench-modal.ts')
+
+  assert.match(ts, /dirtyRowKeys:\s*\[\]/)
+  assert.match(ts, /changedRowKeys:\s*\[rowKey\]/)
+  assert.match(ts, /const dirtyRowKeys = \[\.\.\.this\.data\.dirtyRowKeys\]/)
+  assert.match(ts, /changedRowKeys:\s*dirtyRowKeys/)
+  assert.match(ts, /this\.data\.draftRevision === savedRevision/)
+  assert.match(ts, /deleteInspectionImageAt\(index: number\)[\s\S]*?changedRowKeys:\s*\[\]/)
+  assert.match(ts, /deletedRecordImages:\s*pendingDeletedRecordImages/)
+  assert.match(ts, /pendingAiImageAdditions/)
+  assert.match(ts, /pendingAiImageDeletions/)
+  assert.match(ts, /aiWorkbenchImageAdditions:\s*pendingAiImageAdditions/)
+  assert.match(ts, /aiWorkbenchImageDeletions:\s*pendingAiImageDeletions/)
 })
 
 test('workbench photo requests stop mutating the drawer after closing begins', () => {
@@ -345,7 +362,7 @@ test('workbench photo requests stop mutating the drawer after closing begins', (
   assert.match(ts, /async loadWorkbench\(\) \{[\s\S]*?!this\.isActiveWorkbenchRequest\(requestedTaskId, requestedItemId\)/)
   assert.match(ts, /async uploadInspectionPhotos\(localPaths: string\[\]\) \{[\s\S]*?if \(!this\.isActiveWorkbenchRequest\(requestedTaskId, requestedItemId\)\) return/)
   assert.match(ts, /async appendAndUploadPhotos\(rowKey: string, localPaths: string\[\]\) \{[\s\S]*?if \(!this\.isActiveWorkbenchRequest\(requestedTaskId, requestedItemId\)\) return/)
-  assert.match(ts, /async saveDraft\(closeAfterSave = false, deletedRecordImages: string\[\] = \[\]\) \{[\s\S]*?!this\.isActiveWorkbenchRequest\(this\.data\.taskId, this\.data\.itemId\)/)
+  assert.match(ts, /async saveDraft\(closeAfterSave = false\) \{[\s\S]*?!this\.isActiveWorkbenchRequest\(this\.data\.taskId, this\.data\.itemId\)/)
   assert.match(scss, /\.workbench-modal-mask\s*\{[\s\S]*?backdrop-filter:\s*blur\(12rpx\)/)
   assert.match(scss, /\.workbench-modal-layer\.is-closing \.workbench-modal-panel\s*\{[\s\S]*?modal-sheet-down/)
 })
