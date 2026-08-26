@@ -32,6 +32,7 @@ import { prepareImageForUpload, recognizeInspection } from '../../services/inspe
 import {
   getInspectionItemDetail,
   inspectionImageThumbnailUrl,
+  materializeHistoryCardImage,
   QualityInspectionCustomerProductDto,
   uploadInspectionDraftImage,
   QualityInspectionItemDto,
@@ -56,13 +57,84 @@ interface RowActionEvent {
   currentTarget: { dataset: Record<string, string | number | undefined> }
 }
 
+interface WorkbenchTaskPresentation {
+  task_no: string
+  customer_name: string
+  supplier_name: string
+  contract_no: string
+}
+
+interface WorkbenchItemPresentation {
+  material_name: string
+  material_code: string
+  spec_desc: string
+  quantity: number | null
+  unit: string
+}
+
+interface WorkbenchMasterProductPresentation {
+  name: string
+}
+
+interface WorkbenchCustomerProductPresentation {
+  customer_name: string
+  spec_description: string
+}
+
+const workbenchAiResults = new WeakMap<object, Record<string, unknown>>()
+const workbenchRawContents = new WeakMap<object, string>()
+const workbenchReportImages = new WeakMap<object, string[]>()
+const workbenchInspectionImages = new WeakMap<object, string[]>()
+const workbenchPhotoSources = new WeakMap<object, Map<string, string>>()
+
 function text(value: unknown): string {
   if (value === null || value === undefined) return ''
   return String(value)
 }
 
-function photoOriginalSource(photo: InspectionPhoto): string {
+function photoOriginalSource(component: object, photo: InspectionPhoto): string {
+  const saved = workbenchPhotoSources.get(component)?.get(photo.id)
+  if (saved) return saved
   return photo.remoteUrl || photo.localPath
+}
+
+function compactWorkbenchRows(
+  component: object,
+  rows: InspectionWorkbenchRow[],
+): InspectionWorkbenchRow[] {
+  let sources = workbenchPhotoSources.get(component)
+  if (!sources) {
+    sources = new Map()
+    workbenchPhotoSources.set(component, sources)
+  }
+  return rows.map((row) => ({
+    ...row,
+    images: row.images.map((photo) => {
+      const source = photo.remoteUrl || photo.localPath
+      if (source) sources?.set(photo.id, source)
+      if (!/^data:/i.test(source)) return photo
+      return { ...photo, remoteUrl: '' }
+    }),
+  }))
+}
+
+function restoreWorkbenchRows(
+  component: object,
+  rows: InspectionWorkbenchRow[],
+): InspectionWorkbenchRow[] {
+  const sources = workbenchPhotoSources.get(component)
+  return rows.map((row) => ({
+    ...row,
+    images: row.images.map((photo) => (
+      photo.status === 'uploaded' && !photo.remoteUrl && sources?.get(photo.id)
+        ? { ...photo, remoteUrl: sources.get(photo.id) || '' }
+        : photo
+    )),
+  }))
+}
+
+function restoreWorkbenchForSave(component: object, workbench: InspectionWorkbench): InspectionWorkbench {
+  return { ...workbench, rows: restoreWorkbenchRows(component, workbench.rows) }
 }
 
 function errorMessage(error: unknown, fallback: string): string {
@@ -91,6 +163,101 @@ function quantityDisplay(item: QualityInspectionItemDto): string {
     ? '0'
     : String(item.quantity)
   return `${quantity} ${text(item.unit)}`.trim()
+}
+
+function presentWorkbenchTask(task: QualityInspectionTaskDto): WorkbenchTaskPresentation {
+  return {
+    task_no: text(task.task_no),
+    customer_name: text(task.customer_name),
+    supplier_name: text(task.supplier_name),
+    contract_no: text(task.contract_no),
+  }
+}
+
+function presentWorkbenchItem(item: QualityInspectionItemDto): WorkbenchItemPresentation {
+  return {
+    material_name: text(item.material_name),
+    material_code: text(item.material_code),
+    spec_desc: text(item.spec_desc),
+    quantity: item.quantity === null || item.quantity === undefined ? null : item.quantity,
+    unit: text(item.unit),
+  }
+}
+
+function presentWorkbenchMasterProduct(
+  product: QualityInspectionMasterProductDto | null | undefined,
+): WorkbenchMasterProductPresentation | null {
+  return product ? { name: text(product.name) } : null
+}
+
+function presentWorkbenchCustomerProduct(
+  product: QualityInspectionCustomerProductDto | null | undefined,
+): WorkbenchCustomerProductPresentation | null {
+  return product
+    ? {
+        customer_name: text(product.customer_name),
+        spec_description: text(product.spec_description),
+      }
+    : null
+}
+
+function getWorkbenchAiResult(component: object): Record<string, unknown> {
+  return workbenchAiResults.get(component) || {}
+}
+
+function setWorkbenchAiResult(component: object, value: Record<string, unknown>): void {
+  workbenchAiResults.set(component, value)
+}
+
+function getWorkbenchRawContent(component: object): string {
+  return workbenchRawContents.get(component) || ''
+}
+
+function setWorkbenchRawContent(component: object, value: string): void {
+  workbenchRawContents.set(component, value)
+}
+
+function getWorkbenchReportImages(component: object): string[] {
+  return workbenchReportImages.get(component) || []
+}
+
+function setWorkbenchReportImages(component: object, value: string[]): void {
+  workbenchReportImages.set(component, value)
+}
+
+function getWorkbenchInspectionImages(component: object): string[] {
+  return workbenchInspectionImages.get(component) || []
+}
+
+function setWorkbenchInspectionImages(component: object, value: string[]): void {
+  workbenchInspectionImages.set(component, value)
+}
+
+async function prepareWorkbenchPreviewPaths(
+  images: string[],
+  cachePrefix: string,
+): Promise<string[]> {
+  return Promise.all(images.map((image, index) => (
+    materializeHistoryCardImage(
+      inspectionImageThumbnailUrl(image),
+      `${cachePrefix}-${index}`,
+    ).catch(() => '')
+  ))).then((paths) => paths.filter(Boolean))
+}
+
+async function prepareWorkbenchRows(
+  rows: InspectionWorkbenchRow[],
+  cachePrefix: string,
+): Promise<InspectionWorkbenchRow[]> {
+  return Promise.all(rows.map(async (row) => ({
+    ...row,
+    images: await Promise.all(row.images.map(async (photo) => {
+      const source = photo.remoteUrl || photo.localPath
+      if (!/^data:/i.test(source)) return photo
+      const thumbnailUrl = await materializeHistoryCardImage(source, `${cachePrefix}-${row.rowKey}-${photo.id}`)
+      return { ...photo, thumbnailUrl }
+    })),
+  })))
 }
 
 function inspectionRecognitionRequest(imageCount: number): Record<string, unknown> {
@@ -124,12 +291,11 @@ Component({
   },
 
   data: {
-    task: null as QualityInspectionTaskDto | null,
-    item: null as QualityInspectionItemDto | null,
-    masterProduct: null as QualityInspectionMasterProductDto | null,
-    customerProduct: null as QualityInspectionCustomerProductDto | null,
+    task: null as WorkbenchTaskPresentation | null,
+    item: null as WorkbenchItemPresentation | null,
+    masterProduct: null as WorkbenchMasterProductPresentation | null,
+    customerProduct: null as WorkbenchCustomerProductPresentation | null,
     workbench: null as InspectionWorkbench | null,
-    aiWorkbenchResult: {} as Record<string, unknown>,
     finalState: buildInspectionWorkbenchFinalState([], {}) as InspectionWorkbenchFinalState,
     inspectionDate: '',
     quantityDisplay: '',
@@ -141,11 +307,9 @@ Component({
     photoUploading: false,
     photoDeletingIndex: -1,
     photoUploadError: '',
-    rawContent: '',
-    reportImages: [] as string[],
     reportPreviewPaths: [] as string[],
-    reportPreviewOriginalPaths: [] as string[],
-    inspectionImages: [] as string[],
+    reportImageCount: 0,
+    inspectionImageCount: 0,
     inspectionClassifiedCount: 0,
     inspectionClassificationPending: false,
     unmatched: [] as UnmatchedRecognitionRow[],
@@ -195,13 +359,17 @@ Component({
     noop() {},
 
     resetWorkbench() {
+      workbenchAiResults.delete(this)
+      workbenchRawContents.delete(this)
+      workbenchReportImages.delete(this)
+      workbenchInspectionImages.delete(this)
+      workbenchPhotoSources.delete(this)
       this.setData({
         task: null,
         item: null,
         masterProduct: null,
         customerProduct: null,
         workbench: null,
-        aiWorkbenchResult: {},
         finalState: buildInspectionWorkbenchFinalState([], {}),
         inspectionDate: '',
         quantityDisplay: '',
@@ -213,11 +381,9 @@ Component({
         photoUploading: false,
         photoDeletingIndex: -1,
         photoUploadError: '',
-        rawContent: '',
-        reportImages: [],
         reportPreviewPaths: [],
-        reportPreviewOriginalPaths: [],
-        inspectionImages: [],
+        reportImageCount: 0,
+        inspectionImageCount: 0,
         inspectionClassifiedCount: 0,
         inspectionClassificationPending: false,
         unmatched: [],
@@ -268,6 +434,8 @@ Component({
           thumbnailUrl: inspectionImageThumbnailUrl,
         })
         const aiWorkbenchResult = item.inspection_draft?.ai_workbench_result || {}
+        setWorkbenchAiResult(this, aiWorkbenchResult)
+        setWorkbenchRawContent(this, text(aiWorkbenchResult.recognition_raw_content))
         const unmatched = Array.isArray(aiWorkbenchResult.unmatched_recognition_rows)
           ? aiWorkbenchResult.unmatched_recognition_rows as UnmatchedRecognitionRow[]
           : []
@@ -279,6 +447,8 @@ Component({
           .filter((image) => typeof image === 'string')
         const inspectionImages = (item.inspection_draft?.ai_workbench_images || [])
           .filter((image) => typeof image === 'string')
+        setWorkbenchReportImages(this, reportImages)
+        setWorkbenchInspectionImages(this, inspectionImages)
         const workbench = {
           ...baseWorkbench,
           rows: mergeInspectionImageAssignmentsIntoRows(
@@ -288,19 +458,33 @@ Component({
             inspectionImageThumbnailUrl,
           ),
         }
-        const pages = buildInspectionWorkbenchPages(workbench.rows, unmatched)
+        const preparedRows = await prepareWorkbenchRows(
+          workbench.rows,
+          `${requestedTaskId}-${requestedItemId}-row`,
+        )
+        if (!this.isActiveWorkbenchRequest(requestedTaskId, requestedItemId)) return
+        const presentationWorkbench = {
+          ...workbench,
+          rows: compactWorkbenchRows(this, preparedRows),
+        }
+        const pages = buildInspectionWorkbenchPages(presentationWorkbench.rows, unmatched)
         const imageClassification = buildInspectionImageClassificationState(
           aiWorkbenchResult,
           inspectionImages,
         )
+        const reportPreviewPaths = await prepareWorkbenchPreviewPaths(
+          reportImages,
+          `${requestedTaskId}-${requestedItemId}-report`,
+        )
+        if (!this.isActiveWorkbenchRequest(requestedTaskId, requestedItemId)) return
         this.setData({
-          task,
-          item,
-          masterProduct: detail.master_product || null,
-          customerProduct: detail.customer_product || null,
-          workbench,
-          aiWorkbenchResult,
-          finalState: buildInspectionWorkbenchFinalState(workbench.rows, aiWorkbenchResult),
+          // 明细 DTO 可能含草稿、原始识别结果与 Base64 图片；视图层只保留实际渲染字段。
+          task: presentWorkbenchTask(task),
+          item: presentWorkbenchItem(item),
+          masterProduct: presentWorkbenchMasterProduct(detail.master_product),
+          customerProduct: presentWorkbenchCustomerProduct(detail.customer_product),
+          workbench: presentationWorkbench,
+          finalState: buildInspectionWorkbenchFinalState(presentationWorkbench.rows, aiWorkbenchResult),
           inspectionDate,
           quantityDisplay: quantityDisplay(item),
           templateDisplayName: text(template.title || template.template_name || template.template_id) || '未配置',
@@ -311,13 +495,11 @@ Component({
           pageNumber: pages.length ? 1 : 0,
           pageTotal: pages.length,
           expandedRowKey: '',
-          reportImages,
-          reportPreviewPaths: reportImages.map(inspectionImageThumbnailUrl),
-          reportPreviewOriginalPaths: reportImages,
-          inspectionImages,
+          reportPreviewPaths,
+          reportImageCount: reportImages.length,
+          inspectionImageCount: inspectionImages.length,
           inspectionClassifiedCount: imageClassification.assignedCount,
           inspectionClassificationPending: imageClassification.pending,
-          rawContent: text(aiWorkbenchResult.recognition_raw_content),
           dirty: false,
           dirtyRowKeys: [],
           draftMetadataDirty: false,
@@ -337,12 +519,13 @@ Component({
     setRows(rows: InspectionWorkbenchRow[], modifiedRowKeys: string[] = []) {
       const workbench = this.data.workbench
       if (!workbench || !this.data.visible || this.data.closing) return
-      const next = { ...workbench, rows }
-      const pages = buildInspectionWorkbenchPages(rows, this.data.unmatched)
+      const compactRows = compactWorkbenchRows(this, rows)
+      const next = { ...workbench, rows: compactRows }
+      const pages = buildInspectionWorkbenchPages(compactRows, this.data.unmatched)
       const activePage = Math.min(this.data.activePage, Math.max(0, pages.length - 1))
       this.setData({
         workbench: next,
-        finalState: buildInspectionWorkbenchFinalState(rows, this.data.aiWorkbenchResult),
+        finalState: buildInspectionWorkbenchFinalState(compactRows, getWorkbenchAiResult(this)),
         pages,
         currentPage: pages[activePage] || null,
         activePage,
@@ -420,7 +603,7 @@ Component({
       ) return false
       const nextWorkbench = { ...workbench, rows }
       try {
-        await saveInspectionDraftIncremental(requestedTaskId, requestedItemId, workbenchToDraft(nextWorkbench, {
+        await saveInspectionDraftIncremental(requestedTaskId, requestedItemId, workbenchToDraft(restoreWorkbenchForSave(this, nextWorkbench), {
           metadata: {
             customer: text(task.customer_name),
             supplier: text(task.supplier_name),
@@ -429,11 +612,11 @@ Component({
             arrivalQuantity: item.quantity === null || item.quantity === undefined ? '' : String(item.quantity),
             inspectionDate: this.data.inspectionDate,
           },
-          rawContent: this.data.rawContent,
+          rawContent: getWorkbenchRawContent(this),
           unmatched: this.data.unmatched,
-          qualitySheetImages: this.data.reportImages,
-          inspectionImages: this.data.inspectionImages,
-          aiResult: this.data.aiWorkbenchResult,
+          qualitySheetImages: getWorkbenchReportImages(this),
+          inspectionImages: getWorkbenchInspectionImages(this),
+          aiResult: getWorkbenchAiResult(this),
           changedRowKeys: [rowKey],
         }))
         if (!this.isActiveWorkbenchRequest(requestedTaskId, requestedItemId)) return false
@@ -532,8 +715,8 @@ Component({
       const current = row?.images.find((photo) => photo.id === photoId)
       if (!row || !current) return
       wx.previewImage({
-        current: photoOriginalSource(current),
-        urls: row.images.map(photoOriginalSource).filter(Boolean),
+        current: photoOriginalSource(this, current),
+        urls: row.images.map((photo) => photoOriginalSource(this, photo)).filter(Boolean),
       })
     },
 
@@ -651,7 +834,7 @@ Component({
         || !this.isActiveWorkbenchRequest(requestedTaskId, requestedItemId)
       ) return
       this.setData({ photoUploading: true, photoUploadError: '', savedMessage: '' })
-      const initialInspectionImages = [...this.data.inspectionImages]
+      const initialInspectionImages = [...getWorkbenchInspectionImages(this)]
       let inspectionImages = [...initialInspectionImages]
       let uploadedCount = 0
       let failedCount = 0
@@ -667,8 +850,9 @@ Component({
             )
             if (!this.isActiveWorkbenchRequest(requestedTaskId, requestedItemId)) return
             inspectionImages = [...inspectionImages, uploaded.url]
+            setWorkbenchInspectionImages(this, inspectionImages)
             uploadedCount += 1
-            this.setData({ inspectionImages })
+            this.setData({ inspectionImageCount: inspectionImages.length })
           } catch {
             if (!this.isActiveWorkbenchRequest(requestedTaskId, requestedItemId)) return
             failedCount += 1
@@ -677,7 +861,7 @@ Component({
         if (!uploadedCount) throw new Error('验货图片上传失败，请重试')
 
         const aiWorkbenchResult = {
-          ...this.data.aiWorkbenchResult,
+          ...getWorkbenchAiResult(this),
           ...inspectionRecognitionRequest(inspectionImages.length),
         }
         const imageClassification = buildInspectionImageClassificationState(
@@ -691,9 +875,10 @@ Component({
           inspectionImageThumbnailUrl,
         )
         this.setRows(rows)
+        setWorkbenchAiResult(this, aiWorkbenchResult)
+        setWorkbenchInspectionImages(this, inspectionImages)
         this.setData({
-          inspectionImages,
-          aiWorkbenchResult,
+          inspectionImageCount: inspectionImages.length,
           inspectionClassifiedCount: imageClassification.assignedCount,
           inspectionClassificationPending: imageClassification.pending,
           finalState: buildInspectionWorkbenchFinalState(rows, aiWorkbenchResult),
@@ -710,7 +895,7 @@ Component({
         const pendingAiImageDeletions = [...this.data.pendingAiImageDeletions]
         this.setData({ pendingAiImageAdditions })
         await saveInspectionDraftIncremental(requestedTaskId, requestedItemId, workbenchToDraft(
-          this.data.workbench || workbench,
+          restoreWorkbenchForSave(this, this.data.workbench || workbench),
           {
             metadata: {
               customer: text(this.data.task?.customer_name),
@@ -722,9 +907,9 @@ Component({
                 : String(this.data.item.quantity),
               inspectionDate: this.data.inspectionDate,
             },
-            rawContent: this.data.rawContent,
+            rawContent: getWorkbenchRawContent(this),
             unmatched: this.data.unmatched,
-            qualitySheetImages: this.data.reportImages,
+            qualitySheetImages: getWorkbenchReportImages(this),
           inspectionImages,
           aiResult: aiWorkbenchResult,
           changedRowKeys: [],
@@ -775,7 +960,7 @@ Component({
         || !item
         || !Number.isInteger(index)
         || index < 0
-        || index >= this.data.inspectionImages.length
+        || index >= getWorkbenchInspectionImages(this).length
         || this.data.photoUploading
         || this.data.photoDeletingIndex >= 0
         || this.data.saving
@@ -783,8 +968,9 @@ Component({
         || !this.isActiveWorkbenchRequest(requestedTaskId, requestedItemId)
       ) return
 
-      const inspectionImages = this.data.inspectionImages.filter((_, imageIndex) => imageIndex !== index)
-      const deletedImageUrl = this.data.inspectionImages[index]
+      const currentInspectionImages = getWorkbenchInspectionImages(this)
+      const inspectionImages = currentInspectionImages.filter((_, imageIndex) => imageIndex !== index)
+      const deletedImageUrl = currentInspectionImages[index]
       const wasPendingAddition = this.data.pendingAiImageAdditions.includes(deletedImageUrl)
       const pendingAiImageAdditions = this.data.pendingAiImageAdditions.filter((image) => (
         image !== deletedImageUrl
@@ -797,7 +983,7 @@ Component({
         [deletedImageUrl],
       )
       const aiWorkbenchResult = {
-        ...removeInspectionImageReferences(this.data.aiWorkbenchResult, index),
+        ...removeInspectionImageReferences(getWorkbenchAiResult(this), index),
         ...inspectionRecognitionRequest(inspectionImages.length),
       }
       const imageClassification = buildInspectionImageClassificationState(
@@ -812,9 +998,10 @@ Component({
       )
       const nextWorkbench = { ...workbench, rows }
       this.setRows(rows)
+      setWorkbenchAiResult(this, aiWorkbenchResult)
+      setWorkbenchInspectionImages(this, inspectionImages)
       this.setData({
-        inspectionImages,
-        aiWorkbenchResult,
+        inspectionImageCount: inspectionImages.length,
         inspectionClassifiedCount: imageClassification.assignedCount,
         inspectionClassificationPending: imageClassification.pending,
         finalState: buildInspectionWorkbenchFinalState(rows, aiWorkbenchResult),
@@ -827,7 +1014,7 @@ Component({
         dirty: true,
       })
       try {
-        await saveInspectionDraftIncremental(requestedTaskId, requestedItemId, workbenchToDraft(nextWorkbench, {
+        await saveInspectionDraftIncremental(requestedTaskId, requestedItemId, workbenchToDraft(restoreWorkbenchForSave(this, nextWorkbench), {
           metadata: {
             customer: text(task.customer_name),
             supplier: text(task.supplier_name),
@@ -836,9 +1023,9 @@ Component({
             arrivalQuantity: item.quantity === null || item.quantity === undefined ? '' : String(item.quantity),
             inspectionDate: this.data.inspectionDate,
           },
-          rawContent: this.data.rawContent,
+          rawContent: getWorkbenchRawContent(this),
           unmatched: this.data.unmatched,
-          qualitySheetImages: this.data.reportImages,
+          qualitySheetImages: getWorkbenchReportImages(this),
           inspectionImages,
           deletedRecordImages: pendingDeletedRecordImages,
           aiResult: aiWorkbenchResult,
@@ -919,9 +1106,7 @@ Component({
         if (!this.isActiveWorkbenchRequest(requestedTaskId, requestedItemId)) return
         const merged = mergeRecognitionRecord(this.data.workbench?.rows || workbench.rows, result.record)
         const recognizedRowKeys = findChangedWorkbenchRowKeys(workbench.rows, merged.rows)
-        let reportImages = this.data.reportImages
-        let reportPreviewPath = preparedPath
-        let reportPreviewOriginalPath = preparedPath
+        let reportImages = getWorkbenchReportImages(this)
         try {
           const uploadedReport = await uploadInspectionDraftImage(
             requestedTaskId,
@@ -930,8 +1115,6 @@ Component({
           )
           if (!this.isActiveWorkbenchRequest(requestedTaskId, requestedItemId)) return
           reportImages = [...reportImages, uploadedReport.url]
-          reportPreviewPath = inspectionImageThumbnailUrl(uploadedReport.url)
-          reportPreviewOriginalPath = uploadedReport.url
         } catch {
           if (!this.isActiveWorkbenchRequest(requestedTaskId, requestedItemId)) return
           showTopToast({ title: '识别完成，质检单图片未写入草稿', icon: 'none' })
@@ -941,22 +1124,25 @@ Component({
         const recognizedInspectionDate = resolvedInspectionDate(result.record.inspectionDate)
         const inspectionDate = recognizedInspectionDate || this.data.inspectionDate
         const aiWorkbenchResult = {
-          ...this.data.aiWorkbenchResult,
+          ...getWorkbenchAiResult(this),
           ...(recognizedInspectionDate ? { inspection_date: recognizedInspectionDate } : {}),
         }
+        const rawContent = [getWorkbenchRawContent(this), result.rawContent].filter(Boolean).join('\n\n---\n\n')
+        setWorkbenchAiResult(this, aiWorkbenchResult)
+        setWorkbenchRawContent(this, rawContent)
+        setWorkbenchReportImages(this, reportImages)
+        const reportPreviewPaths = await prepareWorkbenchPreviewPaths(
+          reportImages,
+          `${requestedTaskId}-${requestedItemId}-report`,
+        )
+        if (!this.isActiveWorkbenchRequest(requestedTaskId, requestedItemId)) return
         this.setData({
           workbench: next,
-          aiWorkbenchResult,
           finalState: buildInspectionWorkbenchFinalState(merged.rows, aiWorkbenchResult),
           inspectionDate,
           unmatched,
-          rawContent: [this.data.rawContent, result.rawContent].filter(Boolean).join('\n\n---\n\n'),
-          reportImages,
-          reportPreviewPaths: [...this.data.reportPreviewPaths, reportPreviewPath],
-          reportPreviewOriginalPaths: [
-            ...this.data.reportPreviewOriginalPaths,
-            reportPreviewOriginalPath,
-          ],
+          reportPreviewPaths,
+          reportImageCount: reportImages.length,
           dirty: true,
           dirtyRowKeys: appendUnique(this.data.dirtyRowKeys, recognizedRowKeys),
           draftMetadataDirty: true,
@@ -977,8 +1163,9 @@ Component({
 
     previewReportImage(event: RowActionEvent) {
       const index = Number(event.currentTarget.dataset.index)
-      const current = this.data.reportPreviewOriginalPaths[index]
-      if (current) wx.previewImage({ current, urls: this.data.reportPreviewOriginalPaths })
+      const images = getWorkbenchReportImages(this)
+      const current = images[index]
+      if (current) wx.previewImage({ current, urls: images })
     },
 
     clearUnmatched() {
@@ -1029,7 +1216,7 @@ Component({
       const activePage = matchedIndex >= 0 ? matchedIndex : Math.min(this.data.activePage, Math.max(0, pages.length - 1))
       this.setData({
         pages,
-        finalState: buildInspectionWorkbenchFinalState(rows, this.data.aiWorkbenchResult),
+        finalState: buildInspectionWorkbenchFinalState(rows, getWorkbenchAiResult(this)),
         activePage,
         currentPage: pages[activePage] || null,
         pageNumber: pages.length ? activePage + 1 : 0,
@@ -1099,15 +1286,15 @@ Component({
           ...(draftMetadataDirty
             ? {
                 inspection_date: this.data.inspectionDate,
-                recognition_raw_content: this.data.rawContent,
+                recognition_raw_content: getWorkbenchRawContent(this),
                 unmatched_recognition_rows: this.data.unmatched,
               }
             : {}),
           ...(aiImagesDirty
-            ? inspectionRecognitionRequest(this.data.inspectionImages.length)
+            ? inspectionRecognitionRequest(getWorkbenchInspectionImages(this).length)
             : {}),
         }
-        await saveInspectionDraftIncremental(this.data.taskId, this.data.itemId, workbenchToDraft(workbench, {
+        await saveInspectionDraftIncremental(this.data.taskId, this.data.itemId, workbenchToDraft(restoreWorkbenchForSave(this, workbench), {
           metadata: {
             customer: text(task.customer_name),
             supplier: text(task.supplier_name),
@@ -1116,19 +1303,19 @@ Component({
             arrivalQuantity: item.quantity === null || item.quantity === undefined ? '' : String(item.quantity),
             inspectionDate: this.data.inspectionDate,
           },
-          rawContent: this.data.rawContent,
+          rawContent: getWorkbenchRawContent(this),
           unmatched: this.data.unmatched,
-          qualitySheetImages: this.data.reportImages,
-          inspectionImages: this.data.inspectionImages,
+          qualitySheetImages: getWorkbenchReportImages(this),
+          inspectionImages: getWorkbenchInspectionImages(this),
           deletedRecordImages: pendingDeletedRecordImages,
-          aiResult: this.data.aiWorkbenchResult,
+          aiResult: getWorkbenchAiResult(this),
           changedRowKeys: dirtyRowKeys,
         }), {
           aiWorkbenchResultPatch,
           aiWorkbenchImageAdditions: pendingAiImageAdditions,
           aiWorkbenchImageDeletions: pendingAiImageDeletions,
           recordSourceImageAdditions: draftMetadataDirty
-            ? this.data.reportImages
+            ? getWorkbenchReportImages(this)
             : [],
         })
         if (!this.isActiveWorkbenchRequest(this.data.taskId, this.data.itemId)) return

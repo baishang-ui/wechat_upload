@@ -237,6 +237,28 @@ test('workbench drawer discards stale item detail responses before they can over
   assert.match(ts, /this\.data\.visible && !this\.data\.closing && this\.data\.taskId && this\.data\.itemId/)
 })
 
+test('workbench detail setData excludes raw recognition results and complete API objects', () => {
+  const ts = source('miniprogram/components/inspection-workbench-modal/inspection-workbench-modal.ts')
+  const loadMethod = ts.match(/async loadWorkbench\(\) \{([\s\S]*?)\n    \},\n\n    setRows/)?.[1] || ''
+
+  assert.ok(loadMethod)
+  assert.match(ts, /function presentWorkbenchTask/)
+  assert.match(ts, /function presentWorkbenchItem/)
+  assert.match(loadMethod, /task:\s*presentWorkbenchTask\(task\)/)
+  assert.match(loadMethod, /item:\s*presentWorkbenchItem\(item\)/)
+  assert.match(loadMethod, /masterProduct:\s*presentWorkbenchMasterProduct\(detail\.master_product\)/)
+  assert.match(loadMethod, /customerProduct:\s*presentWorkbenchCustomerProduct\(detail\.customer_product\)/)
+  assert.doesNotMatch(loadMethod, /\n\s*task,\n/)
+  assert.doesNotMatch(loadMethod, /\n\s*item,\n/)
+  const presentationUpdate = loadMethod.slice(
+    loadMethod.indexOf('task: presentWorkbenchTask(task)'),
+    loadMethod.indexOf('loading: false,', loadMethod.indexOf('task: presentWorkbenchTask(task)')),
+  )
+  assert.doesNotMatch(presentationUpdate, /aiWorkbenchResult:|rawContent:/)
+  assert.match(loadMethod, /setWorkbenchAiResult\(this, aiWorkbenchResult\)/)
+  assert.match(loadMethod, /setWorkbenchRawContent\(this, text\(aiWorkbenchResult\.recognition_raw_content\)\)/)
+})
+
 test('pending workbench drawer uses a decision switch with on as OK and off as NG', () => {
   const wxml = source('miniprogram/components/inspection-workbench-modal/inspection-workbench-modal.wxml')
   const scss = source('miniprogram/components/inspection-workbench-modal/inspection-workbench-modal.scss')
@@ -265,7 +287,8 @@ test('recognized quality sheets are uploaded before draft save instead of embedd
 
   assert.match(qualitySheetMethod, /uploadInspectionDraftImage\(\s*requestedTaskId,\s*requestedItemId,\s*preparedPath,\s*\)/)
   assert.doesNotMatch(qualitySheetMethod, /inspectionImageToDataUrl\(preparedPath\)/)
-  assert.match(qualitySheetMethod, /let reportImages = this\.data\.reportImages/)
+  assert.match(qualitySheetMethod, /let reportImages = getWorkbenchReportImages\(this\)/)
+  assert.match(qualitySheetMethod, /prepareWorkbenchPreviewPaths\(/)
   assert.match(qualitySheetMethod, /reportImages,/)
   assert.match(modal, /saveInspectionDraftIncremental\(this\.data\.taskId, this\.data\.itemId/)
 })
@@ -279,7 +302,7 @@ test('workbench overview uploads inspection photos to the online AI workbench wi
   assert.match(wxml, /验货图片识别/)
   assert.match(wxml, /同步到线上验货图片识别区域/)
   assert.match(wxml, /bindtap="chooseInspectionPhotos"/)
-  assert.match(wxml, /inspectionImages/)
+  assert.match(wxml, /inspectionImageCount/)
   assert.match(wxml, /线上正在识别归类/)
   assert.match(wxml, /已关联 \{\{inspectionClassifiedCount\}\}/)
   assert.doesNotMatch(wxml, /inspectionImageGroups|unassignedInspectionImages/)
@@ -290,7 +313,7 @@ test('workbench overview uploads inspection photos to the online AI workbench wi
   assert.doesNotMatch(wxml, /assignPendingPhoto|removePendingPhoto|candidateRow/)
   assert.match(ts, /photoUploading:\s*false/)
   assert.match(ts, /photoUploadError:\s*''/)
-  assert.match(ts, /inspectionImages:\s*\[\]/)
+  assert.match(ts, /inspectionImageCount:\s*0/)
   assert.match(ts, /buildInspectionImageClassificationState/)
   assert.match(ts, /mergeInspectionImageAssignmentsIntoRows/)
   assert.match(ts, /uploadInspectionWorkbenchImage/)
@@ -299,7 +322,7 @@ test('workbench overview uploads inspection photos to the online AI workbench wi
   assert.match(ts, /status:\s*'cleared'[\s\S]*?source:\s*'miniprogram'[\s\S]*?image_count:\s*0/)
   assert.match(ts, /await saveInspectionDraftIncremental\(requestedTaskId, requestedItemId/)
   assert.match(ts, /deleteInspectionImageAt\(index: number\)/)
-  assert.match(ts, /removeInspectionImageReferences\(this\.data\.aiWorkbenchResult, index\)/)
+  assert.match(ts, /removeInspectionImageReferences\(getWorkbenchAiResult\(this\), index\)/)
   assert.match(ts, /pendingDeletedRecordImages:\s*appendUnique\([\s\S]*?\[photo\.remoteUrl\]/)
   assert.match(ts, /void this\.saveDraft\(\)/)
   assert.match(ts, /deletedRecordImages/)

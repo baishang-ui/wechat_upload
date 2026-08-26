@@ -988,14 +988,14 @@ test('online workbenches render server thumbnails and preview original images', 
   assert.match(pageWxml, /photo\.thumbnailUrl/)
   assert.match(modalWxml, /reportPreviewPaths/)
   assert.match(modalWxml, /photo\.thumbnailUrl/)
-  assert.match(page, /reportPreviewOriginalPaths/)
-  assert.match(modal, /reportPreviewOriginalPaths/)
+  assert.match(modal, /getWorkbenchReportImages/)
+  assert.match(modal, /prepareWorkbenchPreviewPaths/)
   assert.match(page, /inspectionImageThumbnailUrl/)
   assert.match(modal, /inspectionImageThumbnailUrl/)
   assert.match(page, /function photoOriginalSource[\s\S]*?return photo\.remoteUrl \|\| photo\.localPath/)
-  assert.match(modal, /function photoOriginalSource[\s\S]*?return photo\.remoteUrl \|\| photo\.localPath/)
+  assert.match(modal, /function photoOriginalSource[\s\S]*?workbenchPhotoSources[\s\S]*?return photo\.remoteUrl \|\| photo\.localPath/)
   assert.match(page, /wx\.previewImage\(\{ current, urls: this\.data\.reportPreviewOriginalPaths \}\)/)
-  assert.match(modal, /wx\.previewImage\(\{ current, urls: this\.data\.reportPreviewOriginalPaths \}\)/)
+  assert.match(modal, /wx\.previewImage\(\{ current, urls: images \}\)/)
 })
 
 test('opening an order uses a fixed expansion layer so list layout never animates', () => {
