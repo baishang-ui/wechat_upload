@@ -8,7 +8,7 @@ const assert: typeof strictAssert = strictAssert
 const projectRoot = path.resolve(import.meta.dirname, '..')
 
 function readProjectFile(relativePath: string): string {
-  return fs.readFileSync(path.join(projectRoot, relativePath), 'utf8')
+  return fs.readFileSync(path.join(projectRoot, relativePath), 'utf8').replace(/\r\n/g, '\n')
 }
 
 test('document camera keeps realtime tracking behind a fixed guide while allowing manual capture', () => {

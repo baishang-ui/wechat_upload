@@ -15,11 +15,11 @@ test('server config separates data and recognition service addresses', () => {
 
   assert.match(
     serverConfig,
-    /export const DATA_SERVER_BASE_URL = 'https:\/\/www\.binictools\.cn:7876'/,
+    /export const DATA_SERVER_BASE_URL = 'https:\/\/example\.invalid'/,
   )
   assert.match(
     serverConfig,
-    /export const RECOGNITION_API_URL = 'https:\/\/www\.binictools\.cn:7876\/api\/miniprogram\/quality-inspections\/recognize'/,
+    /export const RECOGNITION_API_URL = 'https:\/\/example\.invalid\/api\/miniprogram\/quality-inspections\/recognize'/,
   )
   assert.doesNotMatch(serverConfig, /MODEL_API_URL|MODEL_NAME|MODEL_TOKEN_STORAGE_KEY/)
   assert.match(serverConfig, /export const DEMO_MODE = (?:true|false)/)

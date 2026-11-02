@@ -10,8 +10,8 @@
 
 ## Global Constraints
 
-- Backend repository: `/Users/landcloud/smart_sales_system`, base branch `beta_version`.
-- Mini-program repository: `/Users/landcloud/WeChatProjects/miniprogram-2`, base branch `main`.
+- Backend repository: `$HOME/smart_sales_system`, base branch `beta_version`.
+- Mini-program repository: `$HOME/WeChatProjects/miniprogram-2`, base branch `main`.
 - Purchase-order mini-program sync uses `matched_only`.
 - Standalone mini-program sync and Web saves use `replace`.
 - Zero matched projects returns HTTP 422 and performs no mutation.
@@ -24,7 +24,7 @@
 
 ### Task 1: Backend Canonical Project Matching
 
-**Repository:** `/Users/landcloud/smart_sales_system`
+**Repository:** `$HOME/smart_sales_system`
 
 **Files:**
 - Modify: `routes/customer_orders.py:2413-2443,4422-4451`
@@ -78,7 +78,7 @@ Run:
 
 ```bash
 DB_BACKEND=sqlite SESSION_SECRET_KEY=matched-draft-test \
-  /Users/landcloud/.hermes/hermes-agent/venv/bin/python -m pytest \
+  $HOME/.hermes/hermes-agent/venv/bin/python -m pytest \
   tests/test_quality_inspection_matched_draft.py -q
 ```
 
@@ -133,7 +133,7 @@ Expected: all pure helper tests pass.
 
 ### Task 2: Backend Draft Endpoint Integration and Transaction Safety
 
-**Repository:** `/Users/landcloud/smart_sales_system`
+**Repository:** `$HOME/smart_sales_system`
 
 **Files:**
 - Modify: `routes/customer_orders.py:6987-7033`
@@ -228,7 +228,7 @@ Run:
 
 ```bash
 DB_BACKEND=sqlite SESSION_SECRET_KEY=matched-draft-test \
-  /Users/landcloud/.hermes/hermes-agent/venv/bin/python -m pytest \
+  $HOME/.hermes/hermes-agent/venv/bin/python -m pytest \
   tests/test_quality_inspection_matched_draft.py \
   tests/test_quality_inspection_standalone_api.py \
   tests/test_quality_inspection_sources_api.py -q
@@ -247,7 +247,7 @@ git commit -m "feat: merge matched inspection draft projects"
 
 ### Task 3: Mini-program Purchase-only Match Mode
 
-**Repository:** `/Users/landcloud/WeChatProjects/miniprogram-2`
+**Repository:** `$HOME/WeChatProjects/miniprogram-2`
 
 **Files:**
 - Modify: `miniprogram/services/quality-inspection-service.ts:27-47,334-370,476-487`

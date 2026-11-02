@@ -44,7 +44,7 @@ Historical design and plan documents may provide context but must not override c
 Document both environments:
 
 - Local development: `http://localhost:7875`.
-- Production example: `https://www.binictools.cn:7876`.
+- Production example: `https://example.invalid`.
 
 Explain that the active value is configured in `miniprogram/config/server.ts`. Do not claim that the current working-tree-only localhost value is the committed repository default.
 

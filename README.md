@@ -1,14 +1,16 @@
 # 智能质检报告微信小程序
 
-面向工业检验报告的微信小程序客户端。小程序通过业务后端完成账号认证、质检订单待检任务读取、独立报告创建、质检草稿保存和历史记录同步；当前识别功能临时直连视觉模型服务，客户端负责图片队列、结果校对、本地容错及 JSON 导出。
+面向工业检验报告的微信小程序客户端。小程序通过业务后端完成账号认证、质检订单待检任务读取、独立报告创建、质检草稿保存和历史记录同步；识别请求通过业务后端代理，客户端负责图片队列、结果校对、本地容错及 JSON 导出。
+
+本仓库只包含微信小程序客户端，不包含业务后端、模型服务或真实客户数据。首次使用需配置自己的服务和开发者 AppID。运行与测试边界见 [验证记录](docs/verification.md)。
 
 ## 核心能力
 
 - 账号登录和 Session Cookie 复用，未登录或会话失效时自动返回登录页。
 - 拍照或从相册批量添加检验报告，最多 10 个未完成任务。
-- 识别任务按加入顺序逐张处理，识别期间仍可继续添加图片。
-- 图片按原始文件上传，客户端不再设置图片大小上限或强制压缩。
-- 当前临时直接调用可配置的视觉模型接口处理 JPEG、PNG 图片；模型令牌只从微信本地存储读取，不硬编码进仓库。
+- 识别队列按加入顺序调度，最多并发处理 2 个任务；识别期间仍可继续添加图片。
+- 图片上传前检查大小：5 MB 以内保留原始文件，超限时按质量档位压缩；压缩后仍超限则提示重新选择图片。
+- JPEG、PNG 报告通过业务后端识别代理处理；小程序不保存模型地址或模型令牌。
 - 将 OCR 结果归一化为可编辑的十样本检验表格。
 - 结合模型置信度与确定性格式检查，显示红色“重点核对”和黄色“建议核对”提示。
 - 支持钢丝刷、拉绒片、树脂砂轮、百叶轮、网格砂和金刚石锯片等报告类型。
@@ -69,10 +71,10 @@ flowchart LR
   QI --> DB["业务数据库"]
   QI --> WEB["线上验货工作台"]
   WEB --> MODEL["视觉模型服务"]
-  MP -. "临时直连" .-> MODEL["视觉模型服务"]
+  API --> MODEL["视觉模型服务"]
 ```
 
-业务接口与大模型识别地址已分开配置。由于线上识别代理尚未提供，当前小程序临时直接调用视觉模型服务；识别代理上线后应恢复由 HTTPS 业务后端代理模型调用，避免长期在小程序侧保存模型访问配置。
+业务请求与识别代理地址分别配置。识别请求通过 HTTPS 业务后端代理模型调用，模型地址、模型名称与凭据仅由后端管理；客户端不直接连接模型服务。
 
 待检工作台中的现场验货图片采用不同链路：小程序只负责选择、压缩、上传和保存，不提交验货 AI 识别，也不根据文件名或检验项目自行猜测分类；线上 React 工作台读取 `ai_workbench_images` 和待处理标记后自动调用验货识别，并把 `image_assignments`、`measurements` 等结果写回共享草稿。小程序再次加载草稿时直接把这份线上归类图片与检测值合并到对应检验条目，图片只在条目后的“现场照片”区域展示。质检单识别原图始终单独保存在 `record_source_images`，不得与现场验货图片混用。
 
@@ -146,8 +148,8 @@ miniprogram/config/server.ts
 当前配置：
 
 ```ts
-export const DATA_SERVER_BASE_URL = 'https://www.binictools.cn:7876'
-export const RECOGNITION_API_URL = 'https://www.binictools.cn:7876/api/miniprogram/quality-inspections/recognize'
+export const DATA_SERVER_BASE_URL = 'https://example.invalid'
+export const RECOGNITION_API_URL = 'https://example.invalid/api/miniprogram/quality-inspections/recognize'
 ```
 
 - `DATA_SERVER_BASE_URL` 用于登录、待检任务、质检记录、草稿和业务图片等数据读写。
@@ -157,7 +159,7 @@ export const RECOGNITION_API_URL = 'https://www.binictools.cn:7876/api/miniprogr
 
 同一文件还定义请求超时、上传/识别超时、Session Cookie 存储键和演示模式。
 
-> 当前线上业务地址使用 HTTPS，可供真机和体验版访问。微信公众平台仍需将 `https://www.binictools.cn:7876` 配置为 request 与 uploadFile 合法域名。
+> 公开仓库使用保留域名 `example.invalid` 作为不可访问的安全占位符，不会默认连接原业务环境。运行前将这两个地址改为你有权使用的 HTTPS 测试服务；不能将占位符注册为微信合法域名或当作可用演示服务。
 
 ## 在微信开发者工具中运行
 
@@ -165,7 +167,7 @@ export const RECOGNITION_API_URL = 'https://www.binictools.cn:7876/api/miniprogr
 2. 打开微信开发者工具，选择“导入项目”。
 3. 选择仓库根目录。
 4. 确认小程序源码目录为 `miniprogram/`。
-5. 检查 `project.config.json` 中的 AppID 是否适用于当前开发账号。
+5. `project.config.json` 默认使用 `touristappid`；需要登录、网络及真机能力时，配置自己有权使用的 AppID。不要把个人的 `project.private.config.json` 提交到仓库。
 6. 根据环境设置 `miniprogram/config/server.ts`。
 7. 本地开发阶段可临时关闭“校验合法域名、web-view（业务域名）、TLS 版本以及 HTTPS 证书”。
 8. 编译项目，使用有效业务账号登录。
@@ -360,7 +362,7 @@ Session 已失效或未登录。客户端会清除 `smartSalesSession:v1`，重�
 
 ### `413 Request Entity Too Large`
 
-客户端不再限制图片大小；如果服务端或网关仍返回 `413`，需要调整对应服务的上传体积配置。
+客户端会将超出 5 MB 的图片按质量档位压缩。如果服务端或网关仍返回 `413`，检查服务端上传限制与客户端阈值是否一致；不要直接放开限制绕过检查。
 
 ### `422 Unprocessable Entity`
 
@@ -384,6 +386,7 @@ Session 已失效或未登录。客户端会清除 `smartSalesSession:v1`，重�
 
 ## 正式发布检查
 
+- 将公开版的 `example.invalid` 与 `touristappid` 占位符替换为已授权的测试或发布配置；详见 [公开版本安全说明](SECURITY.md)。
 - 将 `DATA_SERVER_BASE_URL` 和 `RECOGNITION_API_URL` 分别设置为对应的正式 HTTPS 地址。
 - 确认 `POST /api/miniprogram/quality-inspections/recognize` 由业务后端代理模型识别，小程序侧不包含模型配置或凭据。
 - 在微信公众平台按实际请求类型配置 request 和 uploadFile 合法域名。

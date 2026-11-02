@@ -40,11 +40,11 @@ Extend `scan workspace exposes recognition queue and confidence review states`:
 const riskSummary = scss.match(/\.review-risk-summary\s*\{([^}]*)\}/)?.[1] || ''
 assert.match(
   riskSummary,
-  /animation:\s*content-rise\s+\.38s\s+\.04s\s+ease-out\s+both;/,
+  /animatio<workspace-path>
 )
-assert.match(scss, /\.api-card\s*\{\s*animation-delay:\s*\.08s;\s*\}/)
-assert.match(scss, /\.form-card\s*\{\s*animation-delay:\s*\.12s;\s*\}/)
-assert.match(scss, /\.table-card\s*\{\s*animation-delay:\s*\.16s;\s*\}/)
+assert.match(scss, /\.api-card\s*\{\s*animation-dela<workspace-path>
+assert.match(scss, /\.form-card\s*\{\s*animation-dela<workspace-path>
+assert.match(scss, /\.table-card\s*\{\s*animation-dela<workspace-path>
 ```
 
 - [ ] **Step 3: Run the focused test and verify RED**

@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** 让微信小程序通过 `https://www.binictools.cn:7876` 使用 Smart Sales System 的 Session 认证、采购质检、独立质检、草稿与历史能力，同时移除客户端和后端源码中的数据库/模型密钥与通用密码风险。
+**Goal:** 让微信小程序通过 `https://example.invalid` 使用 Smart Sales System 的 Session 认证、采购质检、独立质检、草稿与历史能力，同时移除客户端和后端源码中的数据库/模型密钥与通用密码风险。
 
 **Architecture:** 后端扩展现有 `QualityInspectionTask`，以 `source_type` 区分采购任务和独立报告，并通过 `client_record_id` 实现独立报告幂等；新增严格的共享 Session 认证服务、小程序 JSON 认证路由和图片识别代理。小程序增加统一 HTTPS/Cookie 请求层、登录页、三栏目工作区与本地同步状态机；识别结果先落本地，再创建或更新后端质检草稿。
 
@@ -10,7 +10,7 @@
 
 ## Global Constraints
 
-- 小程序只能访问 `https://www.binictools.cn:7876`，不得直连 MySQL，也不得再直连 8865 大模型接口。
+- 小程序只能访问 `https://example.invalid`，不得直连 MySQL，也不得再直连 8865 大模型接口。
 - MySQL 用户名、密码、Session 密钥和大模型 API 密钥只能来自服务器环境变量，不得写入小程序、源码默认值、日志或响应。
 - `source_type` 只能为 `purchase_order` 或 `standalone`；旧 Web 列表未传参数时必须继续默认 `purchase_order`。
 - `purchase_order` 任务必须有 `purchase_order_id`；`standalone` 任务不得关联采购单且必须有 UUID 格式的 `client_record_id`。
@@ -26,11 +26,11 @@
 执行实现前先使用 `superpowers:using-git-worktrees` 为两个仓库建立隔离工作树；如果当前工作区仍然干净，也不得跳过状态检查。
 
 ```bash
-git -C /Users/landcloud/smart_sales_system status --short --branch
-git -C /Users/landcloud/WeChatProjects/miniprogram-2 status --short --branch
-cd /Users/landcloud/smart_sales_system && SESSION_SECRET_KEY=test-only-secret DB_BACKEND=sqlite pytest -q
-cd /Users/landcloud/WeChatProjects/miniprogram-2 && npm test
-cd /Users/landcloud/WeChatProjects/miniprogram-2 && npm run typecheck
+git -C $HOME/smart_sales_system status --short --branch
+git -C $HOME/WeChatProjects/miniprogram-2 status --short --branch
+cd $HOME/smart_sales_system && SESSION_SECRET_KEY=test-only-secret DB_BACKEND=sqlite pytest -q
+cd $HOME/WeChatProjects/miniprogram-2 && npm test
+cd $HOME/WeChatProjects/miniprogram-2 && npm run typecheck
 ```
 
 预期：两个仓库没有非预期修改；后端测试、小程序测试和类型检查均通过。任何基线失败都先记录并与本功能修改隔离，不得通过删除测试或放宽断言掩盖。
@@ -71,13 +71,13 @@ cd /Users/landcloud/WeChatProjects/miniprogram-2 && npm run typecheck
 ### Task 1: 后端敏感配置与共享 Session 认证服务
 
 **Files:**
-- Create: `/Users/landcloud/smart_sales_system/services/session_auth.py`
-- Modify: `/Users/landcloud/smart_sales_system/main.py:1-190, 640-690`
-- Modify: `/Users/landcloud/smart_sales_system/routes/users.py:330-375`
-- Modify: `/Users/landcloud/smart_sales_system/services/llm_client.py:1-80`
-- Modify: `/Users/landcloud/smart_sales_system/.env.example`
-- Test: `/Users/landcloud/smart_sales_system/tests/test_secret_configuration.py`
-- Test: `/Users/landcloud/smart_sales_system/tests/test_session_auth.py`
+- Create: `$HOME/smart_sales_system/services/session_auth.py`
+- Modify: `$HOME/smart_sales_system/main.py:1-190, 640-690`
+- Modify: `$HOME/smart_sales_system/routes/users.py:330-375`
+- Modify: `$HOME/smart_sales_system/services/llm_client.py:1-80`
+- Modify: `$HOME/smart_sales_system/.env.example`
+- Test: `$HOME/smart_sales_system/tests/test_secret_configuration.py`
+- Test: `$HOME/smart_sales_system/tests/test_session_auth.py`
 
 **Interfaces:**
 - Consumes: `models.User`, `models.AuditLog`, `database.get_session`, `utils.auth.verify_password`, `routes.users._get_permissions`, `routes.users._ensure_user_gender`.
@@ -131,7 +131,7 @@ def test_llm_client_has_no_secret_shaped_default():
 
 - [ ] **Step 2: 运行静态测试并确认当前实现失败**
 
-Run: `cd /Users/landcloud/smart_sales_system && DB_BACKEND=sqlite pytest tests/test_secret_configuration.py -q`
+Run: `cd $HOME/smart_sales_system && DB_BACKEND=sqlite pytest tests/test_secret_configuration.py -q`
 
 Expected: FAIL；至少命中 Session 字面量、登录密码字面量比较或模型 key 默认值中的现存风险。
 
@@ -219,7 +219,7 @@ def test_require_session_user_rechecks_status_and_permission():
 
 - [ ] **Step 4: 运行认证测试并确认模块尚不存在**
 
-Run: `cd /Users/landcloud/smart_sales_system && DB_BACKEND=sqlite pytest tests/test_session_auth.py -q`
+Run: `cd $HOME/smart_sales_system && DB_BACKEND=sqlite pytest tests/test_session_auth.py -q`
 
 Expected: FAIL with `ModuleNotFoundError: No module named 'services.session_auth'`。
 
@@ -307,14 +307,14 @@ def authenticate_credentials(username: str, password: str, ip_address: str, now:
 
 - [ ] **Step 6: 运行聚焦测试**
 
-Run: `cd /Users/landcloud/smart_sales_system && SESSION_SECRET_KEY=test-only-secret DB_BACKEND=sqlite pytest tests/test_secret_configuration.py tests/test_session_auth.py -q`
+Run: `cd $HOME/smart_sales_system && SESSION_SECRET_KEY=test-only-secret DB_BACKEND=sqlite pytest tests/test_secret_configuration.py tests/test_session_auth.py -q`
 
 Expected: PASS。
 
 - [ ] **Step 7: 提交后端认证安全改动**
 
 ```bash
-cd /Users/landcloud/smart_sales_system
+cd $HOME/smart_sales_system
 git add services/session_auth.py main.py routes/users.py services/llm_client.py .env.example tests/test_secret_configuration.py tests/test_session_auth.py
 git commit -m "security: harden shared session authentication"
 ```
@@ -324,9 +324,9 @@ git commit -m "security: harden shared session authentication"
 ### Task 2: 小程序 JSON 登录、me 与 logout API
 
 **Files:**
-- Create: `/Users/landcloud/smart_sales_system/routes/miniprogram.py`
-- Modify: `/Users/landcloud/smart_sales_system/main.py:445-505`
-- Test: `/Users/landcloud/smart_sales_system/tests/test_miniprogram_auth_api.py`
+- Create: `$HOME/smart_sales_system/routes/miniprogram.py`
+- Modify: `$HOME/smart_sales_system/main.py:445-505`
+- Test: `$HOME/smart_sales_system/tests/test_miniprogram_auth_api.py`
 
 **Interfaces:**
 - Consumes: Task 1 的 `authenticate_credentials()`、`hydrate_session()`、`require_session_user()`。
@@ -354,7 +354,7 @@ def _user(username: str, status: str = "active", permissions: str = '["procureme
 def test_login_sets_cookie_and_me_rechecks_user():
     init_databases()
     _user("mini-user")
-    with TestClient(app, base_url="https://testserver") as client:
+    with TestClient(app, base_url="https://fixture-ebdab7.example.invalid") as client:
         login = client.post("/api/miniprogram/auth/login", json={"username": "mini-user", "password": "pass-123"})
         assert login.status_code == 200
         assert login.json()["data"]["user"]["username"] == "mini-user"
@@ -367,7 +367,7 @@ def test_login_sets_cookie_and_me_rechecks_user():
 def test_login_rejects_invalid_or_inactive_user():
     init_databases()
     _user("inactive-user", status="rejected")
-    with TestClient(app, base_url="https://testserver") as client:
+    with TestClient(app, base_url="https://fixture-ebdab7.example.invalid") as client:
         wrong = client.post("/api/miniprogram/auth/login", json={"username": "missing", "password": "bad"})
         inactive = client.post("/api/miniprogram/auth/login", json={"username": "inactive-user", "password": "pass-123"})
     assert wrong.status_code == 401
@@ -377,7 +377,7 @@ def test_login_rejects_invalid_or_inactive_user():
 def test_logout_clears_session():
     init_databases()
     _user("logout-user")
-    with TestClient(app, base_url="https://testserver") as client:
+    with TestClient(app, base_url="https://fixture-ebdab7.example.invalid") as client:
         client.post("/api/miniprogram/auth/login", json={"username": "logout-user", "password": "pass-123"})
         assert client.post("/api/miniprogram/auth/logout").status_code == 200
         me = client.get("/api/miniprogram/auth/me")
@@ -387,7 +387,7 @@ def test_logout_clears_session():
 
 - [ ] **Step 2: 运行测试确认路由不存在**
 
-Run: `cd /Users/landcloud/smart_sales_system && SESSION_SECRET_KEY=test-only-secret DB_BACKEND=sqlite pytest tests/test_miniprogram_auth_api.py -q`
+Run: `cd $HOME/smart_sales_system && SESSION_SECRET_KEY=test-only-secret DB_BACKEND=sqlite pytest tests/test_miniprogram_auth_api.py -q`
 
 Expected: FAIL with HTTP `404`。
 
@@ -442,14 +442,14 @@ async def logout(request: Request):
 
 - [ ] **Step 4: 运行认证 API 测试**
 
-Run: `cd /Users/landcloud/smart_sales_system && SESSION_SECRET_KEY=test-only-secret DB_BACKEND=sqlite pytest tests/test_miniprogram_auth_api.py tests/test_session_auth.py -q`
+Run: `cd $HOME/smart_sales_system && SESSION_SECRET_KEY=test-only-secret DB_BACKEND=sqlite pytest tests/test_miniprogram_auth_api.py tests/test_session_auth.py -q`
 
 Expected: PASS。
 
 - [ ] **Step 5: 提交 JSON 认证 API**
 
 ```bash
-cd /Users/landcloud/smart_sales_system
+cd $HOME/smart_sales_system
 git add routes/miniprogram.py main.py tests/test_miniprogram_auth_api.py
 git commit -m "feat: add miniprogram session auth API"
 ```
@@ -459,10 +459,10 @@ git commit -m "feat: add miniprogram session auth API"
 ### Task 3: 质检来源模型与 SQLite/MySQL 幂等迁移
 
 **Files:**
-- Modify: `/Users/landcloud/smart_sales_system/models.py:1917-1945`
-- Modify: `/Users/landcloud/smart_sales_system/database.py:330-430, 1364-1490`
-- Create: `/Users/landcloud/smart_sales_system/scripts/maintenance/migrate_quality_inspection_sources.py`
-- Test: `/Users/landcloud/smart_sales_system/tests/test_quality_inspection_schema_migration.py`
+- Modify: `$HOME/smart_sales_system/models.py:1917-1945`
+- Modify: `$HOME/smart_sales_system/database.py:330-430, 1364-1490`
+- Create: `$HOME/smart_sales_system/scripts/maintenance/migrate_quality_inspection_sources.py`
+- Test: `$HOME/smart_sales_system/tests/test_quality_inspection_schema_migration.py`
 
 **Interfaces:**
 - Consumes: `db_manager.engines["customer_orders"]`、`CustomerOrdersBase.metadata`。
@@ -510,7 +510,7 @@ assert any("CREATE UNIQUE INDEX" in statement and "client_record_id" in statemen
 
 - [ ] **Step 2: 运行迁移测试确认函数不存在**
 
-Run: `cd /Users/landcloud/smart_sales_system && SESSION_SECRET_KEY=test-only-secret DB_BACKEND=sqlite pytest tests/test_quality_inspection_schema_migration.py -q`
+Run: `cd $HOME/smart_sales_system && SESSION_SECRET_KEY=test-only-secret DB_BACKEND=sqlite pytest tests/test_quality_inspection_schema_migration.py -q`
 
 Expected: FAIL with import error for `migrate_quality_inspection_task_schema`。
 
@@ -559,14 +559,14 @@ if __name__ == "__main__":
 
 - [ ] **Step 5: 运行迁移与模型测试**
 
-Run: `cd /Users/landcloud/smart_sales_system && SESSION_SECRET_KEY=test-only-secret DB_BACKEND=sqlite pytest tests/test_quality_inspection_schema_migration.py -q`
+Run: `cd $HOME/smart_sales_system && SESSION_SECRET_KEY=test-only-secret DB_BACKEND=sqlite pytest tests/test_quality_inspection_schema_migration.py -q`
 
 Expected: PASS；重复迁移不报错，旧行被回填，独立任务可插入 NULL 采购字段。
 
 - [ ] **Step 6: 提交模型和迁移**
 
 ```bash
-cd /Users/landcloud/smart_sales_system
+cd $HOME/smart_sales_system
 git add models.py database.py scripts/maintenance/migrate_quality_inspection_sources.py tests/test_quality_inspection_schema_migration.py
 git commit -m "feat: migrate quality inspection task sources"
 ```
@@ -576,8 +576,8 @@ git commit -m "feat: migrate quality inspection task sources"
 ### Task 4: 统一质检权限门、来源过滤和 nullable 兼容
 
 **Files:**
-- Modify: `/Users/landcloud/smart_sales_system/routes/customer_orders.py:1032-1048, 2412-2680, 6124-6825`
-- Test: `/Users/landcloud/smart_sales_system/tests/test_quality_inspection_sources_api.py`
+- Modify: `$HOME/smart_sales_system/routes/customer_orders.py:1032-1048, 2412-2680, 6124-6825`
+- Test: `$HOME/smart_sales_system/tests/test_quality_inspection_sources_api.py`
 
 **Interfaces:**
 - Consumes: Task 1 的 `require_session_user(request, "procurement")`，Task 3 的模型字段。
@@ -619,7 +619,7 @@ def _seed_sources() -> None:
 def test_quality_list_defaults_to_purchase_order_and_all_includes_nullable_standalone():
     init_databases()
     _seed_sources()
-    with TestClient(app, base_url="https://testserver") as client:
+    with TestClient(app, base_url="https://fixture-ebdab7.example.invalid") as client:
         _login(client)
         default = client.get("/customer-orders/api/purchase-orders/quality-inspections")
         combined = client.get("/customer-orders/api/purchase-orders/quality-inspections?source_type=all")
@@ -632,7 +632,7 @@ def test_quality_list_defaults_to_purchase_order_and_all_includes_nullable_stand
 
 def test_quality_routes_require_procurement_permission():
     init_databases()
-    with TestClient(app, base_url="https://testserver") as client:
+    with TestClient(app, base_url="https://fixture-ebdab7.example.invalid") as client:
         _login(client, permissions="[]")
         response = client.get("/customer-orders/api/purchase-orders/quality-inspections")
     assert response.status_code == 403
@@ -643,7 +643,7 @@ def test_quality_routes_require_procurement_permission():
 
 - [ ] **Step 2: 运行测试确认默认列表仍混合来源或缺字段**
 
-Run: `cd /Users/landcloud/smart_sales_system && SESSION_SECRET_KEY=test-only-secret DB_BACKEND=sqlite pytest tests/test_quality_inspection_sources_api.py -q`
+Run: `cd $HOME/smart_sales_system && SESSION_SECRET_KEY=test-only-secret DB_BACKEND=sqlite pytest tests/test_quality_inspection_sources_api.py -q`
 
 Expected: FAIL；当前 serializer 无 `source_type`，列表无来源过滤，权限仅检查登录。
 
@@ -675,14 +675,14 @@ def _apply_quality_source_filter(query, source_type: Literal["purchase_order", "
 
 - [ ] **Step 4: 运行来源、权限和现有质检回归测试**
 
-Run: `cd /Users/landcloud/smart_sales_system && SESSION_SECRET_KEY=test-only-secret DB_BACKEND=sqlite pytest tests/test_quality_inspection_sources_api.py -q`
+Run: `cd $HOME/smart_sales_system && SESSION_SECRET_KEY=test-only-secret DB_BACKEND=sqlite pytest tests/test_quality_inspection_sources_api.py -q`
 
 Expected: PASS。
 
 - [ ] **Step 5: 提交来源过滤与权限改动**
 
 ```bash
-cd /Users/landcloud/smart_sales_system
+cd $HOME/smart_sales_system
 git add routes/customer_orders.py tests/test_quality_inspection_sources_api.py
 git commit -m "feat: filter and authorize quality inspection sources"
 ```
@@ -692,8 +692,8 @@ git commit -m "feat: filter and authorize quality inspection sources"
 ### Task 5: 独立报告创建与 `client_record_id` 幂等
 
 **Files:**
-- Modify: `/Users/landcloud/smart_sales_system/routes/customer_orders.py:2140-2200, 2346-2385, 6070-6124`
-- Test: `/Users/landcloud/smart_sales_system/tests/test_quality_inspection_standalone_api.py`
+- Modify: `$HOME/smart_sales_system/routes/customer_orders.py:2140-2200, 2346-2385, 6070-6124`
+- Test: `$HOME/smart_sales_system/tests/test_quality_inspection_standalone_api.py`
 
 **Interfaces:**
 - Consumes: `_generate_quality_inspection_task_no()`、`_quality_inspection_task_dict()`、`_require_quality_inspection_access()`。
@@ -746,7 +746,7 @@ def test_standalone_create_is_idempotent_and_conflicting_content_returns_409(aut
 
 - [ ] **Step 2: 运行测试确认端点不存在**
 
-Run: `cd /Users/landcloud/smart_sales_system && SESSION_SECRET_KEY=test-only-secret DB_BACKEND=sqlite pytest tests/test_quality_inspection_standalone_api.py -q`
+Run: `cd $HOME/smart_sales_system && SESSION_SECRET_KEY=test-only-secret DB_BACKEND=sqlite pytest tests/test_quality_inspection_standalone_api.py -q`
 
 Expected: FAIL with HTTP `404`。
 
@@ -793,14 +793,14 @@ def _standalone_signature(task: QualityInspectionTask, item: QualityInspectionIt
 
 - [ ] **Step 4: 运行独立报告测试**
 
-Run: `cd /Users/landcloud/smart_sales_system && SESSION_SECRET_KEY=test-only-secret DB_BACKEND=sqlite pytest tests/test_quality_inspection_standalone_api.py tests/test_quality_inspection_sources_api.py -q`
+Run: `cd $HOME/smart_sales_system && SESSION_SECRET_KEY=test-only-secret DB_BACKEND=sqlite pytest tests/test_quality_inspection_standalone_api.py tests/test_quality_inspection_sources_api.py -q`
 
 Expected: PASS。
 
 - [ ] **Step 5: 提交独立报告 API**
 
 ```bash
-cd /Users/landcloud/smart_sales_system
+cd $HOME/smart_sales_system
 git add routes/customer_orders.py tests/test_quality_inspection_standalone_api.py
 git commit -m "feat: create idempotent standalone inspections"
 ```
@@ -810,10 +810,10 @@ git commit -m "feat: create idempotent standalone inspections"
 ### Task 6: 小程序图片识别代理
 
 **Files:**
-- Create: `/Users/landcloud/smart_sales_system/services/miniprogram_inspection_recognition.py`
-- Modify: `/Users/landcloud/smart_sales_system/routes/miniprogram.py`
-- Modify: `/Users/landcloud/smart_sales_system/.env.example`
-- Test: `/Users/landcloud/smart_sales_system/tests/test_miniprogram_inspection_recognition.py`
+- Create: `$HOME/smart_sales_system/services/miniprogram_inspection_recognition.py`
+- Modify: `$HOME/smart_sales_system/routes/miniprogram.py`
+- Modify: `$HOME/smart_sales_system/.env.example`
+- Test: `$HOME/smart_sales_system/tests/test_miniprogram_inspection_recognition.py`
 
 **Interfaces:**
 - Consumes: `services.llm_client.call_llm(messages: list[dict], *, model: str | None = None, temperature: float = 0.1, timeout: float = 600.0) -> str`、`require_session_user(request, "procurement")`。
@@ -865,7 +865,7 @@ def test_recognize_maps_invalid_model_json_to_502(authenticated_client: TestClie
 
 - [ ] **Step 2: 运行测试确认识别端点不存在**
 
-Run: `cd /Users/landcloud/smart_sales_system && SESSION_SECRET_KEY=test-only-secret DB_BACKEND=sqlite pytest tests/test_miniprogram_inspection_recognition.py -q`
+Run: `cd $HOME/smart_sales_system && SESSION_SECRET_KEY=test-only-secret DB_BACKEND=sqlite pytest tests/test_miniprogram_inspection_recognition.py -q`
 
 Expected: FAIL with HTTP `404`。
 
@@ -902,14 +902,14 @@ async def recognize_quality_inspection(request: Request, file: UploadFile = File
 
 - [ ] **Step 4: 运行识别代理测试**
 
-Run: `cd /Users/landcloud/smart_sales_system && SESSION_SECRET_KEY=test-only-secret DB_BACKEND=sqlite pytest tests/test_miniprogram_inspection_recognition.py -q`
+Run: `cd $HOME/smart_sales_system && SESSION_SECRET_KEY=test-only-secret DB_BACKEND=sqlite pytest tests/test_miniprogram_inspection_recognition.py -q`
 
 Expected: PASS。
 
 - [ ] **Step 5: 提交识别代理**
 
 ```bash
-cd /Users/landcloud/smart_sales_system
+cd $HOME/smart_sales_system
 git add services/miniprogram_inspection_recognition.py routes/miniprogram.py .env.example tests/test_miniprogram_inspection_recognition.py
 git commit -m "feat: proxy miniprogram inspection recognition"
 ```
@@ -929,7 +929,7 @@ git commit -m "feat: proxy miniprogram inspection recognition"
 - [ ] **Step 1: 运行后端聚焦测试集合**
 
 ```bash
-cd /Users/landcloud/smart_sales_system
+cd $HOME/smart_sales_system
 SESSION_SECRET_KEY=test-only-secret DB_BACKEND=sqlite pytest \
   tests/test_secret_configuration.py \
   tests/test_session_auth.py \
@@ -944,14 +944,14 @@ Expected: PASS。
 
 - [ ] **Step 2: 运行 SQLite 全量测试**
 
-Run: `cd /Users/landcloud/smart_sales_system && SESSION_SECRET_KEY=test-only-secret DB_BACKEND=sqlite pytest -q`
+Run: `cd $HOME/smart_sales_system && SESSION_SECRET_KEY=test-only-secret DB_BACKEND=sqlite pytest -q`
 
 Expected: PASS；若失败，只修复由 Tasks 1-6 引入的回归，并重新运行失败文件与全量测试。
 
 - [ ] **Step 3: 在专用测试 MySQL 上执行备份后迁移**
 
 ```bash
-cd /Users/landcloud/smart_sales_system
+cd $HOME/smart_sales_system
 DB_BACKEND=mysql SESSION_SECRET_KEY="$SESSION_SECRET_KEY" python scripts/maintenance/migrate_quality_inspection_sources.py
 ```
 
@@ -964,7 +964,7 @@ Expected: 输出 `quality_inspection_tasks migration verified`；运行前确认
 - [ ] **Step 5: 如有回归修复，单独提交**
 
 ```bash
-cd /Users/landcloud/smart_sales_system
+cd $HOME/smart_sales_system
 git diff --name-only -- services/session_auth.py routes/miniprogram.py services/miniprogram_inspection_recognition.py models.py database.py routes/customer_orders.py main.py routes/users.py services/llm_client.py .env.example tests | xargs git add --
 git commit -m "fix: preserve quality inspection compatibility"
 ```
@@ -976,9 +976,9 @@ git commit -m "fix: preserve quality inspection compatibility"
 ### Task 8: 小程序统一 HTTPS/Cookie 请求客户端
 
 **Files:**
-- Create: `/Users/landcloud/WeChatProjects/miniprogram-2/miniprogram/config/server.ts`
-- Create: `/Users/landcloud/WeChatProjects/miniprogram-2/miniprogram/services/server-client.ts`
-- Test: `/Users/landcloud/WeChatProjects/miniprogram-2/tests/server-client.test.ts`
+- Create: `$HOME/WeChatProjects/miniprogram-2/miniprogram/config/server.ts`
+- Create: `$HOME/WeChatProjects/miniprogram-2/miniprogram/services/server-client.ts`
+- Test: `$HOME/WeChatProjects/miniprogram-2/tests/server-client.test.ts`
 
 **Interfaces:**
 - Consumes: `wx.request`、`wx.uploadFile`、`wx.getStorageSync`、`wx.setStorageSync`、`wx.removeStorageSync`。
@@ -1016,7 +1016,7 @@ test('serverRequest saves response cookie and carries it on the next request', a
   await serverRequest<{ ok: boolean }>({ method: 'GET', path: '/api/miniprogram/auth/me' }, state.adapter)
   assert.equal(state.storage.get(SESSION_COOKIE_STORAGE_KEY), 'session=signed-cookie')
   assert.equal((state.requests[1].header as Record<string, string>).Cookie, 'session=signed-cookie')
-  assert.equal(SERVER_BASE_URL, 'https://www.binictools.cn:7876')
+  assert.equal(SERVER_BASE_URL, 'https://example.invalid')
 })
 
 test('401 clears cookie and throws a user-readable error', async () => {
@@ -1031,7 +1031,7 @@ test('401 clears cookie and throws a user-readable error', async () => {
 
 - [ ] **Step 2: 运行测试确认模块不存在**
 
-Run: `cd /Users/landcloud/WeChatProjects/miniprogram-2 && npx tsx --test --test-name-pattern='serverRequest' tests/*.test.ts`
+Run: `cd $HOME/WeChatProjects/miniprogram-2 && npx tsx --test --test-name-pattern='serverRequest' tests/*.test.ts`
 
 Expected: FAIL with module resolution error。
 
@@ -1039,7 +1039,7 @@ Expected: FAIL with module resolution error。
 
 ```typescript
 // miniprogram/config/server.ts
-export const SERVER_BASE_URL = 'https://www.binictools.cn:7876'
+export const SERVER_BASE_URL = 'https://example.invalid'
 export const SERVER_REQUEST_TIMEOUT_MS = 30_000
 export const SERVER_UPLOAD_TIMEOUT_MS = 120_000
 export const SESSION_COOKIE_STORAGE_KEY = 'smartSalesSession:v1'
@@ -1090,14 +1090,14 @@ export class ServerClientError extends Error {
 
 - [ ] **Step 4: 运行客户端测试和类型检查**
 
-Run: `cd /Users/landcloud/WeChatProjects/miniprogram-2 && npm test && npm run typecheck`
+Run: `cd $HOME/WeChatProjects/miniprogram-2 && npm test && npm run typecheck`
 
 Expected: PASS。
 
 - [ ] **Step 5: 提交统一请求层**
 
 ```bash
-cd /Users/landcloud/WeChatProjects/miniprogram-2
+cd $HOME/WeChatProjects/miniprogram-2
 git add miniprogram/config/server.ts miniprogram/services/server-client.ts tests/server-client.test.ts
 git commit -m "feat: add secure miniprogram server client"
 ```
@@ -1107,13 +1107,13 @@ git commit -m "feat: add secure miniprogram server client"
 ### Task 9: 小程序登录页与会话恢复
 
 **Files:**
-- Create: `/Users/landcloud/WeChatProjects/miniprogram-2/miniprogram/services/auth-service.ts`
-- Create: `/Users/landcloud/WeChatProjects/miniprogram-2/miniprogram/pages/login/login.ts`
-- Create: `/Users/landcloud/WeChatProjects/miniprogram-2/miniprogram/pages/login/login.wxml`
-- Create: `/Users/landcloud/WeChatProjects/miniprogram-2/miniprogram/pages/login/login.scss`
-- Create: `/Users/landcloud/WeChatProjects/miniprogram-2/miniprogram/pages/login/login.json`
-- Modify: `/Users/landcloud/WeChatProjects/miniprogram-2/miniprogram/app.json`
-- Test: `/Users/landcloud/WeChatProjects/miniprogram-2/tests/auth-service.test.ts`
+- Create: `$HOME/WeChatProjects/miniprogram-2/miniprogram/services/auth-service.ts`
+- Create: `$HOME/WeChatProjects/miniprogram-2/miniprogram/pages/login/login.ts`
+- Create: `$HOME/WeChatProjects/miniprogram-2/miniprogram/pages/login/login.wxml`
+- Create: `$HOME/WeChatProjects/miniprogram-2/miniprogram/pages/login/login.scss`
+- Create: `$HOME/WeChatProjects/miniprogram-2/miniprogram/pages/login/login.json`
+- Modify: `$HOME/WeChatProjects/miniprogram-2/miniprogram/app.json`
+- Test: `$HOME/WeChatProjects/miniprogram-2/tests/auth-service.test.ts`
 
 **Interfaces:**
 - Consumes: Task 8 的 `serverRequest()` 和 `clearSessionCookie()`。
@@ -1151,7 +1151,7 @@ test('logout clears local session even when the network request fails', async ()
 
 - [ ] **Step 2: 运行测试确认服务不存在**
 
-Run: `cd /Users/landcloud/WeChatProjects/miniprogram-2 && npx tsx --test --test-name-pattern='login' tests/*.test.ts`
+Run: `cd $HOME/WeChatProjects/miniprogram-2 && npx tsx --test --test-name-pattern='login' tests/*.test.ts`
 
 Expected: FAIL with module resolution error。
 
@@ -1184,14 +1184,14 @@ export async function login(username: string, password: string, request: AuthReq
 
 - [ ] **Step 4: 运行测试与类型检查**
 
-Run: `cd /Users/landcloud/WeChatProjects/miniprogram-2 && npm test && npm run typecheck`
+Run: `cd $HOME/WeChatProjects/miniprogram-2 && npm test && npm run typecheck`
 
 Expected: PASS。
 
 - [ ] **Step 5: 提交登录功能**
 
 ```bash
-cd /Users/landcloud/WeChatProjects/miniprogram-2
+cd $HOME/WeChatProjects/miniprogram-2
 git add miniprogram/services/auth-service.ts miniprogram/pages/login miniprogram/app.json tests/auth-service.test.ts
 git commit -m "feat: add miniprogram account login"
 ```
@@ -1201,10 +1201,10 @@ git commit -m "feat: add miniprogram account login"
 ### Task 10: 本地历史 v2、稳定 UUID 和同步状态机
 
 **Files:**
-- Modify: `/Users/landcloud/WeChatProjects/miniprogram-2/miniprogram/domain/inspection-history.ts`
-- Modify: `/Users/landcloud/WeChatProjects/miniprogram-2/miniprogram/services/history-service.ts`
-- Test: `/Users/landcloud/WeChatProjects/miniprogram-2/tests/inspection-history.test.ts`
-- Test: `/Users/landcloud/WeChatProjects/miniprogram-2/tests/history-service.test.ts`
+- Modify: `$HOME/WeChatProjects/miniprogram-2/miniprogram/domain/inspection-history.ts`
+- Modify: `$HOME/WeChatProjects/miniprogram-2/miniprogram/services/history-service.ts`
+- Test: `$HOME/WeChatProjects/miniprogram-2/tests/inspection-history.test.ts`
+- Test: `$HOME/WeChatProjects/miniprogram-2/tests/history-service.test.ts`
 
 **Interfaces:**
 - Consumes: 现有 `InspectionRecord` 和文件保存 adapter。
@@ -1239,7 +1239,7 @@ test('sync transitions preserve local report data', () => {
 
 - [ ] **Step 2: 运行历史测试确认旧类型不支持**
 
-Run: `cd /Users/landcloud/WeChatProjects/miniprogram-2 && npx tsx --test --test-name-pattern='migrates v1|sync transitions' tests/*.test.ts`
+Run: `cd $HOME/WeChatProjects/miniprogram-2 && npx tsx --test --test-name-pattern='migrates v1|sync transitions' tests/*.test.ts`
 
 Expected: FAIL；旧接口只接受 `syncStatus: 'local'`。
 
@@ -1291,14 +1291,14 @@ createUuid(): string
 
 - [ ] **Step 5: 运行历史全套测试和类型检查**
 
-Run: `cd /Users/landcloud/WeChatProjects/miniprogram-2 && npm test && npm run typecheck`
+Run: `cd $HOME/WeChatProjects/miniprogram-2 && npm test && npm run typecheck`
 
 Expected: PASS。
 
 - [ ] **Step 6: 提交本地同步状态机**
 
 ```bash
-cd /Users/landcloud/WeChatProjects/miniprogram-2
+cd $HOME/WeChatProjects/miniprogram-2
 git add miniprogram/domain/inspection-history.ts miniprogram/services/history-service.ts tests/inspection-history.test.ts tests/history-service.test.ts
 git commit -m "feat: add durable inspection sync state"
 ```
@@ -1308,10 +1308,10 @@ git commit -m "feat: add durable inspection sync state"
 ### Task 11: 质检 DTO、双向草稿映射和后端识别调用
 
 **Files:**
-- Create: `/Users/landcloud/WeChatProjects/miniprogram-2/miniprogram/services/quality-inspection-service.ts`
-- Modify: `/Users/landcloud/WeChatProjects/miniprogram-2/miniprogram/services/inspection-service.ts:1-280`
-- Test: `/Users/landcloud/WeChatProjects/miniprogram-2/tests/quality-inspection-service.test.ts`
-- Test: `/Users/landcloud/WeChatProjects/miniprogram-2/tests/inspection-service.test.ts`
+- Create: `$HOME/WeChatProjects/miniprogram-2/miniprogram/services/quality-inspection-service.ts`
+- Modify: `$HOME/WeChatProjects/miniprogram-2/miniprogram/services/inspection-service.ts:1-280`
+- Test: `$HOME/WeChatProjects/miniprogram-2/tests/quality-inspection-service.test.ts`
+- Test: `$HOME/WeChatProjects/miniprogram-2/tests/inspection-service.test.ts`
 
 **Interfaces:**
 - Consumes: Task 8 client、Task 10 `StoredInspectionRecord`、现有 `RawApiRecord`/`InspectionRecord`。
@@ -1354,7 +1354,7 @@ test('createStandaloneInspection sends stable client id to the standalone endpoi
 
 - [ ] **Step 2: 运行测试确认服务不存在或旧直连逻辑仍在**
 
-Run: `cd /Users/landcloud/WeChatProjects/miniprogram-2 && npx tsx --test --test-name-pattern='preserves ten-column|stable client id|recognizeInspection' tests/*.test.ts`
+Run: `cd $HOME/WeChatProjects/miniprogram-2 && npx tsx --test --test-name-pattern='preserves ten-column|stable client id|recognizeInspection' tests/*.test.ts`
 
 Expected: FAIL。
 
@@ -1402,14 +1402,14 @@ export const saveInspectionDraft = (taskId: number, itemId: number, payload: Qua
 
 - [ ] **Step 5: 运行映射、识别和现有领域测试**
 
-Run: `cd /Users/landcloud/WeChatProjects/miniprogram-2 && npm test && npm run typecheck`
+Run: `cd $HOME/WeChatProjects/miniprogram-2 && npm test && npm run typecheck`
 
 Expected: PASS。
 
 - [ ] **Step 6: 提交质检服务和识别迁移**
 
 ```bash
-cd /Users/landcloud/WeChatProjects/miniprogram-2
+cd $HOME/WeChatProjects/miniprogram-2
 git add miniprogram/services/quality-inspection-service.ts miniprogram/services/inspection-service.ts tests/quality-inspection-service.test.ts tests/inspection-service.test.ts
 git commit -m "feat: connect inspections to shared backend"
 ```
@@ -1419,11 +1419,11 @@ git commit -m "feat: connect inspections to shared backend"
 ### Task 12: 三栏目工作区和采购待检任务
 
 **Files:**
-- Modify: `/Users/landcloud/WeChatProjects/miniprogram-2/miniprogram/pages/index/index.ts`
-- Modify: `/Users/landcloud/WeChatProjects/miniprogram-2/miniprogram/pages/index/index.wxml`
-- Modify: `/Users/landcloud/WeChatProjects/miniprogram-2/miniprogram/pages/index/index.scss`
-- Modify: `/Users/landcloud/WeChatProjects/miniprogram-2/miniprogram/pages/index/index.json`
-- Test: `/Users/landcloud/WeChatProjects/miniprogram-2/tests/quality-inspection-service.test.ts`
+- Modify: `$HOME/WeChatProjects/miniprogram-2/miniprogram/pages/index/index.ts`
+- Modify: `$HOME/WeChatProjects/miniprogram-2/miniprogram/pages/index/index.wxml`
+- Modify: `$HOME/WeChatProjects/miniprogram-2/miniprogram/pages/index/index.scss`
+- Modify: `$HOME/WeChatProjects/miniprogram-2/miniprogram/pages/index/index.json`
+- Test: `$HOME/WeChatProjects/miniprogram-2/tests/quality-inspection-service.test.ts`
 
 **Interfaces:**
 - Consumes: `getCurrentUser()`、`listInspectionTasks()`、`getInspectionTask()`、`draftToInspectionRecord()`、现有拍照/编辑流程。
@@ -1450,7 +1450,7 @@ test('task item prefill keeps supplier and product values', () => {
 
 - [ ] **Step 2: 运行测试确认函数不存在**
 
-Run: `cd /Users/landcloud/WeChatProjects/miniprogram-2 && npx tsx --test --test-name-pattern='purchase-order tasks|task item prefill' tests/*.test.ts`
+Run: `cd $HOME/WeChatProjects/miniprogram-2 && npx tsx --test --test-name-pattern='purchase-order tasks|task item prefill' tests/*.test.ts`
 
 Expected: FAIL。
 
@@ -1481,14 +1481,14 @@ selectedItemId: 0,
 
 - [ ] **Step 4: 运行测试、类型检查和开发者工具编译**
 
-Run: `cd /Users/landcloud/WeChatProjects/miniprogram-2 && npm test && npm run typecheck`
+Run: `cd $HOME/WeChatProjects/miniprogram-2 && npm test && npm run typecheck`
 
 Expected: PASS；随后在微信开发者工具编译，预期 WXML/SCSS 无错误，三个 tab 均可切换，未登录会进入登录页。
 
 - [ ] **Step 5: 提交三栏目和待检任务**
 
 ```bash
-cd /Users/landcloud/WeChatProjects/miniprogram-2
+cd $HOME/WeChatProjects/miniprogram-2
 git add miniprogram/pages/index tests/quality-inspection-service.test.ts
 git commit -m "feat: add pending inspection workspace"
 ```
@@ -1498,12 +1498,12 @@ git commit -m "feat: add pending inspection workspace"
 ### Task 13: 独立报告同步、采购草稿覆盖和失败重试
 
 **Files:**
-- Modify: `/Users/landcloud/WeChatProjects/miniprogram-2/miniprogram/pages/index/index.ts`
-- Modify: `/Users/landcloud/WeChatProjects/miniprogram-2/miniprogram/pages/index/index.wxml`
-- Modify: `/Users/landcloud/WeChatProjects/miniprogram-2/miniprogram/pages/index/index.scss`
-- Modify: `/Users/landcloud/WeChatProjects/miniprogram-2/miniprogram/services/quality-inspection-service.ts`
-- Test: `/Users/landcloud/WeChatProjects/miniprogram-2/tests/quality-inspection-service.test.ts`
-- Test: `/Users/landcloud/WeChatProjects/miniprogram-2/tests/history-service.test.ts`
+- Modify: `$HOME/WeChatProjects/miniprogram-2/miniprogram/pages/index/index.ts`
+- Modify: `$HOME/WeChatProjects/miniprogram-2/miniprogram/pages/index/index.wxml`
+- Modify: `$HOME/WeChatProjects/miniprogram-2/miniprogram/pages/index/index.scss`
+- Modify: `$HOME/WeChatProjects/miniprogram-2/miniprogram/services/quality-inspection-service.ts`
+- Test: `$HOME/WeChatProjects/miniprogram-2/tests/quality-inspection-service.test.ts`
+- Test: `$HOME/WeChatProjects/miniprogram-2/tests/history-service.test.ts`
 
 **Interfaces:**
 - Consumes: `createStandaloneInspection()`、`saveInspectionDraft()`、Task 10 状态更新函数。
@@ -1554,7 +1554,7 @@ test('purchase-order sync skips task creation and overwrites selected item draft
 
 - [ ] **Step 2: 运行测试确认同步编排函数不存在**
 
-Run: `cd /Users/landcloud/WeChatProjects/miniprogram-2 && npx tsx --test --test-name-pattern='standalone sync|failed sync|purchase-order sync' tests/*.test.ts`
+Run: `cd $HOME/WeChatProjects/miniprogram-2 && npx tsx --test --test-name-pattern='standalone sync|failed sync|purchase-order sync' tests/*.test.ts`
 
 Expected: FAIL。
 
@@ -1583,14 +1583,14 @@ WXML/SCSS 要求：
 
 - [ ] **Step 5: 运行同步测试、全量测试和类型检查**
 
-Run: `cd /Users/landcloud/WeChatProjects/miniprogram-2 && npm test && npm run typecheck`
+Run: `cd $HOME/WeChatProjects/miniprogram-2 && npm test && npm run typecheck`
 
 Expected: PASS。
 
 - [ ] **Step 6: 提交同步闭环**
 
 ```bash
-cd /Users/landcloud/WeChatProjects/miniprogram-2
+cd $HOME/WeChatProjects/miniprogram-2
 git add miniprogram/pages/index miniprogram/services/quality-inspection-service.ts tests/quality-inspection-service.test.ts tests/history-service.test.ts
 git commit -m "feat: sync inspection drafts with retry"
 ```
@@ -1600,11 +1600,11 @@ git commit -m "feat: sync inspection drafts with retry"
 ### Task 14: 合并服务端历史与本地未同步记录
 
 **Files:**
-- Modify: `/Users/landcloud/WeChatProjects/miniprogram-2/miniprogram/services/quality-inspection-service.ts`
-- Modify: `/Users/landcloud/WeChatProjects/miniprogram-2/miniprogram/pages/index/index.ts`
-- Modify: `/Users/landcloud/WeChatProjects/miniprogram-2/miniprogram/pages/index/index.wxml`
-- Modify: `/Users/landcloud/WeChatProjects/miniprogram-2/miniprogram/pages/index/index.scss`
-- Test: `/Users/landcloud/WeChatProjects/miniprogram-2/tests/quality-inspection-service.test.ts`
+- Modify: `$HOME/WeChatProjects/miniprogram-2/miniprogram/services/quality-inspection-service.ts`
+- Modify: `$HOME/WeChatProjects/miniprogram-2/miniprogram/pages/index/index.ts`
+- Modify: `$HOME/WeChatProjects/miniprogram-2/miniprogram/pages/index/index.wxml`
+- Modify: `$HOME/WeChatProjects/miniprogram-2/miniprogram/pages/index/index.scss`
+- Test: `$HOME/WeChatProjects/miniprogram-2/tests/quality-inspection-service.test.ts`
 
 **Interfaces:**
 - Consumes: 服务端历史接口、`loadInspectionHistory()`。
@@ -1634,7 +1634,7 @@ test('merged history keeps failed local records and sorts newest first', () => {
 
 - [ ] **Step 2: 运行测试确认合并函数不存在**
 
-Run: `cd /Users/landcloud/WeChatProjects/miniprogram-2 && npx tsx --test --test-name-pattern='merged history' tests/*.test.ts`
+Run: `cd $HOME/WeChatProjects/miniprogram-2 && npx tsx --test --test-name-pattern='merged history' tests/*.test.ts`
 
 Expected: FAIL。
 
@@ -1660,14 +1660,14 @@ serverRequest<HistoryListData>({
 
 - [ ] **Step 4: 运行历史合并测试与全量验证**
 
-Run: `cd /Users/landcloud/WeChatProjects/miniprogram-2 && npm test && npm run typecheck`
+Run: `cd $HOME/WeChatProjects/miniprogram-2 && npm test && npm run typecheck`
 
 Expected: PASS。
 
 - [ ] **Step 5: 提交合并历史**
 
 ```bash
-cd /Users/landcloud/WeChatProjects/miniprogram-2
+cd $HOME/WeChatProjects/miniprogram-2
 git add miniprogram/services/quality-inspection-service.ts miniprogram/pages/index tests/quality-inspection-service.test.ts
 git commit -m "feat: merge local and server inspection history"
 ```
@@ -1687,38 +1687,38 @@ git commit -m "feat: merge local and server inspection history"
 - [ ] **Step 1: 再次确认两个仓库没有混入用户修改**
 
 ```bash
-git -C /Users/landcloud/smart_sales_system status --short --branch
-git -C /Users/landcloud/WeChatProjects/miniprogram-2 status --short --branch
-git -C /Users/landcloud/smart_sales_system diff --check
-git -C /Users/landcloud/WeChatProjects/miniprogram-2 diff --check
+git -C $HOME/smart_sales_system status --short --branch
+git -C $HOME/WeChatProjects/miniprogram-2 status --short --branch
+git -C $HOME/smart_sales_system diff --check
+git -C $HOME/WeChatProjects/miniprogram-2 diff --check
 ```
 
 Expected: 只存在计划内提交，工作区干净，`diff --check` 无输出。
 
 - [ ] **Step 2: 运行后端全量测试**
 
-Run: `cd /Users/landcloud/smart_sales_system && SESSION_SECRET_KEY=test-only-secret DB_BACKEND=sqlite pytest -q`
+Run: `cd $HOME/smart_sales_system && SESSION_SECRET_KEY=test-only-secret DB_BACKEND=sqlite pytest -q`
 
 Expected: PASS。
 
 - [ ] **Step 3: 运行小程序全量测试和类型检查**
 
-Run: `cd /Users/landcloud/WeChatProjects/miniprogram-2 && npm test && npm run typecheck`
+Run: `cd $HOME/WeChatProjects/miniprogram-2 && npm test && npm run typecheck`
 
 Expected: PASS。
 
 - [ ] **Step 4: 检查小程序构建产物不含敏感地址或凭据**
 
 ```bash
-cd /Users/landcloud/WeChatProjects/miniprogram-2
+cd $HOME/WeChatProjects/miniprogram-2
 rg -n "MYSQL_|192\.168\.1\.37|:3306|:8865|Authorization|MOONSHOT_API_KEY|CLOUD_LLM_API_KEY" miniprogram
 ```
 
-Expected: 无输出。`https://www.binictools.cn:7876` 只能在 `miniprogram/config/server.ts` 出现一次。
+Expected: 无输出。`https://example.invalid` 只能在 `miniprogram/config/server.ts` 出现一次。
 
 - [ ] **Step 5: 配置微信合法域名并在开发者工具联调**
 
-在微信公众平台将 `https://www.binictools.cn:7876` 同时加入 request 与 uploadFile 合法域名；开发者工具关闭“不校验合法域名”后验证：登录、me、采购任务分页/搜索、图片识别、采购草稿保存、独立报告创建、断网失败状态、恢复网络重试、合并历史均成功。
+在微信公众平台将 `https://example.invalid` 同时加入 request 与 uploadFile 合法域名；开发者工具关闭“不校验合法域名”后验证：登录、me、采购任务分页/搜索、图片识别、采购草稿保存、独立报告创建、断网失败状态、恢复网络重试、合并历史均成功。
 
 - [ ] **Step 6: 测试环境验证 Web 共用数据**
 
@@ -1742,11 +1742,11 @@ Expected: 无输出。`https://www.binictools.cn:7876` 只能在 `miniprogram/co
 - [ ] **Step 9: 如验证产生修复，分别提交并重新跑全量测试**
 
 ```bash
-cd /Users/landcloud/smart_sales_system
+cd $HOME/smart_sales_system
 git diff --name-only -- services routes models.py database.py main.py .env.example tests scripts/maintenance | xargs git add --
 git commit -m "fix: complete shared inspection verification"
 
-cd /Users/landcloud/WeChatProjects/miniprogram-2
+cd $HOME/WeChatProjects/miniprogram-2
 git diff --name-only -- miniprogram tests | xargs git add --
 git commit -m "fix: complete miniprogram inspection verification"
 ```

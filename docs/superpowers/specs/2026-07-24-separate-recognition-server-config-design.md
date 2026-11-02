@@ -25,7 +25,7 @@ POST /api/miniprogram/quality-inspections/recognize
 
 ```ts
 export const BUSINESS_SERVER_BASE_URL = 'http://localhost:7875'
-export const MODEL_API_URL = 'http://www.binictools.cn:8865/api/llm/v1/chat/completions'
+export const MODEL_API_URL = 'https://example.invalid/api/llm/v1/chat/completions'
 export const MODEL_NAME = 'qwen35'
 export const MODEL_TOKEN_STORAGE_KEY = 'llmApiToken'
 ```
@@ -73,7 +73,7 @@ export const MODEL_TOKEN_STORAGE_KEY = 'llmApiToken'
 当前确认的模型地址是 HTTP：
 
 ```text
-http://www.binictools.cn:8865/api/llm/v1/chat/completions
+https://example.invalid/api/llm/v1/chat/completions
 ```
 
 开发者工具关闭合法域名校验后可以用于临时调试，但微信真机预览、体验版和正式版通常要求合法 HTTPS 域名及有效证书。因此，本次配置拆分能够让地址便于独立修改，但如果服务器没有提供 HTTPS，仅靠小程序项目配置不能保证手机端请求成功。后续应为模型服务提供 HTTPS，或优先发布线上 HTTPS 识别代理。

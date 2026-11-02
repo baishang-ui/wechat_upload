@@ -4,7 +4,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 
 const root = path.resolve(import.meta.dirname, '..')
-const source = (relativePath: string) => fs.readFileSync(path.join(root, relativePath), 'utf8')
+const source = (relativePath: string) => fs.readFileSync(path.join(root, relativePath), 'utf8').replace(/\r\n/g, '\n')
 
 test('pending product selection opens a paged inspection workbench modal instead of navigating away', () => {
   const indexTs = source('miniprogram/pages/index/index.ts')

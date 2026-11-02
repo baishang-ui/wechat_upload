@@ -25,8 +25,8 @@
 - Run: `npm test && npm run typecheck`。
 
 ### Task 4: 收紧后端提示词
-- Modify `/Users/landcloud/smart_sales_system/tests/test_miniprogram_inspection_recognition.py`。
-- Modify `/Users/landcloud/smart_sales_system/services/miniprogram_inspection_recognition.py`。
+- Modify `$HOME/smart_sales_system/tests/test_miniprogram_inspection_recognition.py`。
+- Modify `$HOME/smart_sales_system/services/miniprogram_inspection_recognition.py`。
 - 捕获 prompt 并断言空值 null、禁止统一分数、高于 0.9 条件。
 - Run backend focused pytest。
 

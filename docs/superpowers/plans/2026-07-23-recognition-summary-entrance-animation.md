@@ -35,7 +35,7 @@ Extend `scan workspace exposes recognition queue and confidence review states` a
 const summary = scss.match(/\.recognition-queue-summary\s*\{([^}]*)\}/)?.[1] || ''
 assert.match(
   summary,
-  /animation:\s*content-rise\s+\.38s\s+\.06s\s+ease-out\s+both;/,
+  /animatio<workspace-path>
 )
 ```
 

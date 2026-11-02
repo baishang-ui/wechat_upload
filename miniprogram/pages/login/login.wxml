@@ -5,7 +5,7 @@
 <view class="login-page" style="padding-top: calc({{navigationBarHeight}}px + 72rpx);">
   <view class="login-shell">
     <view class="login-intro">
-      <view class="brand-mark">BINIC INSPECTION</view>
+      <view class="brand-mark">QUALITY INSPECTION</view>
       <view class="login-title">质量检验工作台</view>
       <view class="login-subtitle">连接智能销售系统，处理采购待检任务与检验报告。</view>
     </view>

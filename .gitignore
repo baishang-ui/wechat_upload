@@ -4,3 +4,9 @@ node_modules/
 
 # Codex isolated worktrees
 /.worktrees/
+
+# Developer-local settings and credentials
+project.private.config.json
+.env
+.env.*
+!.env.example

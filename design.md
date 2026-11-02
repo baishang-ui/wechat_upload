@@ -2,7 +2,7 @@
 
 ## 图标系统
 
-- 项目界面图标统一选用 [Heroicons](https://heroicons.com/) 官方图标。
+- 项目界面图标统一选用 [Heroicons](https://fixture-e814c0.example.invalid/) 官方图标。
 - 只使用 **Solid** 类型，不使用 Outline 类型，也不混用其他描边或手绘风格图标。
 - 优先选择语义最接近的官方图标，保持 Heroicons 原始轮廓、比例和圆角特征，不自行修改路径造型。
 - 同一功能在不同页面必须使用同一个图标，不能因页面不同而替换为近义图标。

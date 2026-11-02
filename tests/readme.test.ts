@@ -12,7 +12,7 @@ function escapeRegExp(value: string): string {
 
 test('README documents the current authenticated inspection workflow', () => {
   const required = [
-    'https://www.binictools.cn:7876',
+    'https://example.invalid',
     'POST /api/miniprogram/quality-inspections/recognize',
     'smartSalesSession:v1',
     '最多 10 个未完成任务',

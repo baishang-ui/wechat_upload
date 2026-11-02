@@ -5,7 +5,7 @@ import { resolve } from 'node:path'
 
 const assert: typeof strictAssert = strictAssert
 const root = resolve(__dirname, '..')
-const source = (path: string) => readFileSync(resolve(root, path), 'utf8')
+const source = (path: string) => readFileSync(resolve(root, path), 'utf8').replace(/\r\n/g, '\n')
 
 test('all project animation curves use explicit cubic bezier timing', () => {
   const animationSources = [

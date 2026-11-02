@@ -20,7 +20,7 @@
 
 ## 样例报告结构
 
-样例位于 `/Users/landcloud/Downloads/检验报告PDF`。六种产品报告均为 A4 页面，主体表格横向排版，PDF 页面内容带 90 度旋转。每份 PDF 包含三张独立检验记录页面。
+样例位于 `$HOME/Downloads/检验报告PDF`。六种产品报告均为 A4 页面，主体表格横向排版，PDF 页面内容带 90 度旋转。每份 PDF 包含三张独立检验记录页面。
 
 报告包含以下共同区域：
 
@@ -35,7 +35,7 @@
 
 - 推荐方案：小程序只访问 HTTPS 业务接口，业务后端保存模型密钥、规范图片方向、调用视觉模型并校验返回 JSON。该方案安全且便于统一处理 OCR 失败和数据持久化。
 - 备选方案：微信云函数代理模型调用。该方案需要额外启用和维护微信云开发环境，当前项目尚未配置。
-- 当前原型：小程序直接调用 `http://www.binictools.cn:8865/api/llm/v1/chat/completions`，使用 base64 `image_url` 发送压缩图片。该 HTTP 地址只适合关闭域名校验的开发者工具调试，不满足正式小程序的 HTTPS 与域名白名单要求。
+- 当前原型：小程序直接调用 `https://example.invalid/api/llm/v1/chat/completions`，使用 base64 `image_url` 发送压缩图片。该 HTTP 地址只适合关闭域名校验的开发者工具调试，不满足正式小程序的 HTTPS 与域名白名单要求。
 
 ## 页面与状态
 
@@ -118,7 +118,7 @@ interface InspectionRecord {
 
 小程序通过 `wx.request` 调用：
 
-- `POST http://www.binictools.cn:8865/api/llm/v1/chat/completions`：发送 `qwen35` 多模态消息，图片使用 `data:image/...;base64,...`。
+- `POST https://example.invalid/api/llm/v1/chat/completions`：发送 `qwen35` 多模态消息，图片使用 `data:image/...;base64,...`。
 - 服务层保留模型原始文本，解析 JSON 后把 snake_case 字段和检验行归一化为 `InspectionRecord`。
 - 若模型把“判定”识别为普通检验行，归一化逻辑会把该行移到 `sampleJudgements`。
 

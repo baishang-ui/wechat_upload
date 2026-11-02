@@ -4,9 +4,9 @@
 
 ## 1. 背景
 
-微信小程序当前独立完成检验报告图片选择、图片压缩、大模型识别、十列数据校对、本地历史保存和 JSON 导出。它直接调用 `http://www.binictools.cn:8865/api/llm/v1/chat/completions`，但检验记录没有写入业务数据库。
+微信小程序当前独立完成检验报告图片选择、图片压缩、大模型识别、十列数据校对、本地历史保存和 JSON 导出。它直接调用 `https://example.invalid/api/llm/v1/chat/completions`，但检验记录没有写入业务数据库。
 
-`smart_sales_system` 已有 FastAPI、SQLAlchemy、用户 Session、MySQL 支持和完整质量检验模块。线上 HTTPS 入口为 `https://www.binictools.cn:7876`。该后端已有采购质检任务、明细、草稿、AI 判定、签字、PDF 报告和历史记录接口，适合由微信小程序直接复用。
+`smart_sales_system` 已有 FastAPI、SQLAlchemy、用户 Session、MySQL 支持和完整质量检验模块。线上 HTTPS 入口为 `https://example.invalid`。该后端已有采购质检任务、明细、草稿、AI 判定、签字、PDF 报告和历史记录接口，适合由微信小程序直接复用。
 
 本次设计同时支持两种业务来源：
 
@@ -36,7 +36,7 @@
 
 ### 4.1 小程序
 
-项目路径：`/Users/landcloud/WeChatProjects/miniprogram-2`
+项目路径：`$HOME/WeChatProjects/miniprogram-2`
 
 当前关键能力：
 
@@ -49,7 +49,7 @@
 
 ### 4.2 Smart Sales System
 
-项目路径：`/Users/landcloud/smart_sales_system`
+项目路径：`$HOME/smart_sales_system`
 
 后端技术栈：FastAPI + SQLAlchemy。数据库由 `database.py` 根据 `DB_BACKEND` 选择 SQLite、MySQL 或 SQL Server。生产部署应使用 `DB_BACKEND=mysql`。
 
@@ -102,7 +102,7 @@
 微信小程序
   │ HTTPS + Session Cookie
   ▼
-https://www.binictools.cn:7876
+https://example.invalid
 smart_sales_system / FastAPI
   ├── 小程序 JSON 认证
   ├── 采购质检任务
@@ -398,7 +398,7 @@ miniprogram/services/quality-inspection-service.ts
 基础地址：
 
 ```text
-https://www.binictools.cn:7876
+https://example.invalid
 ```
 
 职责：
@@ -430,7 +430,7 @@ https://www.binictools.cn:7876
 5. MySQL 凭据仅保存在服务器 `.env`；
 6. 大模型密钥仅保存在服务器；
 7. 限制图片 MIME 类型、大小和数量；
-8. 小程序后台配置 `https://www.binictools.cn:7876` 为 request/uploadFile 合法域名；
+8. 小程序后台配置 `https://example.invalid` 为 request/uploadFile 合法域名；
 9. 生产数据库迁移前备份；
 10. 响应和日志中不返回数据库异常细节或敏感配置。
 
@@ -484,8 +484,8 @@ https://www.binictools.cn:7876
 
 实施涉及两个仓库：
 
-- `/Users/landcloud/smart_sales_system`
-- `/Users/landcloud/WeChatProjects/miniprogram-2`
+- `$HOME/smart_sales_system`
+- `$HOME/WeChatProjects/miniprogram-2`
 
 实施开始前必须重新检查两个仓库的工作区状态；如果存在用户未提交修改，应使用隔离工作树或其他不覆盖现有工作区的方式。任何情况下都不得提交、还原或改写用户已有修改。
 
@@ -502,4 +502,4 @@ https://www.binictools.cn:7876
 - 本地离线记录不会因同步失败丢失；
 - 现有 Web 质检流程和历史采购质检数据不受破坏；
 - 后端自动化测试、小程序单元测试和类型检查通过；
-- 真机能通过 `https://www.binictools.cn:7876` 完成登录、读取、识别和保存闭环。
+- 真机能通过 `https://example.invalid` 完成登录、读取、识别和保存闭环。

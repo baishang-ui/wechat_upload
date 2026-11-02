@@ -10,7 +10,7 @@
 
 ## Global Constraints
 
-- 保留 `/Users/landcloud/WeChatProjects/miniprogram-2` 和 `/Users/landcloud/smart_sales_system` 中用户已有未提交修改。
+- 保留 `$HOME/WeChatProjects/miniprogram-2` 和 `$HOME/smart_sales_system` 中用户已有未提交修改。
 - 未经用户明确要求，不创建提交、不推送代码；每个任务用 `git diff --check` 和聚焦测试替代提交检查点。
 - 服务器删除失败时不得删除本地副本。
 - 采购质检删除不得删除采购任务、采购物料或同任务下其他物料。
@@ -22,8 +22,8 @@
 ### Task 1: 后端按物料删除服务器识别记录
 
 **Files:**
-- Create: `/Users/landcloud/smart_sales_system/tests/test_quality_inspection_delete_record.py`
-- Modify: `/Users/landcloud/smart_sales_system/routes/customer_orders.py`
+- Create: `$HOME/smart_sales_system/tests/test_quality_inspection_delete_record.py`
+- Modify: `$HOME/smart_sales_system/routes/customer_orders.py`
 
 **Interfaces:**
 - Produces: `DELETE /customer-orders/api/purchase-orders/quality-inspections/{task_id}/items/{item_id}/record`
@@ -73,9 +73,9 @@ Also assert that the history-records endpoint no longer returns the deleted targ
 Run:
 
 ```bash
-cd /Users/landcloud/smart_sales_system
+cd $HOME/smart_sales_system
 DB_BACKEND=sqlite SESSION_SECRET_KEY=inspection-delete-regression \
-/Users/landcloud/.hermes/hermes-agent/venv/bin/python -m pytest \
+$HOME/.hermes/hermes-agent/venv/bin/python -m pytest \
   tests/test_quality_inspection_delete_record.py -q
 ```
 
@@ -182,7 +182,7 @@ Run the focused test, then:
 
 ```bash
 DB_BACKEND=sqlite SESSION_SECRET_KEY=inspection-delete-regression \
-/Users/landcloud/.hermes/hermes-agent/venv/bin/python -m pytest \
+$HOME/.hermes/hermes-agent/venv/bin/python -m pytest \
   tests/test_quality_inspection_delete_record.py \
   tests/test_quality_inspection_matched_draft.py \
   tests/test_quality_inspection_standalone_api.py \
@@ -197,10 +197,10 @@ Expected: all selected tests pass, exit code 0.
 ### Task 2: 小程序删除服务与关联本地副本清理
 
 **Files:**
-- Modify: `/Users/landcloud/WeChatProjects/miniprogram-2/miniprogram/services/quality-inspection-service.ts`
-- Modify: `/Users/landcloud/WeChatProjects/miniprogram-2/miniprogram/services/history-service.ts`
-- Modify: `/Users/landcloud/WeChatProjects/miniprogram-2/tests/quality-inspection-service.test.ts`
-- Modify: `/Users/landcloud/WeChatProjects/miniprogram-2/tests/history-service.test.ts`
+- Modify: `$HOME/WeChatProjects/miniprogram-2/miniprogram/services/quality-inspection-service.ts`
+- Modify: `$HOME/WeChatProjects/miniprogram-2/miniprogram/services/history-service.ts`
+- Modify: `$HOME/WeChatProjects/miniprogram-2/tests/quality-inspection-service.test.ts`
+- Modify: `$HOME/WeChatProjects/miniprogram-2/tests/history-service.test.ts`
 
 **Interfaces:**
 - Produces: `deleteRemoteInspectionRecord(taskId: number, itemId: number, request?: QualityRequest): Promise<DeleteInspectionRecordResult>`
@@ -237,7 +237,7 @@ test('deleteInspectionHistoriesByServerRecord removes all matching local copies 
 - [ ] **Step 2: Run focused tests and verify RED**
 
 ```bash
-cd /Users/landcloud/WeChatProjects/miniprogram-2
+cd $HOME/WeChatProjects/miniprogram-2
 npx tsx --test --test-name-pattern='deleteRemoteInspectionRecord|deleteInspectionHistoriesByServerRecord' \
   tests/quality-inspection-service.test.ts tests/history-service.test.ts
 ```
@@ -278,10 +278,10 @@ Run the focused command again and `npm run typecheck`; expected exit code 0.
 ### Task 3: 记录卡片统一删除按钮和页面交互
 
 **Files:**
-- Modify: `/Users/landcloud/WeChatProjects/miniprogram-2/miniprogram/pages/index/index.ts`
-- Modify: `/Users/landcloud/WeChatProjects/miniprogram-2/miniprogram/pages/index/index.wxml`
-- Modify: `/Users/landcloud/WeChatProjects/miniprogram-2/miniprogram/pages/index/index.scss`
-- Modify: `/Users/landcloud/WeChatProjects/miniprogram-2/tests/ui-consistency.test.ts`
+- Modify: `$HOME/WeChatProjects/miniprogram-2/miniprogram/pages/index/index.ts`
+- Modify: `$HOME/WeChatProjects/miniprogram-2/miniprogram/pages/index/index.wxml`
+- Modify: `$HOME/WeChatProjects/miniprogram-2/miniprogram/pages/index/index.scss`
+- Modify: `$HOME/WeChatProjects/miniprogram-2/tests/ui-consistency.test.ts`
 
 **Interfaces:**
 - Consumes: Task 2 delete functions.
@@ -338,10 +338,10 @@ Run the focused UI test and `npm run typecheck`; expected exit code 0.
 ### Task 4: 采购任务与识别记录动画骨架屏
 
 **Files:**
-- Modify: `/Users/landcloud/WeChatProjects/miniprogram-2/miniprogram/pages/index/index.ts`
-- Modify: `/Users/landcloud/WeChatProjects/miniprogram-2/miniprogram/pages/index/index.wxml`
-- Modify: `/Users/landcloud/WeChatProjects/miniprogram-2/miniprogram/pages/index/index.scss`
-- Modify: `/Users/landcloud/WeChatProjects/miniprogram-2/tests/ui-consistency.test.ts`
+- Modify: `$HOME/WeChatProjects/miniprogram-2/miniprogram/pages/index/index.ts`
+- Modify: `$HOME/WeChatProjects/miniprogram-2/miniprogram/pages/index/index.wxml`
+- Modify: `$HOME/WeChatProjects/miniprogram-2/miniprogram/pages/index/index.scss`
+- Modify: `$HOME/WeChatProjects/miniprogram-2/tests/ui-consistency.test.ts`
 
 **Interfaces:**
 - Adds page state: `historyLoading: boolean`.
@@ -401,11 +401,11 @@ Run the focused UI test and `npm run typecheck`; expected exit code 0.
 ### Task 5: 每张识别队列卡片的阶段式进度条
 
 **Files:**
-- Modify: `/Users/landcloud/WeChatProjects/miniprogram-2/miniprogram/domain/recognition-queue.ts`
-- Modify: `/Users/landcloud/WeChatProjects/miniprogram-2/miniprogram/pages/index/index.wxml`
-- Modify: `/Users/landcloud/WeChatProjects/miniprogram-2/miniprogram/pages/index/index.scss`
-- Modify: `/Users/landcloud/WeChatProjects/miniprogram-2/tests/recognition-queue.test.ts`
-- Modify: `/Users/landcloud/WeChatProjects/miniprogram-2/tests/ui-consistency.test.ts`
+- Modify: `$HOME/WeChatProjects/miniprogram-2/miniprogram/domain/recognition-queue.ts`
+- Modify: `$HOME/WeChatProjects/miniprogram-2/miniprogram/pages/index/index.wxml`
+- Modify: `$HOME/WeChatProjects/miniprogram-2/miniprogram/pages/index/index.scss`
+- Modify: `$HOME/WeChatProjects/miniprogram-2/tests/recognition-queue.test.ts`
+- Modify: `$HOME/WeChatProjects/miniprogram-2/tests/ui-consistency.test.ts`
 
 **Interfaces:**
 - Produces: `getRecognitionProgress(status: RecognitionQueueStatus): number`.
@@ -471,7 +471,7 @@ Run focused recognition/UI tests and `npm run typecheck`; expected exit code 0.
 - [ ] **Step 1: Run all small-program checks**
 
 ```bash
-cd /Users/landcloud/WeChatProjects/miniprogram-2
+cd $HOME/WeChatProjects/miniprogram-2
 npm test
 npm run typecheck
 git diff --check
@@ -482,9 +482,9 @@ Expected: all tests pass, TypeScript exits 0, diff check exits 0.
 - [ ] **Step 2: Run related backend regression suite**
 
 ```bash
-cd /Users/landcloud/smart_sales_system
+cd $HOME/smart_sales_system
 DB_BACKEND=sqlite SESSION_SECRET_KEY=inspection-delete-regression \
-/Users/landcloud/.hermes/hermes-agent/venv/bin/python -m pytest \
+$HOME/.hermes/hermes-agent/venv/bin/python -m pytest \
   tests/test_quality_inspection_delete_record.py \
   tests/test_quality_inspection_matched_draft.py \
   tests/test_quality_inspection_standalone_api.py \
@@ -497,8 +497,8 @@ Expected: all selected tests pass and diff check exits 0.
 - [ ] **Step 3: Review changed-file boundaries**
 
 ```bash
-git -C /Users/landcloud/WeChatProjects/miniprogram-2 status --short
-git -C /Users/landcloud/smart_sales_system status --short
+git -C $HOME/WeChatProjects/miniprogram-2 status --short
+git -C $HOME/smart_sales_system status --short
 ```
 
 Confirm the task did not overwrite the user's existing changes in `miniprogram/config/server.ts`, package files, `project.config.json`, `tests/server-client.test.ts`, or backend `.env.example`.

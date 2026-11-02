@@ -29,12 +29,12 @@ import {
 
 test('inspection image thumbnails use the shared server endpoint without replacing originals', () => {
   assert.equal(
-    inspectionImageThumbnailUrl('https://www.binictools.cn:7876/uploads/report 1.jpg'),
-    'https://www.binictools.cn:7876/customer-orders/api/purchase-orders/quality-inspection-image-thumbnail?url=%2Fuploads%2Freport%201.jpg',
+    inspectionImageThumbnailUrl('https://example.invalid/uploads/report 1.jpg'),
+    'https://example.invalid/customer-orders/api/purchase-orders/quality-inspection-image-thumbnail?url=%2Fuploads%2Freport%201.jpg',
   )
   assert.equal(
     inspectionImageThumbnailUrl('/uploads/report.jpg'),
-    'https://www.binictools.cn:7876/customer-orders/api/purchase-orders/quality-inspection-image-thumbnail?url=%2Fuploads%2Freport.jpg',
+    'https://example.invalid/customer-orders/api/purchase-orders/quality-inspection-image-thumbnail?url=%2Fuploads%2Freport.jpg',
   )
   assert.equal(inspectionImageThumbnailUrl('wxfile://tmp/report.jpg'), 'wxfile://tmp/report.jpg')
 })
@@ -44,7 +44,7 @@ function createCompleteRecord() {
     report_title: '钢丝刷检验记录单',
     customer: '客户A',
     supplier: '供应商A',
-    trademark: 'BINIC',
+    trademark: 'DEMO',
     order_number: 'PO-1',
     model_spec: '100x20',
     arrival_quantity: '1000',
@@ -548,12 +548,12 @@ test('getInspectionItemDetail loads shared online data and resolves server image
   })
   assert.equal(detail.item.id, 34)
   assert.deepEqual(detail.item.preview_images, [
-    'https://www.binictools.cn:7876/uploads/appearance.jpg',
-    'https://www.binictools.cn:7876/uploads/workbench.jpg',
-    'https://www.binictools.cn:7876/uploads/report.jpg',
+    'https://example.invalid/uploads/appearance.jpg',
+    'https://example.invalid/uploads/workbench.jpg',
+    'https://example.invalid/uploads/report.jpg',
   ])
   assert.deepEqual(detail.item.inspection_draft?.records?.[0].images, [
-    'https://www.binictools.cn:7876/uploads/appearance.jpg',
+    'https://example.invalid/uploads/appearance.jpg',
   ])
   assert.deepEqual(detail.item.inspection_summary, {
     total: 1,
@@ -563,10 +563,10 @@ test('getInspectionItemDetail loads shared online data and resolves server image
     has_data: true,
   })
   assert.deepEqual(detail.master_product?.image_paths, [
-    'https://www.binictools.cn:7876/uploads/master.jpg',
+    'https://example.invalid/uploads/master.jpg',
   ])
   assert.deepEqual(detail.customer_product?.customer_images, [
-    'https://www.binictools.cn:7876/uploads/customer.jpg',
+    'https://example.invalid/uploads/customer.jpg',
   ])
 })
 
@@ -609,9 +609,9 @@ test('task lists expose online inspection data and row photos without extra item
   }) as T)
 
   assert.deepEqual(result.items[0].items?.[0].preview_images, [
-    'https://www.binictools.cn:7876/uploads/row.jpg',
+    'https://example.invalid/uploads/row.jpg',
     'https://cdn.example.com/row-2.jpg',
-    'https://www.binictools.cn:7876/uploads/site.jpg',
+    'https://example.invalid/uploads/site.jpg',
   ])
   assert.deepEqual(result.items[0].items?.[0].inspection_summary, {
     total: 3,
@@ -669,14 +669,14 @@ test('compact task payload preserves server summaries and caps lazy previews', a
   )
   const item = result.items[0].items?.[0]
   assert.deepEqual(item?.preview_images, [
-    'https://www.binictools.cn:7876/uploads/one.jpg',
-    'https://www.binictools.cn:7876/uploads/two.jpg',
-    'https://www.binictools.cn:7876/uploads/three.jpg',
+    'https://example.invalid/uploads/one.jpg',
+    'https://example.invalid/uploads/two.jpg',
+    'https://example.invalid/uploads/three.jpg',
   ])
   assert.deepEqual(item?.preview_thumbnails, [
-    'https://www.binictools.cn:7876/customer-orders/api/purchase-orders/quality-inspection-image-thumbnail?url=%2Fuploads%2Fone.jpg',
-    'https://www.binictools.cn:7876/customer-orders/api/purchase-orders/quality-inspection-image-thumbnail?url=%2Fuploads%2Ftwo.jpg',
-    'https://www.binictools.cn:7876/customer-orders/api/purchase-orders/quality-inspection-image-thumbnail?url=%2Fuploads%2Fthree.jpg',
+    'https://example.invalid/customer-orders/api/purchase-orders/quality-inspection-image-thumbnail?url=%2Fuploads%2Fone.jpg',
+    'https://example.invalid/customer-orders/api/purchase-orders/quality-inspection-image-thumbnail?url=%2Fuploads%2Ftwo.jpg',
+    'https://example.invalid/customer-orders/api/purchase-orders/quality-inspection-image-thumbnail?url=%2Fuploads%2Fthree.jpg',
   ])
   assert.equal(item?.preview_image_count, 12)
   assert.deepEqual(item?.inspection_summary, {
@@ -722,9 +722,9 @@ test('compact task detail uses the compact endpoint and drops legacy full drafts
   assert.equal(task.items?.[0].inspection_draft, undefined)
   assert.equal(task.items?.[0].preview_images?.length, 3)
   assert.deepEqual(task.items?.[0].preview_thumbnails, [
-    'https://www.binictools.cn:7876/customer-orders/api/purchase-orders/quality-inspection-image-thumbnail?url=%2Fuploads%2Fone.jpg',
-    'https://www.binictools.cn:7876/customer-orders/api/purchase-orders/quality-inspection-image-thumbnail?url=%2Fuploads%2Ftwo.jpg',
-    'https://www.binictools.cn:7876/customer-orders/api/purchase-orders/quality-inspection-image-thumbnail?url=%2Fuploads%2Fthree.jpg',
+    'https://example.invalid/customer-orders/api/purchase-orders/quality-inspection-image-thumbnail?url=%2Fuploads%2Fone.jpg',
+    'https://example.invalid/customer-orders/api/purchase-orders/quality-inspection-image-thumbnail?url=%2Fuploads%2Ftwo.jpg',
+    'https://example.invalid/customer-orders/api/purchase-orders/quality-inspection-image-thumbnail?url=%2Fuploads%2Fthree.jpg',
   ])
   assert.equal(task.items?.[0].preview_image_count, 4)
 })
@@ -1120,9 +1120,9 @@ test('merged history resolves and exposes up to three server thumbnails for card
   const [merged] = mergeInspectionHistory([], [remote])
 
   assert.deepEqual(merged.imagePaths, [
-    'https://www.binictools.cn:7876/thumbnails/one.jpg',
-    'https://www.binictools.cn:7876/thumbnails/two.jpg',
-    'https://www.binictools.cn:7876/thumbnails/three.jpg',
+    'https://example.invalid/thumbnails/one.jpg',
+    'https://example.invalid/thumbnails/two.jpg',
+    'https://example.invalid/thumbnails/three.jpg',
   ])
   assert.equal(merged.imagePath, merged.imagePaths[0])
   assert.equal(merged.imageCount, 4)
@@ -1256,9 +1256,9 @@ test('history image hydration replaces one legacy thumbnail with a three-image d
   }))
 
   assert.deepEqual(hydrated.imagePaths, [
-    'https://www.binictools.cn:7876/customer-orders/api/purchase-orders/quality-inspection-image-thumbnail?url=https%3A%2F%2Ffiles.example.com%2Fone.jpg',
-    'https://www.binictools.cn:7876/customer-orders/api/purchase-orders/quality-inspection-image-thumbnail?url=https%3A%2F%2Ffiles.example.com%2Ftwo.jpg',
-    'https://www.binictools.cn:7876/customer-orders/api/purchase-orders/quality-inspection-image-thumbnail?url=https%3A%2F%2Ffiles.example.com%2Fthree.jpg',
+    'https://example.invalid/customer-orders/api/purchase-orders/quality-inspection-image-thumbnail?url=https%3A%2F%2Ffiles.example.com%2Fone.jpg',
+    'https://example.invalid/customer-orders/api/purchase-orders/quality-inspection-image-thumbnail?url=https%3A%2F%2Ffiles.example.com%2Ftwo.jpg',
+    'https://example.invalid/customer-orders/api/purchase-orders/quality-inspection-image-thumbnail?url=https%3A%2F%2Ffiles.example.com%2Fthree.jpg',
   ])
   assert.equal(hydrated.imageCount, 4)
   assert.equal(hydrated.imageSummaryComplete, true)
@@ -1460,7 +1460,7 @@ test('uploadInspectionDraftImage stores the recognized report as a server URL', 
     item_id: '11',
     row_key: 'quality-sheet',
   })
-  assert.equal(result.url, 'https://www.binictools.cn:7876/uploads/quality-sheet.jpg')
+  assert.equal(result.url, 'https://example.invalid/uploads/quality-sheet.jpg')
 })
 
 test('uploadInspectionWorkbenchImage sends images to the online AI workbench area', async () => {
@@ -1486,7 +1486,7 @@ test('uploadInspectionWorkbenchImage sends images to the online AI workbench are
     item_id: '11',
     row_key: 'ai-workbench',
   })
-  assert.equal(result.url, 'https://www.binictools.cn:7876/uploads/inspection-photo.jpg')
+  assert.equal(result.url, 'https://example.invalid/uploads/inspection-photo.jpg')
 })
 
 test('uploadInspectionRowImage sends the row context with the multipart file', async () => {
@@ -1518,7 +1518,7 @@ test('uploadInspectionRowImage sends the row context with the multipart file', a
     row_key: 'appearance',
   })
   assert.equal(result.id, '/srv/uploads/appearance.jpg')
-  assert.equal(result.url, 'https://www.binictools.cn:7876/uploads/appearance.jpg')
+  assert.equal(result.url, 'https://example.invalid/uploads/appearance.jpg')
 })
 
 

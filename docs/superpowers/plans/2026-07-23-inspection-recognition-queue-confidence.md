@@ -24,12 +24,12 @@
 
 ## File Map
 
-### 共用后端 `/Users/landcloud/smart_sales_system`
+### 共用后端 `$HOME/smart_sales_system`
 
 - Modify `services/miniprogram_inspection_recognition.py`: 新旧模型响应解析、置信度规范化和接口返回。
 - Modify `tests/test_miniprogram_inspection_recognition.py`: 新格式、旧格式、分数限制和非法分数测试。
 
-### 微信小程序 `/Users/landcloud/WeChatProjects/miniprogram-2`
+### 微信小程序 `$HOME/WeChatProjects/miniprogram-2`
 
 - Create `miniprogram/domain/recognition-review.ts`: 置信度 DTO、格式校验、红黄提示和人工审核状态。
 - Create `tests/recognition-review.test.ts`: 阈值、格式覆盖、缺失分数和人工审核测试。
@@ -46,8 +46,8 @@
 ## Task 1: 后端兼容性返回字段置信度
 
 **Files:**
-- Modify: `/Users/landcloud/smart_sales_system/tests/test_miniprogram_inspection_recognition.py`
-- Modify: `/Users/landcloud/smart_sales_system/services/miniprogram_inspection_recognition.py`
+- Modify: `$HOME/smart_sales_system/tests/test_miniprogram_inspection_recognition.py`
+- Modify: `$HOME/smart_sales_system/services/miniprogram_inspection_recognition.py`
 
 **Interfaces:**
 - Consumes: `call_llm()` 返回的 JSON 字符串。
@@ -85,9 +85,9 @@ def test_recognize_returns_normalized_field_confidence(authenticated_client, mon
 Run:
 
 ```bash
-cd /Users/landcloud/smart_sales_system
+cd $HOME/smart_sales_system
 SESSION_SECRET_KEY='local-test-session-secret-not-for-production' DB_BACKEND=sqlite \
-  /Users/landcloud/.hermes/hermes-agent/venv/bin/python -m pytest -q \
+  $HOME/.hermes/hermes-agent/venv/bin/python -m pytest -q \
   tests/test_miniprogram_inspection_recognition.py
 ```
 
@@ -153,10 +153,10 @@ Expected: 全部通过。
 - [ ] **Step 6: 提交后端修改**
 
 ```bash
-git -C /Users/landcloud/smart_sales_system add \
+git -C $HOME/smart_sales_system add \
   services/miniprogram_inspection_recognition.py \
   tests/test_miniprogram_inspection_recognition.py
-git -C /Users/landcloud/smart_sales_system commit -m "feat: return inspection field confidence"
+git -C $HOME/smart_sales_system commit -m "feat: return inspection field confidence"
 ```
 
 ## Task 2: 小程序字段审核提示领域模块
@@ -457,9 +457,9 @@ git commit -m "feat: run inspection recognition queue in background"
 - [ ] **Step 1: 运行后端聚焦测试**
 
 ```bash
-cd /Users/landcloud/smart_sales_system
+cd $HOME/smart_sales_system
 SESSION_SECRET_KEY='local-test-session-secret-not-for-production' DB_BACKEND=sqlite \
-  /Users/landcloud/.hermes/hermes-agent/venv/bin/python -m pytest -q \
+  $HOME/.hermes/hermes-agent/venv/bin/python -m pytest -q \
   tests/test_miniprogram_inspection_recognition.py \
   tests/test_miniprogram_auth_api.py \
   tests/test_quality_inspection_standalone_api.py
@@ -470,7 +470,7 @@ Expected: 全部通过。
 - [ ] **Step 2: 运行小程序最终验证**
 
 ```bash
-cd /Users/landcloud/WeChatProjects/miniprogram-2
+cd $HOME/WeChatProjects/miniprogram-2
 npm test
 npm run typecheck
 npx --yes sass@1.77.8 miniprogram/pages/login/login.scss /tmp/miniprogram-login-queue-final.css --no-source-map
@@ -500,8 +500,8 @@ POST 一张有效 JPEG 到本地 `/api/miniprogram/quality-inspections/recognize
 - [ ] **Step 5: 检查 Git 边界**
 
 ```bash
-git -C /Users/landcloud/WeChatProjects/miniprogram-2 status --short
-git -C /Users/landcloud/smart_sales_system status --short
+git -C $HOME/WeChatProjects/miniprogram-2 status --short
+git -C $HOME/smart_sales_system status --short
 ```
 
 Expected: 小程序仅保留计划开始前已有的三个未提交修改；后端工作树干净。不推送远端。

@@ -12,7 +12,7 @@
 微信小程序
   ├─ 登录/采购待检/历史/保存 → http://localhost:7875 或线上业务后端
   └─ 队列图片上传            → /api/miniprogram/quality-inspections/recognize
-                                    └─ 独立模型网关 http://www.binictools.cn:8865/api/llm/v1
+                                    └─ 独立模型网关 https://example.invalid/api/llm/v1
 ```
 
 ## 独立配置
@@ -20,7 +20,7 @@
 后端质检识别服务使用：
 
 ```text
-MINIPROGRAM_INSPECTION_LLM_BASE_URL=http://www.binictools.cn:8865/api/llm/v1
+MINIPROGRAM_INSPECTION_LLM_BASE_URL=https://example.invalid/api/llm/v1
 MINIPROGRAM_INSPECTION_LLM_MODEL=qwen35
 MINIPROGRAM_INSPECTION_LLM_API_KEY=
 ```

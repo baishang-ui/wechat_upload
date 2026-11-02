@@ -245,7 +245,7 @@ POST /api/miniprogram/quality-inspections/images
 ```json
 {
   "id": "image-id",
-  "url": "https://.../inspection-image.jpg"
+  "url": "https://fixture-ab5df6.example.invalid/inspection-image.jpg"
 }
 ```
 

@@ -7,7 +7,7 @@
 本次体验模式需同时满足：
 
 1. 小程序启动后直接进入首页，不显示登录页，也不因缺少会话跳转到登录页。
-2. 小程序请求恢复到线上服务地址 `https://www.binictools.cn:7876`，而不是本机 `http://localhost:7875`。
+2. 小程序请求恢复到线上服务地址 `https://example.invalid`，而不是本机 `http://localhost:7875`。
 3. 线上服务实际提供当前小程序使用的识别接口，体验者可上传图片并得到识别结果；不能仅恢复一个可打开但接口 404 的地址。
 4. 登录相关页面、服务与正常鉴权接口完整保留。关闭开关即可恢复登录流程。
 5. 匿名体验不得读取、修改或删除真实采购任务、真实检验记录或其他用户数据。
@@ -20,7 +20,7 @@
 
 - 删除登录页面或移除后端会话体系：后续恢复成本高，并会破坏正式业务流程。
 - 将全部 `/api/miniprogram/*` 接口改为匿名：会暴露采购任务、历史记录及删除能力，风险不可接受。
-- 仅把前端地址切回线上：已验证 `https://www.binictools.cn:7876/openapi.json` 可访问，但截至 **2026 年 7 月 24 日**，该实例未暴露 `/api/miniprogram/*` 路由；这样会导致真实识别请求失败。
+- 仅把前端地址切回线上：已验证 `https://example.invalid/openapi.json` 可访问，但截至 **2026 年 7 月 24 日**，该实例未暴露 `/api/miniprogram/*` 路由；这样会导致真实识别请求失败。
 
 ## 前端设计
 
@@ -29,7 +29,7 @@
 在 `miniprogram/config/server.ts` 中集中维护：
 
 ```ts
-export const SERVER_BASE_URL = 'https://www.binictools.cn:7876'
+export const SERVER_BASE_URL = 'https://example.invalid'
 export const DEMO_MODE = true
 ```
 
@@ -117,7 +117,7 @@ MINIPROGRAM_DEMO_MODE=false
 1. 体验模式启动时不会调用 `getCurrentUser()`，也不会重定向到登录页。
 2. 正式模式仍会检查会话，并在 401 时跳转登录。
 3. 体验模式下同步遭遇 401 时不会跳转登录，记录保持本地可查看。
-4. 线上基地址为 `https://www.binictools.cn:7876`。
+4. 线上基地址为 `https://example.invalid`。
 5. 体验模式不触发任务、远端历史、远端删除或任务日期回写请求。
 
 ### 后端
@@ -132,7 +132,7 @@ MINIPROGRAM_DEMO_MODE=false
 ## 验收标准
 
 1. 新安装或无会话的小程序可直接到达首页，不出现登录界面。
-2. 小程序实际请求线上 `https://www.binictools.cn:7876`。
+2. 小程序实际请求线上 `https://example.invalid`。
 3. 线上 OpenAPI 包含小程序识别路由，无 Cookie 上传测试返回成功结果或可预期的图片校验错误，而非 404/401。
 4. 体验者能完成识别、校对与本地历史保存；正式登录代码未删除。
 5. 匿名请求不能读取、改写或删除真实采购和检验数据。

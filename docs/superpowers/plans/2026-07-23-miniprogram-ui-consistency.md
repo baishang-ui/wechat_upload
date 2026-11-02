@@ -163,7 +163,7 @@ git commit -m "style: share miniprogram design tokens"
 <view class="login-page">
   <view class="login-shell">
     <view class="login-intro">
-      <view class="brand-mark">BINIC INSPECTION</view>
+      <view class="brand-mark">QUALITY INSPECTION</view>
       <view class="login-title">质量检验工作台</view>
       <view class="login-subtitle">连接智能销售系统，处理采购待检任务与检验报告。</view>
     </view>
@@ -335,7 +335,7 @@ Expected: `200`。若当前配置为线上地址但线上尚未部署小程序�
 
 - [ ] **Step 2: 在微信开发者工具重新编译**
 
-打开 `/Users/landcloud/WeChatProjects/miniprogram-2`，执行“清除编译缓存并重新编译”。
+打开 `$HOME/WeChatProjects/miniprogram-2`，执行“清除编译缓存并重新编译”。
 
 Expected: WXML、SCSS 和 TypeScript 编译无错误。
 

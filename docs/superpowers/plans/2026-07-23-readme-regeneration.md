@@ -10,7 +10,7 @@
 
 ## Global Constraints
 
-- Document both `http://localhost:7875` and `https://www.binictools.cn:7876` as selectable backend examples.
+- Document both `http://localhost:7875` and `https://example.invalid` as selectable backend examples.
 - State that the active address is configured in `miniprogram/config/server.ts`.
 - Do not describe direct model-gateway calls or client-side model tokens.
 - Document Session Cookie authentication through `smartSalesSession:v1`.
@@ -45,7 +45,7 @@ const readme = readFileSync(resolve(__dirname, '..', 'README.md'), 'utf8')
 test('README documents the current authenticated inspection workflow', () => {
   const required = [
     'http://localhost:7875',
-    'https://www.binictools.cn:7876',
+    'https://example.invalid',
     'smartSalesSession:v1',
     '最多 10 个未完成任务',
     'inspectionHistory:v2',
@@ -163,7 +163,7 @@ export const SERVER_BASE_URL = 'http://localhost:7875'
 ```
 
 ```ts
-export const SERVER_BASE_URL = 'https://www.binictools.cn:7876'
+export const SERVER_BASE_URL = 'https://example.invalid'
 ```
 
 Explain that physical devices cannot use the development machine through their own `localhost`; use a reachable LAN/HTTPS address for device testing.

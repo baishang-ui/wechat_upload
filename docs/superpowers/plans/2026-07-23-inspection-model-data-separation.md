@@ -13,14 +13,14 @@
 - 不在小程序中写入模型地址或密钥。
 - 不修改现有 `call_llm()` 行为。
 - 不修改数据库连接和业务数据 API。
-- 专用默认地址为 `http://www.binictools.cn:8865/api/llm/v1`。
+- 专用默认地址为 `https://example.invalid/api/llm/v1`。
 - 不提交 API Key，不推送远端。
 
 ### Task 1: 添加显式模型端点调用
 
 **Files:**
-- Modify: `/Users/landcloud/smart_sales_system/services/llm_client.py`
-- Modify: `/Users/landcloud/smart_sales_system/tests/test_miniprogram_inspection_recognition.py`
+- Modify: `$HOME/smart_sales_system/services/llm_client.py`
+- Modify: `$HOME/smart_sales_system/tests/test_miniprogram_inspection_recognition.py`
 
 - [ ] 在后端测试中 monkeypatch `call_llm_at_endpoint`，断言收到专用 `base_url`、模型和超时。
 - [ ] 运行测试并确认当前实现失败。
@@ -30,8 +30,8 @@
 ### Task 2: 质检服务使用专用配置
 
 **Files:**
-- Modify: `/Users/landcloud/smart_sales_system/services/miniprogram_inspection_recognition.py`
-- Modify: `/Users/landcloud/smart_sales_system/.env.example`
+- Modify: `$HOME/smart_sales_system/services/miniprogram_inspection_recognition.py`
+- Modify: `$HOME/smart_sales_system/.env.example`
 
 - [ ] 定义 `INSPECTION_LLM_BASE_URL`、`INSPECTION_LLM_MODEL`、`INSPECTION_LLM_API_KEY`。
 - [ ] 将质检识别改为 `call_llm_at_endpoint()`。

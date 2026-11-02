@@ -725,7 +725,7 @@ Expected: all four interface features have matches.
 
 - [ ] **Step 7: Verify in WeChat Developer Tools**
 
-Open `/Users/landcloud/WeChatProjects/miniprogram-2` and confirm:
+Open `$HOME/WeChatProjects/miniprogram-2` and confirm:
 
 - The capture screen renders without template errors.
 - Camera and album buttons each select one image.
